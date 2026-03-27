@@ -128,7 +128,7 @@ def validate_input_dataframe(df: pd.DataFrame) -> None:
 
 
 def build_trial_metadata(df: pd.DataFrame) -> pd.DataFrame:
-    """Build one metadata row per trial in first-seen trial order."""
+    """Build one metadata row per trial in deterministic trial order."""
 
     out = _ensure_trial_id(df).copy()
     if "has_any_nan_trace" not in out.columns or "is_all_nan_trace" not in out.columns:
@@ -152,7 +152,8 @@ def build_trial_metadata(df: pd.DataFrame) -> pd.DataFrame:
     for trial_id, trial in out.groupby("trial_id", sort=False, dropna=False):
         first_row = trial.iloc[0]
         trace_flags = trial.drop_duplicates(["stimulus", "neuron"], keep="first")
-        observed_neurons = {neuron for neuron in trace_flags["neuron"].dropna().astype(str) if neuron in NEURON_ORDER}
+        surviving_traces = trace_flags.loc[~trace_flags["is_all_nan_trace"].fillna(False)]
+        observed_neurons = {neuron for neuron in surviving_traces["neuron"].dropna().astype(str) if neuron in NEURON_ORDER}
         if "n_all_nan_traces_removed" in trial.columns:
             n_all_nan_traces_removed = int(trial["n_all_nan_traces_removed"].iloc[0])
         else:
@@ -175,7 +176,13 @@ def build_trial_metadata(df: pd.DataFrame) -> pd.DataFrame:
             }
         )
 
-    return pd.DataFrame(rows, columns=trial_columns)
+    metadata = pd.DataFrame(rows, columns=trial_columns)
+    metadata["__trial_sort_date"] = pd.to_datetime(metadata["date"], errors="raise")
+    metadata = metadata.sort_values(
+        ["__trial_sort_date", "worm_key", "segment_index", "trial_id"],
+        kind="stable",
+    ).drop(columns=["__trial_sort_date"])
+    return metadata.reset_index(drop=True)
 
 
 def build_trial_wide_table(df: pd.DataFrame, metadata: pd.DataFrame) -> pd.DataFrame:

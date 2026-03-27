@@ -112,6 +112,13 @@ def processed_df(synthetic_neuron_segments_df):
     return center_by_baseline(filter_traces(annotate_trace_quality(processed)))
 
 
+@pytest.fixture
+def raw_annotated_df(synthetic_neuron_segments_df):
+    raw = synthetic_neuron_segments_df.copy()
+    raw["date"] = "2026-01-06"
+    return annotate_trace_quality(raw)
+
+
 def test_expected_timepoints_cover_full_window():
     assert EXPECTED_TIMEPOINTS == tuple(range(45))
 
@@ -313,6 +320,52 @@ def test_trial_metadata_has_one_row_per_trial(processed_df):
     assert metadata["trial_id"].is_unique
 
 
+def test_trial_metadata_counts_match_raw_and_processed_inputs(raw_annotated_df, processed_df):
+    raw_metadata = build_trial_metadata(raw_annotated_df).set_index("trial_id")
+    processed_metadata = build_trial_metadata(processed_df).set_index("trial_id")
+
+    expected = pd.DataFrame(
+        [
+            {
+                "trial_id": "20260106__worm_001__0",
+                "n_observed_neurons": 1,
+                "n_missing_neurons": 21,
+                "n_all_nan_traces_removed": 1,
+                "has_partial_nan_trace": False,
+            },
+            {
+                "trial_id": "20260106__worm_002__1",
+                "n_observed_neurons": 1,
+                "n_missing_neurons": 21,
+                "n_all_nan_traces_removed": 0,
+                "has_partial_nan_trace": True,
+            },
+        ]
+    ).set_index("trial_id")
+
+    pd.testing.assert_frame_equal(
+        raw_metadata[expected.columns],
+        expected,
+        check_dtype=False,
+    )
+    pd.testing.assert_frame_equal(
+        processed_metadata[expected.columns],
+        expected,
+        check_dtype=False,
+    )
+
+
+def test_trial_metadata_order_is_deterministic_under_shuffle(raw_annotated_df):
+    shuffled = raw_annotated_df.sample(frac=1, random_state=7).reset_index(drop=True)
+
+    metadata = build_trial_metadata(shuffled)
+
+    assert metadata["trial_id"].tolist() == [
+        "20260106__worm_001__0",
+        "20260106__worm_002__1",
+    ]
+
+
 def test_trial_metadata_preserves_removed_trace_count(processed_df):
     metadata = build_trial_metadata(processed_df).set_index("trial_id")
 
@@ -338,14 +391,39 @@ def test_trial_metadata_reports_neuron_coverage_and_partial_nans(processed_df):
 def test_wide_table_has_trial_rows_and_neuron_time_columns(processed_df):
     metadata = build_trial_metadata(processed_df)
     wide = build_trial_wide_table(processed_df, metadata)
-    assert "ADFL__t00" in wide.columns
+    expected_feature_columns = [f"{neuron}__t{time_point:02d}" for neuron in NEURON_ORDER for time_point in EXPECTED_TIMEPOINTS]
+    assert list(wide.columns[-len(expected_feature_columns):]) == expected_feature_columns
     assert len(wide) == len(metadata)
+
+
+def test_wide_and_tensor_use_canonical_order_and_known_values(processed_df):
+    metadata = build_trial_metadata(processed_df)
+    wide = build_trial_wide_table(processed_df, metadata)
+    tensor = build_trial_tensor(processed_df, metadata)
+
+    expected_feature_columns = [f"{neuron}__t{time_point:02d}" for neuron in NEURON_ORDER for time_point in EXPECTED_TIMEPOINTS]
+    assert list(wide.columns[-len(expected_feature_columns):]) == expected_feature_columns
+
+    assert wide.loc[0, "ADFL__t00"] == pytest.approx(-0.25)
+    assert tensor[0, NEURON_ORDER.index("ADFL"), 0] == pytest.approx(-0.25)
+    assert pd.isna(wide.loc[0, "ADFR__t00"])
+    assert pd.isna(tensor[0, NEURON_ORDER.index("ADFR"), 0])
 
 
 def test_tensor_shape_matches_metadata_neurons_time(processed_df):
     metadata = build_trial_metadata(processed_df)
     tensor = build_trial_tensor(processed_df, metadata)
     assert tensor.shape == (len(metadata), 22, 45)
+
+
+def test_nan_propagation_is_preserved_for_invalid_baseline(sample_df_missing_baseline):
+    processed = center_by_baseline(filter_traces(annotate_trace_quality(sample_df_missing_baseline)))
+    metadata = build_trial_metadata(processed)
+    wide = build_trial_wide_table(processed, metadata)
+    tensor = build_trial_tensor(processed, metadata)
+
+    assert pd.isna(wide.loc[0, "ASEL__t03"])
+    assert pd.isna(tensor[0, NEURON_ORDER.index("ASEL"), 3])
 
 
 def test_tensor_and_metadata_share_trial_order(processed_df):
