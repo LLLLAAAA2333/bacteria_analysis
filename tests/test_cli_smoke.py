@@ -28,4 +28,15 @@ def test_cli_runs_and_writes_outputs(tmp_path, tiny_parquet_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "processed" / "clean" / "neuron_segments_clean.parquet").exists()
+    output_root = tmp_path / "processed"
+    expected_paths = [
+        output_root / "clean" / "neuron_segments_clean.parquet",
+        output_root / "trial_level" / "trial_metadata.parquet",
+        output_root / "trial_level" / "trial_wide_baseline_centered.parquet",
+        output_root / "trial_level" / "trial_tensor_baseline_centered.npz",
+        output_root / "qc" / "preprocessing_report.json",
+        output_root / "qc" / "preprocessing_report.md",
+    ]
+
+    for path in expected_paths:
+        assert path.exists(), path
