@@ -1,0 +1,25 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+data/*
+
+# python cache
+__pycache__/
+*.py[cod]
+
+# generated figures and run artifacts
+docs/figures/*
+
+# local agent metadata
+.agent/*
+.agents/*
+.claude/*
+
+# local planning and memory artifacts
+MEMORY.md
+memory/
+state/
+
+# local git worktrees
+.worktrees/
