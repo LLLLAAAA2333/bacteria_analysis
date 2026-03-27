@@ -77,6 +77,31 @@ def sample_df_missing_baseline(sample_df):
     return broken
 
 
+@pytest.fixture
+def same_trial_dual_stimulus_df():
+    rows = []
+    for stimulus, values in (
+        ("b1_1", [1.0 for _ in EXPECTED_TIMEPOINTS]),
+        ("b1_2", [float("nan") for _ in EXPECTED_TIMEPOINTS]),
+    ):
+        for time_point, value in zip(EXPECTED_TIMEPOINTS, values, strict=True):
+            rows.append(
+                {
+                    "neuron": "ADFL",
+                    "stimulus": stimulus,
+                    "time_point": time_point,
+                    "delta_F_over_F0": value,
+                    "worm_key": "worm_003",
+                    "segment_index": 2,
+                    "date": "2026-03-27",
+                    "stim_name": "Bacteria 1",
+                    "stim_color": "#1f77b4",
+                }
+            )
+
+    return pd.DataFrame(rows, columns=REQUIRED_COLUMNS)
+
+
 def test_expected_timepoints_cover_full_window():
     assert EXPECTED_TIMEPOINTS == tuple(range(45))
 
@@ -217,6 +242,20 @@ def test_full_nan_trace_is_flagged(sample_df):
     assert annotated.loc[annotated["neuron"] == "ADFR", "is_all_nan_trace"].all()
 
 
+def test_trace_quality_counts_are_recorded(sample_df):
+    annotated = annotate_trace_quality(sample_df)
+
+    adfl = annotated[annotated["neuron"] == "ADFL"]
+    asel = annotated[annotated["neuron"] == "ASEL"]
+
+    assert adfl["n_valid_points"].iloc[0] == 45
+    assert not adfl["has_any_nan_trace"].iloc[0]
+    assert adfl["n_valid_baseline_points"].iloc[0] == 6
+    assert asel["n_valid_points"].iloc[0] == 40
+    assert asel["has_any_nan_trace"].iloc[0]
+    assert asel["n_valid_baseline_points"].iloc[0] == 3
+
+
 def test_filter_drops_fully_nan_trace_only(sample_df):
     annotated = annotate_trace_quality(sample_df)
     filtered = filter_traces(annotated)
@@ -239,6 +278,21 @@ def test_partial_baseline_uses_available_values(sample_df):
     assert trace.loc[trace["time_point"] == 3, "dff_baseline_centered"].iloc[0] == pytest.approx(-0.05)
 
 
+def test_dff_baseline_centered_is_nan_when_baseline_invalid(sample_df_missing_baseline):
+    centered = center_by_baseline(filter_traces(annotate_trace_quality(sample_df_missing_baseline)))
+    trace = centered[centered["neuron"] == "ASEL"]
+    assert not trace["baseline_valid"].any()
+    assert trace["dff_baseline_centered"].isna().all()
+
+
 def test_missing_baseline_marks_baseline_invalid(sample_df_missing_baseline):
     centered = center_by_baseline(filter_traces(annotate_trace_quality(sample_df_missing_baseline)))
     assert not centered["baseline_valid"].all()
+
+
+def test_stimulus_is_part_of_trace_grouping(same_trial_dual_stimulus_df):
+    annotated = annotate_trace_quality(same_trial_dual_stimulus_df)
+    grouped = annotated.groupby("stimulus", sort=False)
+
+    assert grouped["is_all_nan_trace"].first().to_dict() == {"b1_1": False, "b1_2": True}
+    assert grouped["n_valid_points"].first().to_dict() == {"b1_1": 45, "b1_2": 0}

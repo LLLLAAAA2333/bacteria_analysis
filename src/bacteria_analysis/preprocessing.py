@@ -6,7 +6,13 @@ import pandas as pd
 
 from bacteria_analysis.constants import BASELINE_TIMEPOINTS, EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 
-TRACE_GROUP_COLUMNS = ("worm_key", "segment_index", "date", "neuron")
+TRACE_GROUP_COLUMNS = ("trial_id", "stimulus", "neuron")
+
+
+def _ensure_trial_id(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with trial_id present."""
+
+    return df if "trial_id" in df.columns else add_trial_id(df)
 
 
 def add_trial_id(df: pd.DataFrame) -> pd.DataFrame:
@@ -21,7 +27,7 @@ def add_trial_id(df: pd.DataFrame) -> pd.DataFrame:
 def annotate_trace_quality(df: pd.DataFrame) -> pd.DataFrame:
     """Add trace-level QC flags and counts."""
 
-    out = df.copy()
+    out = _ensure_trial_id(df).copy()
 
     def _trace_quality_stats(group: pd.DataFrame) -> pd.Series:
         baseline_values = group.loc[group["time_point"].isin(BASELINE_TIMEPOINTS), "delta_F_over_F0"]
@@ -56,9 +62,10 @@ def filter_traces(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def center_by_baseline(df: pd.DataFrame) -> pd.DataFrame:
-    """Center traces by their baseline mean when the full baseline window is present."""
+    """Center traces by the mean of available non-NaN baseline points."""
 
-    out = df if "n_valid_points" in df.columns else annotate_trace_quality(df)
+    out = _ensure_trial_id(df)
+    out = out if "n_valid_points" in out.columns else annotate_trace_quality(out)
 
     def _baseline_stats(group: pd.DataFrame) -> pd.Series:
         baseline_values = group.loc[group["time_point"].isin(BASELINE_TIMEPOINTS), "delta_F_over_F0"]
