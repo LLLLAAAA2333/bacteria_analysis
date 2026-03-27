@@ -6,9 +6,12 @@ platforms = ["win-64"]
 version = "0.1.0"
 
 [tasks]
+test = "pytest -q"
+preprocess = "python scripts/run_preprocessing.py"
 
 [dependencies]
 python = "3.11.*"
 pandas = ">=2.2,<3"
 pyarrow = ">=15,<22"
 numpy = ">=1.26,<3"
+pytest = ">=8.0,<9"
