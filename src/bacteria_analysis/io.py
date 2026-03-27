@@ -10,6 +10,12 @@ import numpy as np
 import pandas as pd
 
 
+def read_parquet(path: str | Path) -> pd.DataFrame:
+    """Read a parquet file from disk."""
+
+    return pd.read_parquet(Path(path))
+
+
 def ensure_output_dirs(output_root: str | Path) -> dict[str, Path]:
     """Create and return the standard preprocessing output tree."""
 

@@ -340,3 +340,25 @@ def build_qc_report(raw_df: pd.DataFrame, processed_df: pd.DataFrame, metadata: 
         "neuron_coverage_distribution": neuron_coverage_distribution,
         "trials_per_stimulus_summary": trials_per_stimulus_summary,
     }
+
+
+def run_preprocessing_pipeline(raw_df: pd.DataFrame) -> dict[str, pd.DataFrame | np.ndarray | dict]:
+    """Run the full preprocessing pipeline and return derived artifacts."""
+
+    validated = add_trial_id(raw_df)
+    validate_input_dataframe(validated)
+    annotated = annotate_trace_quality(validated)
+    filtered = filter_traces(annotated)
+    centered = center_by_baseline(filtered)
+    metadata = build_trial_metadata(centered)
+    wide = build_trial_wide_table(centered, metadata)
+    tensor = build_trial_tensor(centered, metadata)
+    report = build_qc_report(raw_df, centered, metadata)
+
+    return {
+        "clean_df": centered,
+        "metadata": metadata,
+        "wide": wide,
+        "tensor": tensor,
+        "report": report,
+    }
