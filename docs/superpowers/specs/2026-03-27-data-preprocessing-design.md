@@ -33,6 +33,16 @@ The raw parquet has already been checked in this repository.
 
 These facts are treated as current expectations and should be revalidated every preprocessing run.
 
+## Verification Note
+
+The current preprocessing run has been verified against the real dataset and the artifact layout in `data/processed/`.
+
+- Verified trial count: `678`
+- Verified neuron count: `22`
+- Verified timepoints: `45`
+- Filtering policy: mild filtering, meaning fully-NaN traces are dropped and partially-NaN traces are retained
+- Verified trace outcomes: `130` fully-NaN traces removed, `1` partially-NaN trace retained
+
 ## Scope
 
 This spec covers:
