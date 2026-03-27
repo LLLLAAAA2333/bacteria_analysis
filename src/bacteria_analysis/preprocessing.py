@@ -16,6 +16,44 @@ def _ensure_trial_id(df: pd.DataFrame) -> pd.DataFrame:
     return df if "trial_id" in df.columns else add_trial_id(df)
 
 
+def _trial_id_set(df: pd.DataFrame) -> set[str]:
+    """Return the unique trial_id values for *df*."""
+
+    return set(_ensure_trial_id(df)["trial_id"].dropna().astype(str).unique())
+
+
+def _validate_same_trial_set(raw_df: pd.DataFrame, processed_df: pd.DataFrame, metadata: pd.DataFrame) -> None:
+    """Ensure the three report inputs describe the same trial set."""
+
+    raw_trials = _trial_id_set(raw_df)
+    processed_trials = _trial_id_set(processed_df)
+    metadata_trials = set(metadata["trial_id"].dropna().astype(str).unique())
+
+    if raw_trials == processed_trials == metadata_trials:
+        return
+
+    mismatches = []
+    for label, trial_ids in (
+        ("raw_df", raw_trials),
+        ("processed_df", processed_trials),
+        ("metadata", metadata_trials),
+    ):
+        missing = sorted((raw_trials | processed_trials | metadata_trials) - trial_ids)
+        extra = sorted(trial_ids - (raw_trials | processed_trials | metadata_trials))
+        if missing or extra:
+            details = []
+            if missing:
+                details.append(f"missing={missing}")
+            if extra:
+                details.append(f"extra={extra}")
+            mismatches.append(f"{label}({', '.join(details)})")
+
+    raise ValueError(
+        "raw_df, processed_df, and metadata must describe the same trial set; "
+        + "; ".join(mismatches)
+    )
+
+
 def add_trial_id(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy of *df* with a normalized trial_id column."""
 
@@ -239,6 +277,8 @@ def build_trial_tensor(df: pd.DataFrame, metadata: pd.DataFrame) -> np.ndarray:
 
 def build_qc_report(raw_df: pd.DataFrame, processed_df: pd.DataFrame, metadata: pd.DataFrame) -> dict:
     """Build a data-only QC summary for JSON and markdown rendering."""
+
+    _validate_same_trial_set(raw_df, processed_df, metadata)
 
     raw = _ensure_trial_id(raw_df).copy()
     if "has_any_nan_trace" not in raw.columns or "is_all_nan_trace" not in raw.columns:

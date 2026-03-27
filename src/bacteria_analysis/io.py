@@ -72,32 +72,58 @@ def write_json(obj: Any, path: str | Path) -> Path:
 
 
 def write_markdown_report(report: dict[str, Any], path: str | Path) -> Path:
-    """Render a compact markdown QC report."""
+    """Render the preprocessing QC schema as a readable markdown report."""
 
-    def _render_value(value: Any) -> str:
-        if isinstance(value, dict):
-            lines = []
-            for key, item in value.items():
-                lines.append(f"- {key}: {_render_value(item)}")
-            return "\n".join(lines)
-        if isinstance(value, list):
-            if not value:
-                return "[]"
-            lines = []
-            for item in value:
-                if isinstance(item, dict):
-                    fields = ", ".join(f"{key}={_render_value(item[key])}" for key in item)
-                    lines.append(f"- {fields}")
-                else:
-                    lines.append(f"- {_render_value(item)}")
-            return "\n".join(lines)
-        return str(value)
+    required_keys = (
+        "input_rows",
+        "output_rows",
+        "n_unique_trials",
+        "n_unique_stimuli",
+        "n_unique_neurons",
+        "n_fully_nan_traces_removed",
+        "n_partially_nan_traces_retained",
+        "neuron_coverage_distribution",
+        "trials_per_stimulus_summary",
+    )
+    missing_keys = [key for key in required_keys if key not in report]
+    if missing_keys:
+        raise ValueError(f"report is missing required keys: {', '.join(missing_keys)}")
 
-    lines = ["# Preprocessing QC Report", ""]
-    for key, value in report.items():
-        lines.append(f"## {key}")
-        lines.append(_render_value(value))
+    lines = [
+        "# Preprocessing QC Report",
+        "",
+        "## Summary",
+        f"- Input rows: {report['input_rows']}",
+        f"- Output rows: {report['output_rows']}",
+        f"- Unique trials: {report['n_unique_trials']}",
+        f"- Unique stimuli: {report['n_unique_stimuli']}",
+        f"- Unique neurons: {report['n_unique_neurons']}",
+        "",
+        "## Trace Filtering",
+        f"- Fully-NaN traces removed: {report['n_fully_nan_traces_removed']}",
+        f"- Partially-NaN traces retained: {report['n_partially_nan_traces_retained']}",
+        "",
+        "## Neuron Coverage Distribution",
+    ]
+
+    coverage_rows = report["neuron_coverage_distribution"]
+    if coverage_rows:
+        lines.extend(["", "| Observed neurons | Trials |", "| --- | ---: |"])
+        for row in coverage_rows:
+            lines.append(f"| {row['n_observed_neurons']} | {row['n_trials']} |")
+    else:
         lines.append("")
+        lines.append("- None")
+
+    lines.extend(["", "## Trials Per Stimulus"])
+    stimulus_rows = report["trials_per_stimulus_summary"]
+    if stimulus_rows:
+        lines.extend(["", "| Stimulus | Stim name | Trials |", "| --- | --- | ---: |"])
+        for row in stimulus_rows:
+            lines.append(f"| {row['stimulus']} | {row['stim_name']} | {row['n_trials']} |")
+    else:
+        lines.append("")
+        lines.append("- None")
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
