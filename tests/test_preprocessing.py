@@ -96,3 +96,45 @@ def test_validate_rejects_broken_time_grid(synthetic_neuron_segments_df):
     broken = synthetic_neuron_segments_df[synthetic_neuron_segments_df["time_point"] != 44]
     with pytest.raises(ValueError, match="45 unique time_point"):
         validate_input_dataframe(broken)
+
+
+def test_validate_rejects_trials_with_multiple_stimuli(synthetic_neuron_segments_df):
+    broken = synthetic_neuron_segments_df.copy()
+    first_trial_mask = (
+        (broken["worm_key"] == "worm_001")
+        & (broken["segment_index"] == 0)
+        & (broken["date"] == "2026-03-27")
+    )
+    broken.loc[first_trial_mask & (broken["neuron"] == "ADFL") & (broken["time_point"] == 0), "stimulus"] = "b1_2"
+
+    with pytest.raises(ValueError, match="exactly one stimulus"):
+        validate_input_dataframe(broken)
+
+
+def test_validate_rejects_trial_neuron_with_too_few_rows(synthetic_neuron_segments_df):
+    broken = synthetic_neuron_segments_df[
+        ~(
+            (synthetic_neuron_segments_df["worm_key"] == "worm_001")
+            & (synthetic_neuron_segments_df["segment_index"] == 0)
+            & (synthetic_neuron_segments_df["date"] == "2026-03-27")
+            & (synthetic_neuron_segments_df["neuron"] == "ADFL")
+            & (synthetic_neuron_segments_df["time_point"] == 44)
+        )
+    ]
+
+    with pytest.raises(ValueError, match="45 rows"):
+        validate_input_dataframe(broken)
+
+
+def test_validate_rejects_trial_neuron_with_duplicate_time_points(synthetic_neuron_segments_df):
+    broken = synthetic_neuron_segments_df.copy()
+    target_mask = (
+        (broken["worm_key"] == "worm_001")
+        & (broken["segment_index"] == 0)
+        & (broken["date"] == "2026-03-27")
+        & (broken["neuron"] == "ADFL")
+    )
+    broken.loc[target_mask & (broken["time_point"] == 44), "time_point"] = 43
+
+    with pytest.raises(ValueError, match="45 unique time_point"):
+        validate_input_dataframe(broken)
