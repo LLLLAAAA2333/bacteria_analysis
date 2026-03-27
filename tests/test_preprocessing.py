@@ -5,6 +5,9 @@ from bacteria_analysis.constants import BASELINE_TIMEPOINTS, EXPECTED_TIMEPOINTS
 from bacteria_analysis.preprocessing import (
     add_trial_id,
     annotate_trace_quality,
+    build_trial_metadata,
+    build_trial_tensor,
+    build_trial_wide_table,
     center_by_baseline,
     filter_traces,
     validate_input_dataframe,
@@ -100,6 +103,13 @@ def same_trial_dual_stimulus_df():
             )
 
     return pd.DataFrame(rows, columns=REQUIRED_COLUMNS)
+
+
+@pytest.fixture
+def processed_df(synthetic_neuron_segments_df):
+    processed = synthetic_neuron_segments_df.copy()
+    processed["date"] = "2026-01-06"
+    return center_by_baseline(filter_traces(annotate_trace_quality(processed)))
 
 
 def test_expected_timepoints_cover_full_window():
@@ -296,3 +306,28 @@ def test_stimulus_is_part_of_trace_grouping(same_trial_dual_stimulus_df):
 
     assert grouped["is_all_nan_trace"].first().to_dict() == {"b1_1": False, "b1_2": True}
     assert grouped["n_valid_points"].first().to_dict() == {"b1_1": 45, "b1_2": 0}
+
+
+def test_trial_metadata_has_one_row_per_trial(processed_df):
+    metadata = build_trial_metadata(processed_df)
+    assert metadata["trial_id"].is_unique
+
+
+def test_wide_table_has_trial_rows_and_neuron_time_columns(processed_df):
+    metadata = build_trial_metadata(processed_df)
+    wide = build_trial_wide_table(processed_df, metadata)
+    assert "ADFL__t00" in wide.columns
+    assert len(wide) == len(metadata)
+
+
+def test_tensor_shape_matches_metadata_neurons_time(processed_df):
+    metadata = build_trial_metadata(processed_df)
+    tensor = build_trial_tensor(processed_df, metadata)
+    assert tensor.shape == (len(metadata), 22, 45)
+
+
+def test_tensor_and_metadata_share_trial_order(processed_df):
+    metadata = build_trial_metadata(processed_df)
+    tensor = build_trial_tensor(processed_df, metadata)
+    assert tensor.shape[0] == len(metadata)
+    assert metadata.iloc[0]["trial_id"].startswith("20260106__")
