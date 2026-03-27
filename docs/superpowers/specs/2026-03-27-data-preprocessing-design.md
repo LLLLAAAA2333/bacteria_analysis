@@ -206,8 +206,6 @@ Columns should include:
 - `stimulus`
 - `stim_name`
 - `stim_color`
-- `start_time`
-- `end_time`
 - `n_observed_neurons`
 - `n_missing_neurons`
 - `n_all_nan_traces_removed`
@@ -249,8 +247,6 @@ Purpose:
 Paths:
 
 - `data/processed/trial_level/trial_tensor_baseline_centered.npz`
-- `data/processed/trial_level/neuron_index.json`
-- `data/processed/trial_level/time_index.json`
 
 Tensor definition:
 
@@ -258,6 +254,7 @@ Tensor definition:
 - axis 0: trial order aligned exactly with `trial_metadata.parquet`
 - axis 1: fixed neuron order from the documented 22-neuron list
 - axis 2: fixed time order `0..44`
+- the NPZ stores the tensor plus aligned `trial_ids`, `stimulus_labels`, and `stim_name_labels`
 
 Missing data:
 
@@ -277,7 +274,6 @@ Paths:
 
 Must include:
 
-- input file path
 - input row count
 - output row count
 - number of unique trials
@@ -287,7 +283,6 @@ Must include:
 - number of partially-NaN traces retained
 - neuron coverage distribution across trials
 - trials per stimulus summary
-- any validation warnings
 
 Purpose:
 
