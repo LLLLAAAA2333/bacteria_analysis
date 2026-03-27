@@ -235,3 +235,68 @@ def build_trial_tensor(df: pd.DataFrame, metadata: pd.DataFrame) -> np.ndarray:
         tensor[trial_position, neuron_position, time_position] = row.dff_baseline_centered
 
     return tensor
+
+
+def build_qc_report(raw_df: pd.DataFrame, processed_df: pd.DataFrame, metadata: pd.DataFrame) -> dict:
+    """Build a data-only QC summary for JSON and markdown rendering."""
+
+    raw = _ensure_trial_id(raw_df).copy()
+    if "has_any_nan_trace" not in raw.columns or "is_all_nan_trace" not in raw.columns:
+        raw = annotate_trace_quality(raw)
+
+    processed = _ensure_trial_id(processed_df).copy()
+    if "has_any_nan_trace" not in processed.columns or "is_all_nan_trace" not in processed.columns:
+        processed = annotate_trace_quality(processed)
+
+    trace_flags = (
+        raw.drop_duplicates(list(TRACE_GROUP_COLUMNS), keep="first")[
+            ["trial_id", "stimulus", "neuron", "has_any_nan_trace", "is_all_nan_trace"]
+        ]
+        .copy()
+    )
+
+    fully_nan_traces_removed = int(trace_flags["is_all_nan_trace"].sum())
+    partially_nan_traces_retained = int(
+        (trace_flags["has_any_nan_trace"] & ~trace_flags["is_all_nan_trace"]).sum()
+    )
+
+    neuron_coverage = (
+        metadata.groupby("n_observed_neurons", sort=True, dropna=False)["trial_id"]
+        .nunique()
+        .reset_index(name="n_trials")
+        .sort_values("n_observed_neurons", kind="stable")
+    )
+    neuron_coverage_distribution = [
+        {
+            "n_observed_neurons": int(row.n_observed_neurons),
+            "n_trials": int(row.n_trials),
+        }
+        for row in neuron_coverage.itertuples(index=False)
+    ]
+
+    trials_per_stimulus = (
+        metadata.groupby(["stimulus", "stim_name"], sort=True, dropna=False)["trial_id"]
+        .nunique()
+        .reset_index(name="n_trials")
+        .sort_values(["stimulus", "stim_name"], kind="stable")
+    )
+    trials_per_stimulus_summary = [
+        {
+            "stimulus": str(row.stimulus),
+            "stim_name": str(row.stim_name),
+            "n_trials": int(row.n_trials),
+        }
+        for row in trials_per_stimulus.itertuples(index=False)
+    ]
+
+    return {
+        "input_rows": int(len(raw_df)),
+        "output_rows": int(len(processed_df)),
+        "n_unique_trials": int(metadata["trial_id"].nunique()),
+        "n_unique_stimuli": int(metadata["stimulus"].nunique()),
+        "n_unique_neurons": int(processed["neuron"].nunique()),
+        "n_fully_nan_traces_removed": fully_nan_traces_removed,
+        "n_partially_nan_traces_retained": partially_nan_traces_retained,
+        "neuron_coverage_distribution": neuron_coverage_distribution,
+        "trials_per_stimulus_summary": trials_per_stimulus_summary,
+    }

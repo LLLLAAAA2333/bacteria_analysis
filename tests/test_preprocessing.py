@@ -2,9 +2,11 @@ import pandas as pd
 import pytest
 
 from bacteria_analysis.constants import BASELINE_TIMEPOINTS, EXPECTED_TIMEPOINTS, NEURON_ORDER, REQUIRED_COLUMNS
+from bacteria_analysis.io import ensure_output_dirs, write_json
 from bacteria_analysis.preprocessing import (
     add_trial_id,
     annotate_trace_quality,
+    build_qc_report,
     build_trial_metadata,
     build_trial_tensor,
     build_trial_wide_table,
@@ -431,3 +433,29 @@ def test_tensor_and_metadata_share_trial_order(processed_df):
     tensor = build_trial_tensor(processed_df, metadata)
     assert tensor.shape[0] == len(metadata)
     assert metadata.iloc[0]["trial_id"].startswith("20260106__")
+
+
+def test_qc_report_counts_removed_and_retained_traces(sample_df, processed_df):
+    metadata = build_trial_metadata(processed_df)
+    report = build_qc_report(raw_df=sample_df, processed_df=processed_df, metadata=metadata)
+
+    assert report["n_unique_trials"] == len(metadata)
+    assert report["n_fully_nan_traces_removed"] >= 1
+    assert report["n_partially_nan_traces_retained"] >= 1
+
+
+def test_ensure_output_dirs_creates_expected_tree(tmp_path):
+    paths = ensure_output_dirs(tmp_path)
+
+    assert paths["clean_dir"].exists()
+    assert paths["trial_level_dir"].exists()
+    assert paths["qc_dir"].exists()
+
+
+def test_write_json_round_trips(tmp_path):
+    path = tmp_path / "report.json"
+    payload = {"b": 2, "a": 1}
+
+    write_json(payload, path)
+
+    assert path.read_text(encoding="utf-8") == '{\n  "a": 1,\n  "b": 2\n}\n'
