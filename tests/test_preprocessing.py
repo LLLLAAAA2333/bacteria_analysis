@@ -231,6 +231,14 @@ def test_baseline_centering_subtracts_trace_baseline(sample_df):
     assert trace.loc[trace["time_point"] == 0, "dff_baseline_centered"].iloc[0] == pytest.approx(-2.5)
 
 
+def test_partial_baseline_uses_available_values(sample_df):
+    centered = center_by_baseline(filter_traces(annotate_trace_quality(sample_df)))
+    trace = centered[centered["neuron"] == "ASEL"].sort_values("time_point")
+    assert trace["baseline_valid"].all()
+    assert trace["baseline_mean"].iloc[0] == pytest.approx(0.45)
+    assert trace.loc[trace["time_point"] == 3, "dff_baseline_centered"].iloc[0] == pytest.approx(-0.05)
+
+
 def test_missing_baseline_marks_baseline_invalid(sample_df_missing_baseline):
     centered = center_by_baseline(filter_traces(annotate_trace_quality(sample_df_missing_baseline)))
     assert not centered["baseline_valid"].all()

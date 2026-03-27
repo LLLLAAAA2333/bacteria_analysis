@@ -62,8 +62,9 @@ def center_by_baseline(df: pd.DataFrame) -> pd.DataFrame:
 
     def _baseline_stats(group: pd.DataFrame) -> pd.Series:
         baseline_values = group.loc[group["time_point"].isin(BASELINE_TIMEPOINTS), "delta_F_over_F0"]
-        baseline_valid = baseline_values.notna().sum() == len(BASELINE_TIMEPOINTS)
-        baseline_mean = baseline_values.mean() if baseline_valid else float("nan")
+        valid_baseline_values = baseline_values.dropna()
+        baseline_valid = not valid_baseline_values.empty
+        baseline_mean = valid_baseline_values.mean() if baseline_valid else float("nan")
         return pd.Series(
             {
                 "baseline_mean": baseline_mean,
@@ -79,6 +80,7 @@ def center_by_baseline(df: pd.DataFrame) -> pd.DataFrame:
     out = out.merge(stats, on=list(TRACE_GROUP_COLUMNS), how="left")
     out["baseline_valid"] = out["baseline_valid"].fillna(False).astype(bool)
     out["dff_baseline_centered"] = out["delta_F_over_F0"] - out["baseline_mean"]
+    out.loc[~out["baseline_valid"], "dff_baseline_centered"] = float("nan")
     return out
 
 
