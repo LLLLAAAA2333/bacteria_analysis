@@ -313,6 +313,28 @@ def test_trial_metadata_has_one_row_per_trial(processed_df):
     assert metadata["trial_id"].is_unique
 
 
+def test_trial_metadata_preserves_removed_trace_count(processed_df):
+    metadata = build_trial_metadata(processed_df).set_index("trial_id")
+
+    assert metadata.loc["20260106__worm_001__0", "n_all_nan_traces_removed"] == 1
+    assert metadata.loc["20260106__worm_002__1", "n_all_nan_traces_removed"] == 0
+
+
+def test_trial_metadata_reports_neuron_coverage_and_partial_nans(processed_df):
+    metadata = build_trial_metadata(processed_df).set_index("trial_id")
+
+    first_trial = metadata.loc["20260106__worm_001__0"]
+    second_trial = metadata.loc["20260106__worm_002__1"]
+
+    assert first_trial["n_observed_neurons"] == 1
+    assert first_trial["n_missing_neurons"] == 21
+    assert not first_trial["has_partial_nan_trace"]
+
+    assert second_trial["n_observed_neurons"] == 1
+    assert second_trial["n_missing_neurons"] == 21
+    assert second_trial["has_partial_nan_trace"]
+
+
 def test_wide_table_has_trial_rows_and_neuron_time_columns(processed_df):
     metadata = build_trial_metadata(processed_df)
     wide = build_trial_wide_table(processed_df, metadata)

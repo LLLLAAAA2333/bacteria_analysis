@@ -59,7 +59,18 @@ def filter_traces(df: pd.DataFrame) -> pd.DataFrame:
     """Drop traces that are entirely NaN."""
 
     out = df if "is_all_nan_trace" in df.columns else annotate_trace_quality(df)
-    return out.loc[~out["is_all_nan_trace"]].copy()
+    removed_counts = (
+        out.groupby(list(TRACE_GROUP_COLUMNS), sort=False, dropna=False)["is_all_nan_trace"]
+        .first()
+        .groupby(level=0, sort=False, dropna=False)
+        .sum()
+        .astype("int64")
+        if "trial_id" in out.columns
+        else pd.Series(dtype="int64")
+    )
+    kept = out.loc[~out["is_all_nan_trace"]].copy()
+    kept["n_all_nan_traces_removed"] = kept["trial_id"].map(removed_counts).fillna(0).astype("int64")
+    return kept
 
 
 def center_by_baseline(df: pd.DataFrame) -> pd.DataFrame:
@@ -142,7 +153,10 @@ def build_trial_metadata(df: pd.DataFrame) -> pd.DataFrame:
         first_row = trial.iloc[0]
         trace_flags = trial.drop_duplicates(["stimulus", "neuron"], keep="first")
         observed_neurons = {neuron for neuron in trace_flags["neuron"].dropna().astype(str) if neuron in NEURON_ORDER}
-        n_all_nan_traces_removed = int(trace_flags["is_all_nan_trace"].fillna(False).sum())
+        if "n_all_nan_traces_removed" in trial.columns:
+            n_all_nan_traces_removed = int(trial["n_all_nan_traces_removed"].iloc[0])
+        else:
+            n_all_nan_traces_removed = int(trace_flags["is_all_nan_trace"].fillna(False).sum())
         has_partial_nan_trace = bool((trace_flags["has_any_nan_trace"].fillna(False) & ~trace_flags["is_all_nan_trace"].fillna(False)).any())
 
         rows.append(
