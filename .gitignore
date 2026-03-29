@@ -23,3 +23,6 @@ state/
 
 # local git worktrees
 .worktrees/
+
+# results
+results
