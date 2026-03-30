@@ -156,7 +156,7 @@ def _build_similarity_plot_panels(frame: pd.DataFrame) -> list[dict[str, object]
     for comparison_scope, scope_frame in plot_frame.groupby("comparison_scope", sort=False, dropna=False):
         summary = (
             scope_frame.groupby("view_label", sort=False, dropna=False)["similarity"]
-            .mean()
+            .median()
             .reset_index()
         )
         summary["comparison_scope"] = str(comparison_scope)

@@ -697,6 +697,12 @@ def test_build_similarity_plot_panels_keeps_scopes_separate():
                 "similarity": 0.9,
             },
             {
+                "comparison_scope": "within_group_type",
+                "view_name": "response_window",
+                "reference_view_name": "response_window",
+                "similarity": 0.1,
+            },
+            {
                 "comparison_scope": "pooled_vs_group",
                 "view_name": "response_window",
                 "reference_view_name": "response_window",
@@ -720,7 +726,7 @@ def test_build_similarity_plot_panels_keeps_scopes_separate():
         {
             "comparison_scope": "within_group_type",
             "view_label": "response_window",
-            "similarity": 0.9,
+            "similarity": 0.5,
         }
     ]
     assert pooled.to_dict("records") == [
