@@ -37,7 +37,22 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
         return pd.DataFrame(columns=columns)
 
     if group_type == "pooled":
-        valid["group_id"] = "pooled"
+        return pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": valid.iloc[0]["view_name"],
+                    "group_type": group_type,
+                    "group_id": "pooled",
+                    "stimulus_left": "pooled",
+                    "stimulus_right": "pooled",
+                    "same_stimulus": False,
+                    "n_pairs": int(len(valid)),
+                    "mean_distance": float(valid["distance"].mean()),
+                    "median_distance": float(valid["distance"].median()),
+                }
+            ],
+            columns=columns,
+        )
     elif group_type == "individual":
         valid = valid.loc[valid["same_individual"].astype(bool)].copy()
         valid["group_id"] = valid["individual_id_a"].astype(str)
