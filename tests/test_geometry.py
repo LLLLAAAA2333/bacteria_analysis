@@ -5,12 +5,17 @@ import pytest
 
 from bacteria_analysis.geometry import (
     build_rdm_matrix,
+    build_rdm_group_coverage,
     extract_upper_triangle,
     score_rdm_similarity,
     summarize_grouped_stimulus_pairs,
     summarize_rdm_stability,
 )
-from bacteria_analysis.geometry_outputs import ensure_stage2_output_dirs, write_stage2_outputs
+from bacteria_analysis.geometry_outputs import (
+    _build_similarity_plot_panels,
+    ensure_stage2_output_dirs,
+    write_stage2_outputs,
+)
 
 
 def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pairs(synthetic_geometry_comparisons):
@@ -23,6 +28,7 @@ def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pair
     assert set(summary["group_id"]) == {"2026-01-01__worm_a", "2026-01-02__worm_b"}
     assert (summary["group_type"] == "individual").all()
     assert summary["view_name"].eq("response_window").all()
+    assert summary["pair_count"].sum() == 3
     assert summary["n_pairs"].sum() == 3
 
 
@@ -36,7 +42,7 @@ def test_date_grouped_stimulus_pair_summary_uses_date_groups(synthetic_geometry_
     assert set(summary["group_id"]) == {"2026-01-01"}
     assert (summary["group_type"] == "date").all()
     assert summary["view_name"].eq("full_trajectory").all()
-    assert summary["n_pairs"].sum() == 1
+    assert summary["pair_count"].sum() == 1
 
 
 def test_pooled_grouped_stimulus_pair_summary_uses_single_group(synthetic_geometry_comparisons):
@@ -55,7 +61,101 @@ def test_pooled_grouped_stimulus_pair_summary_uses_single_group(synthetic_geomet
         ("b1_1", "b2_1"),
         ("b2_1", "b2_1"),
     }
-    assert summary["n_pairs"].sum() == 4
+    assert summary["pair_count"].sum() == 4
+
+    support = summary.set_index(["stimulus_left", "stimulus_right"])
+    assert support.loc[("b1_1", "b1_1"), "stimulus_left_trial_count"] == 2
+    assert support.loc[("b1_1", "b1_1"), "stimulus_right_trial_count"] == 2
+    assert support.loc[("b1_1", "b2_1"), "pair_count"] == 2
+    assert support.loc[("b1_1", "b2_1"), "stimulus_left_trial_count"] == 1
+    assert support.loc[("b1_1", "b2_1"), "stimulus_right_trial_count"] == 2
+    assert support.loc[("b2_1", "b2_1"), "stimulus_left_trial_count"] == 2
+    assert support.loc[("b2_1", "b2_1"), "stimulus_right_trial_count"] == 2
+
+
+def test_build_rdm_group_coverage_surfaces_present_sparse_and_invalid_groups():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"trial_id": "t1", "individual_id": "ind_ok", "date": "2026-01-01"},
+            {"trial_id": "t2", "individual_id": "ind_ok", "date": "2026-01-01"},
+            {"trial_id": "t3", "individual_id": "ind_single", "date": "2026-01-01"},
+            {"trial_id": "t4", "individual_id": "ind_invalid", "date": "2026-01-02"},
+            {"trial_id": "t5", "individual_id": "ind_invalid", "date": "2026-01-02"},
+        ]
+    )
+    comparisons = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "trial_id_a": "t1",
+                "trial_id_b": "t2",
+                "individual_id_a": "ind_ok",
+                "individual_id_b": "ind_ok",
+                "date_a": "2026-01-01",
+                "date_b": "2026-01-01",
+                "same_individual": True,
+                "same_date": True,
+                "comparison_status": "ok",
+            },
+            {
+                "view_name": "response_window",
+                "trial_id_a": "t1",
+                "trial_id_b": "t3",
+                "individual_id_a": "ind_ok",
+                "individual_id_b": "ind_single",
+                "date_a": "2026-01-01",
+                "date_b": "2026-01-01",
+                "same_individual": False,
+                "same_date": True,
+                "comparison_status": "ok",
+            },
+            {
+                "view_name": "response_window",
+                "trial_id_a": "t2",
+                "trial_id_b": "t3",
+                "individual_id_a": "ind_ok",
+                "individual_id_b": "ind_single",
+                "date_a": "2026-01-01",
+                "date_b": "2026-01-01",
+                "same_individual": False,
+                "same_date": True,
+                "comparison_status": "ok",
+            },
+            {
+                "view_name": "response_window",
+                "trial_id_a": "t4",
+                "trial_id_b": "t5",
+                "individual_id_a": "ind_invalid",
+                "individual_id_b": "ind_invalid",
+                "date_a": "2026-01-02",
+                "date_b": "2026-01-02",
+                "same_individual": True,
+                "same_date": True,
+                "comparison_status": "insufficient_overlap_neurons",
+            },
+        ]
+    )
+
+    coverage = build_rdm_group_coverage(metadata, comparisons, view_names=["response_window"])
+
+    individual = coverage.loc[coverage["group_type"] == "individual"].set_index("group_id")
+    assert individual.loc["ind_ok", "metadata_trial_count"] == 2
+    assert individual.loc["ind_ok", "same_group_pair_count"] == 1
+    assert individual.loc["ind_ok", "valid_same_group_pair_count"] == 1
+    assert individual.loc["ind_single", "metadata_trial_count"] == 1
+    assert individual.loc["ind_single", "same_group_pair_count"] == 0
+    assert individual.loc["ind_single", "valid_same_group_pair_count"] == 0
+    assert individual.loc["ind_invalid", "metadata_trial_count"] == 2
+    assert individual.loc["ind_invalid", "same_group_pair_count"] == 1
+    assert individual.loc["ind_invalid", "valid_same_group_pair_count"] == 0
+
+    date = coverage.loc[coverage["group_type"] == "date"].set_index("group_id")
+    assert date.loc["2026-01-01", "metadata_trial_count"] == 3
+    assert date.loc["2026-01-01", "same_group_pair_count"] == 3
+    assert date.loc["2026-01-01", "valid_same_group_pair_count"] == 3
+    assert date.loc["2026-01-02", "metadata_trial_count"] == 2
+    assert date.loc["2026-01-02", "same_group_pair_count"] == 1
+    assert date.loc["2026-01-02", "valid_same_group_pair_count"] == 0
 
 
 def test_build_pooled_rdm_matrix_is_symmetric(synthetic_geometry_comparisons):
@@ -587,6 +687,56 @@ def test_summarize_rdm_stability_marks_sparse_pooled_vs_group_scores_invalid():
     assert pd.isna(result.loc[0, "similarity"])
 
 
+def test_build_similarity_plot_panels_keeps_scopes_separate():
+    frame = pd.DataFrame.from_records(
+        [
+            {
+                "comparison_scope": "within_group_type",
+                "view_name": "response_window",
+                "reference_view_name": "response_window",
+                "similarity": 0.9,
+            },
+            {
+                "comparison_scope": "pooled_vs_group",
+                "view_name": "response_window",
+                "reference_view_name": "response_window",
+                "similarity": 0.3,
+            },
+            {
+                "comparison_scope": "pooled_vs_group",
+                "view_name": "full_trajectory",
+                "reference_view_name": "full_trajectory",
+                "similarity": 0.5,
+            },
+        ]
+    )
+
+    panels = _build_similarity_plot_panels(frame)
+
+    assert [panel["comparison_scope"] for panel in panels] == ["within_group_type", "pooled_vs_group"]
+    within = panels[0]["frame"]
+    pooled = panels[1]["frame"]
+    assert within.to_dict("records") == [
+        {
+            "comparison_scope": "within_group_type",
+            "view_label": "response_window",
+            "similarity": 0.9,
+        }
+    ]
+    assert pooled.to_dict("records") == [
+        {
+            "comparison_scope": "pooled_vs_group",
+            "view_label": "response_window",
+            "similarity": 0.3,
+        },
+        {
+            "comparison_scope": "pooled_vs_group",
+            "view_label": "full_trajectory",
+            "similarity": 0.5,
+        },
+    ]
+
+
 @pytest.fixture
 def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
     outputs = {
@@ -599,7 +749,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b1_1",
                     "same_stimulus": True,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 2,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.10,
                     "median_distance": 0.10,
                 },
@@ -610,7 +763,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 2,
                     "n_pairs": 2,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.85,
                     "median_distance": 0.85,
                 },
@@ -621,7 +777,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b2_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": True,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 2,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.20,
                     "median_distance": 0.20,
                 },
@@ -636,7 +795,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 1,
                     "mean_distance": 0.80,
                     "median_distance": 0.80,
                 }
@@ -651,7 +813,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 1,
                     "mean_distance": 0.82,
                     "median_distance": 0.82,
                 }
@@ -666,7 +831,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b1_1",
                     "same_stimulus": True,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 2,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.05,
                     "median_distance": 0.05,
                 },
@@ -677,7 +845,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 2,
                     "n_pairs": 2,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.65,
                     "median_distance": 0.65,
                 },
@@ -688,7 +859,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b2_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": True,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 2,
+                    "stimulus_right_trial_count": 2,
                     "mean_distance": 0.15,
                     "median_distance": 0.15,
                 },
@@ -703,7 +877,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 1,
                     "mean_distance": 0.60,
                     "median_distance": 0.60,
                 }
@@ -718,7 +895,10 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                     "stimulus_left": "b1_1",
                     "stimulus_right": "b2_1",
                     "same_stimulus": False,
+                    "pair_count": 1,
                     "n_pairs": 1,
+                    "stimulus_left_trial_count": 1,
+                    "stimulus_right_trial_count": 1,
                     "mean_distance": 0.62,
                     "median_distance": 0.62,
                 }
@@ -807,10 +987,70 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
         ),
         "rdm_group_coverage": pd.DataFrame.from_records(
             [
-                {"view_name": "response_window", "group_type": "individual", "n_groups": 2},
-                {"view_name": "response_window", "group_type": "date", "n_groups": 2},
-                {"view_name": "full_trajectory", "group_type": "individual", "n_groups": 1},
-                {"view_name": "full_trajectory", "group_type": "date", "n_groups": 1},
+                {
+                    "view_name": "response_window",
+                    "group_type": "individual",
+                    "group_id": "2026-01-01__worm_a",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 1,
+                    "valid_same_group_pair_count": 1,
+                },
+                {
+                    "view_name": "response_window",
+                    "group_type": "individual",
+                    "group_id": "2026-01-02__worm_b",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 1,
+                    "valid_same_group_pair_count": 1,
+                },
+                {
+                    "view_name": "response_window",
+                    "group_type": "date",
+                    "group_id": "2026-01-01",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 1,
+                    "valid_same_group_pair_count": 1,
+                },
+                {
+                    "view_name": "response_window",
+                    "group_type": "date",
+                    "group_id": "2026-01-02",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 0,
+                    "valid_same_group_pair_count": 0,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "individual",
+                    "group_id": "2026-01-01__worm_a",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 1,
+                    "valid_same_group_pair_count": 1,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "individual",
+                    "group_id": "2026-01-02__worm_b",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 0,
+                    "valid_same_group_pair_count": 0,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "date",
+                    "group_id": "2026-01-01",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 1,
+                    "valid_same_group_pair_count": 1,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "date",
+                    "group_id": "2026-01-02",
+                    "metadata_trial_count": 2,
+                    "same_group_pair_count": 0,
+                    "valid_same_group_pair_count": 0,
+                },
             ]
         ),
     }

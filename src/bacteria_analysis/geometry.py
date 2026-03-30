@@ -91,7 +91,11 @@ def run_geometry_pipeline(
     core_outputs["rdm_stability_by_individual"] = _filter_stability_table(stability, group_type="individual")
     core_outputs["rdm_stability_by_date"] = _filter_stability_table(stability, group_type="date")
     core_outputs["rdm_view_comparison"] = _filter_stability_table(stability, comparison_scope="pooled_cross_view")
-    core_outputs["rdm_group_coverage"] = build_rdm_group_coverage(pair_summary_by_group, view_names=selected_view_names)
+    core_outputs["rdm_group_coverage"] = build_rdm_group_coverage(
+        inputs.metadata,
+        comparisons,
+        view_names=selected_view_names,
+    )
     return core_outputs
 
 
@@ -160,21 +164,62 @@ def build_group_matrices(pair_summary_by_group: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
-def build_rdm_group_coverage(pair_summary_by_group: pd.DataFrame, view_names: list[str]) -> pd.DataFrame:
-    columns = ["view_name", "group_type", "n_groups"]
+def build_rdm_group_coverage(
+    metadata: pd.DataFrame,
+    comparisons: pd.DataFrame,
+    view_names: list[str],
+) -> pd.DataFrame:
+    columns = [
+        "view_name",
+        "group_type",
+        "group_id",
+        "metadata_trial_count",
+        "same_group_pair_count",
+        "valid_same_group_pair_count",
+    ]
     rows: list[dict[str, object]] = []
+    group_specs = (
+        ("individual", "individual_id", "individual_id_a", "same_individual"),
+        ("date", "date", "date_a", "same_date"),
+    )
     for view_name in view_names:
-        for group_type in ("individual", "date"):
-            subset = pair_summary_by_group.loc[
-                (pair_summary_by_group["view_name"] == view_name) & (pair_summary_by_group["group_type"] == group_type)
-            ].copy()
-            rows.append(
-                {
-                    "view_name": view_name,
-                    "group_type": group_type,
-                    "n_groups": int(subset["group_id"].nunique()) if not subset.empty else 0,
-                }
+        view_comparisons = comparisons.loc[comparisons["view_name"] == view_name].copy()
+        for group_type, metadata_group_column, comparison_group_column, same_group_column in group_specs:
+            metadata_groups = (
+                metadata.groupby(metadata_group_column, sort=False, dropna=False)["trial_id"].nunique().astype(int)
             )
+            metadata_groups.index = metadata_groups.index.astype(str)
+            same_group = view_comparisons.loc[view_comparisons[same_group_column].astype(bool)].copy()
+            same_group_counts = (
+                same_group.groupby(comparison_group_column, sort=False, dropna=False).size().astype(int)
+                if not same_group.empty
+                else pd.Series(dtype="int64")
+            )
+            same_group_counts.index = same_group_counts.index.astype(str)
+            valid_same_group = same_group.loc[same_group["comparison_status"] == VALID_COMPARISON_STATUS].copy()
+            valid_same_group_counts = (
+                valid_same_group.groupby(comparison_group_column, sort=False, dropna=False).size().astype(int)
+                if not valid_same_group.empty
+                else pd.Series(dtype="int64")
+            )
+            valid_same_group_counts.index = valid_same_group_counts.index.astype(str)
+
+            ordered_group_ids = metadata[metadata_group_column].astype(str).drop_duplicates().tolist()
+            extra_group_ids: list[str] = []
+            for group_id in same_group_counts.index.tolist() + valid_same_group_counts.index.tolist():
+                if group_id not in ordered_group_ids and group_id not in extra_group_ids:
+                    extra_group_ids.append(group_id)
+            for group_id in ordered_group_ids + extra_group_ids:
+                rows.append(
+                    {
+                        "view_name": view_name,
+                        "group_type": group_type,
+                        "group_id": group_id,
+                        "metadata_trial_count": int(metadata_groups.get(group_id, 0)),
+                        "same_group_pair_count": int(same_group_counts.get(group_id, 0)),
+                        "valid_same_group_pair_count": int(valid_same_group_counts.get(group_id, 0)),
+                    }
+                )
     return pd.DataFrame(rows, columns=columns)
 
 
@@ -186,7 +231,10 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
         "stimulus_left",
         "stimulus_right",
         "same_stimulus",
+        "pair_count",
         "n_pairs",
+        "stimulus_left_trial_count",
+        "stimulus_right_trial_count",
         "mean_distance",
         "median_distance",
     ]
@@ -211,8 +259,13 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
 
     stimulus_a = valid["stimulus_a"].astype(str)
     stimulus_b = valid["stimulus_b"].astype(str)
+    trial_id_a = valid["trial_id_a"].astype(str)
+    trial_id_b = valid["trial_id_b"].astype(str)
+    swapped = stimulus_a > stimulus_b
     valid["stimulus_left"] = np.where(stimulus_a <= stimulus_b, stimulus_a, stimulus_b)
     valid["stimulus_right"] = np.where(stimulus_a <= stimulus_b, stimulus_b, stimulus_a)
+    valid["trial_id_left"] = np.where(swapped, trial_id_b, trial_id_a)
+    valid["trial_id_right"] = np.where(swapped, trial_id_a, trial_id_b)
 
     rows: list[dict[str, object]] = []
     for (view, group_id, stimulus_left, stimulus_right), group in valid.groupby(
@@ -220,6 +273,22 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
         sort=False,
         dropna=False,
     ):
+        pair_count = int(len(group))
+        if stimulus_left == stimulus_right:
+            support_trial_ids = pd.Index(
+                pd.concat(
+                    [
+                        group["trial_id_left"].astype(str),
+                        group["trial_id_right"].astype(str),
+                    ],
+                    ignore_index=True,
+                ).unique()
+            )
+            stimulus_left_trial_count = int(len(support_trial_ids))
+            stimulus_right_trial_count = int(len(support_trial_ids))
+        else:
+            stimulus_left_trial_count = int(group["trial_id_left"].astype(str).nunique())
+            stimulus_right_trial_count = int(group["trial_id_right"].astype(str).nunique())
         rows.append(
             {
                 "view_name": view,
@@ -228,7 +297,10 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
                 "stimulus_left": stimulus_left,
                 "stimulus_right": stimulus_right,
                 "same_stimulus": bool(stimulus_left == stimulus_right),
-                "n_pairs": int(len(group)),
+                "pair_count": pair_count,
+                "n_pairs": pair_count,
+                "stimulus_left_trial_count": stimulus_left_trial_count,
+                "stimulus_right_trial_count": stimulus_right_trial_count,
                 "mean_distance": float(group["distance"].mean()),
                 "median_distance": float(group["distance"].median()),
             }

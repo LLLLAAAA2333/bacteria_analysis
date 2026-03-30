@@ -119,13 +119,29 @@ def _plot_rdm_matrix(matrix_frame: pd.DataFrame, title: str, path: Path) -> Path
 
 
 def _plot_similarity_summary(frame: pd.DataFrame, title: str, path: Path) -> Path:
-    plt.figure(figsize=(7, 4.5))
     if frame.empty:
+        plt.figure(figsize=(7, 4.5))
         plt.text(0.5, 0.5, "No data", ha="center", va="center")
         plt.axis("off")
         plt.title(title)
         return _save_figure(path)
 
+    panels = _build_similarity_plot_panels(frame)
+    fig, axes = plt.subplots(1, len(panels), figsize=(max(7, 4.5 * len(panels)), 4.5), squeeze=False)
+    axes_flat = list(axes.flat)
+    for axis, panel in zip(axes_flat, panels, strict=True):
+        sns.barplot(data=panel["frame"], x="view_label", y="similarity", color="#4c78a8", ax=axis)
+        axis.tick_params(axis="x", rotation=15)
+        for label in axis.get_xticklabels():
+            label.set_ha("right")
+        axis.set_xlabel("Comparison")
+        axis.set_ylabel("Similarity")
+        axis.set_title(_format_similarity_scope_label(panel["comparison_scope"]))
+    fig.suptitle(title)
+    return _save_figure(path)
+
+
+def _build_similarity_plot_panels(frame: pd.DataFrame) -> list[dict[str, object]]:
     plot_frame = frame.copy()
     plot_frame["view_label"] = plot_frame["view_name"].astype(str)
     if "reference_view_name" in plot_frame.columns:
@@ -134,13 +150,27 @@ def _plot_similarity_summary(frame: pd.DataFrame, title: str, path: Path) -> Pat
         plot_frame.loc[different_reference, "view_label"] = (
             plot_frame.loc[different_reference, "view_label"] + " vs " + reference.loc[different_reference]
         )
+    plot_frame["similarity"] = pd.to_numeric(plot_frame["similarity"], errors="coerce")
 
-    sns.barplot(data=plot_frame, x="view_label", y="similarity", color="#4c78a8")
-    plt.xticks(rotation=15, ha="right")
-    plt.xlabel("Comparison")
-    plt.ylabel("Similarity")
-    plt.title(title)
-    return _save_figure(path)
+    panels: list[dict[str, object]] = []
+    for comparison_scope, scope_frame in plot_frame.groupby("comparison_scope", sort=False, dropna=False):
+        summary = (
+            scope_frame.groupby("view_label", sort=False, dropna=False)["similarity"]
+            .mean()
+            .reset_index()
+        )
+        summary["comparison_scope"] = str(comparison_scope)
+        panels.append(
+            {
+                "comparison_scope": str(comparison_scope),
+                "frame": summary[["comparison_scope", "view_label", "similarity"]],
+            }
+        )
+    return panels
+
+
+def _format_similarity_scope_label(comparison_scope: str) -> str:
+    return str(comparison_scope).replace("_", " ").title()
 
 
 def _save_figure(path: Path) -> Path:
