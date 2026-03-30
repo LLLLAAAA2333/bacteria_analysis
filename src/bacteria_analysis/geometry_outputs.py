@@ -51,6 +51,8 @@ def _write_stage2_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     }
 
     for artifact_name, frame in core_outputs.items():
+        if _is_non_pooled_matrix_artifact(artifact_name):
+            continue
         output_dir = dirs["qc_dir"] if artifact_name == "rdm_group_coverage" else dirs["tables_dir"]
         written[artifact_name] = write_parquet(_prepare_for_parquet(frame), output_dir / f"{artifact_name}.parquet")
 
@@ -141,6 +143,10 @@ def _save_figure(path: Path) -> Path:
     plt.savefig(path, dpi=150, bbox_inches="tight")
     plt.close()
     return path
+
+
+def _is_non_pooled_matrix_artifact(artifact_name: str) -> bool:
+    return artifact_name.startswith("rdm_matrix__") and not artifact_name.endswith("__pooled")
 
 
 def _build_run_summary(core_outputs: dict[str, pd.DataFrame], written: dict[str, Path]) -> dict[str, Any]:

@@ -527,7 +527,7 @@ def test_summarize_rdm_stability_rejects_duplicate_pooled_matrices_for_view():
 
 @pytest.fixture
 def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
-    return {
+    outputs = {
         "rdm_pairs__response_window__pooled": pd.DataFrame.from_records(
             [
                 {
@@ -676,6 +676,13 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                 "b2_1": [0.65, 0.15],
             }
         ),
+        "rdm_matrix__response_window__individual": pd.DataFrame(
+            {
+                "stimulus_row": ["b1_1", "b2_1"],
+                "b1_1": [0.11, 0.81],
+                "b2_1": [0.81, 0.21],
+            }
+        ),
         "rdm_stability_by_individual": pd.DataFrame.from_records(
             [
                 {
@@ -745,6 +752,7 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
             ]
         ),
     }
+    return outputs
 
 
 def test_ensure_stage2_output_dirs_creates_expected_tree(tmp_path):
@@ -759,6 +767,17 @@ def test_ensure_stage2_output_dirs_creates_expected_tree(tmp_path):
 def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometry_outputs):
     written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
 
+    required_pair_tables = [
+        "rdm_pairs__response_window__pooled.parquet",
+        "rdm_pairs__response_window__individual.parquet",
+        "rdm_pairs__response_window__date.parquet",
+        "rdm_pairs__full_trajectory__pooled.parquet",
+        "rdm_pairs__full_trajectory__individual.parquet",
+        "rdm_pairs__full_trajectory__date.parquet",
+    ]
+    for name in required_pair_tables:
+        assert (written["tables_dir"] / name).exists()
+
     assert (written["tables_dir"] / "rdm_stability_by_individual.parquet").exists()
     assert (written["tables_dir"] / "rdm_stability_by_date.parquet").exists()
     assert (written["tables_dir"] / "rdm_view_comparison.parquet").exists()
@@ -770,6 +789,14 @@ def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometr
     assert (written["figures_dir"] / "rdm_stability_by_individual.png").exists()
     assert (written["figures_dir"] / "rdm_stability_by_date.png").exists()
     assert (written["figures_dir"] / "rdm_view_comparison.png").exists()
+
+
+def test_write_stage2_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path, synthetic_geometry_outputs):
+    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+
+    assert "rdm_matrix__response_window__individual" not in written
+    assert not (written["tables_dir"] / "rdm_matrix__response_window__individual.parquet").exists()
+    assert (written["tables_dir"] / "rdm_matrix__response_window__pooled.parquet").exists()
 
 
 def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
