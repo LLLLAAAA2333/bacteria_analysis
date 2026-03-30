@@ -19,8 +19,6 @@ def summarize_grouped_stimulus_pairs(comparisons: pd.DataFrame, view_name: str, 
 
 def build_rdm_matrix(pair_summary: pd.DataFrame, group_id: str) -> pd.DataFrame:
     group = pair_summary.loc[pair_summary["group_id"] == group_id].copy()
-    if group.empty and group_id == "all":
-        group = pair_summary.copy()
     matrix = _pivot_symmetric_distance_matrix(group, value_column="mean_distance")
     if matrix.empty:
         return matrix.reset_index()

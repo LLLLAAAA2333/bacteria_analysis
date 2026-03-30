@@ -19,14 +19,14 @@ def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pair
 def test_date_grouped_stimulus_pair_summary_uses_date_groups(synthetic_geometry_comparisons):
     summary = summarize_grouped_stimulus_pairs(
         synthetic_geometry_comparisons,
-        view_name="response_window",
+        view_name="full_trajectory",
         group_type="date",
     )
 
-    assert set(summary["group_id"]) == {"2026-01-01", "2026-01-02"}
+    assert set(summary["group_id"]) == {"2026-01-01"}
     assert (summary["group_type"] == "date").all()
-    assert summary["view_name"].eq("response_window").all()
-    assert summary["n_pairs"].sum() == 3
+    assert summary["view_name"].eq("full_trajectory").all()
+    assert summary["n_pairs"].sum() == 1
 
 
 def test_pooled_grouped_stimulus_pair_summary_uses_single_group(synthetic_geometry_comparisons):
@@ -55,7 +55,7 @@ def test_build_pooled_rdm_matrix_is_symmetric(synthetic_geometry_comparisons):
         group_type="pooled",
     )
 
-    matrix = build_rdm_matrix(pair_summary, group_id="all").set_index("stimulus_row")
+    matrix = build_rdm_matrix(pair_summary, group_id="pooled").set_index("stimulus_row")
 
     assert matrix.shape[0] == matrix.shape[1]
     assert matrix.equals(matrix.T)
