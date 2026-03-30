@@ -101,6 +101,12 @@ def _prepare_for_parquet(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _plot_rdm_matrix(matrix_frame: pd.DataFrame, title: str, path: Path) -> Path:
     heatmap_frame = matrix_frame.set_index("stimulus_row")
+    if heatmap_frame.empty or len(heatmap_frame.columns) == 0:
+        plt.figure(figsize=(6, 4.5))
+        plt.text(0.5, 0.5, "No data", ha="center", va="center")
+        plt.axis("off")
+        plt.title(title)
+        return _save_figure(path)
     size = max(5.5, 0.75 * len(heatmap_frame.columns) + 2.0)
     plt.figure(figsize=(size, size))
     sns.heatmap(heatmap_frame, cmap="viridis")
@@ -151,7 +157,7 @@ def _is_non_pooled_matrix_artifact(artifact_name: str) -> bool:
 
 def _build_run_summary(core_outputs: dict[str, pd.DataFrame], written: dict[str, Path]) -> dict[str, Any]:
     pair_table_names = sorted(name for name in core_outputs if name.startswith("rdm_pairs__"))
-    pooled_matrix_names = sorted(name for name in core_outputs if name.startswith("rdm_matrix__"))
+    pooled_matrix_names = sorted(name for name in core_outputs if name.startswith("rdm_matrix__") and name.endswith("__pooled"))
     views = sorted(
         {
             name.split("__")[1]

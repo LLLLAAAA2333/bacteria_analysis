@@ -799,6 +799,36 @@ def test_write_stage2_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path
     assert (written["tables_dir"] / "rdm_matrix__response_window__pooled.parquet").exists()
 
 
+def test_write_stage2_outputs_handles_empty_pooled_matrix_frames(tmp_path, synthetic_geometry_outputs):
+    outputs = dict(synthetic_geometry_outputs)
+    outputs["rdm_matrix__response_window__pooled"] = pd.DataFrame(columns=["stimulus_row"])
+
+    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+
+    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
+    assert (written["output_root"] / "run_summary.json").exists()
+
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+
+
+def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summary(tmp_path, synthetic_geometry_outputs):
+    outputs = dict(synthetic_geometry_outputs)
+    outputs["rdm_matrix__novel_view__individual"] = pd.DataFrame(
+        {
+            "stimulus_row": ["b1_1", "b2_1"],
+            "b1_1": [0.12, 0.72],
+            "b2_1": [0.72, 0.18],
+        }
+    )
+
+    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+    assert "novel_view" not in summary["pooled_matrix_views"]
+
+
 def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
     written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
 
