@@ -125,6 +125,25 @@ def test_extract_upper_triangle_returns_strict_upper_entries():
     ]
 
 
+def test_extract_upper_triangle_aligns_columns_to_stimulus_row_labels():
+    matrix = pd.DataFrame(
+        {
+            "stimulus_row": ["b1_1", "b2_1", "b3_1"],
+            "b3_1": [0.5, 0.7, 0.0],
+            "b1_1": [0.0, 0.3, 0.5],
+            "b2_1": [0.3, 0.0, 0.7],
+        }
+    )
+
+    result = extract_upper_triangle(matrix)
+
+    assert result.to_dict("records") == [
+        {"stimulus_left": "b1_1", "stimulus_right": "b2_1", "value": 0.3},
+        {"stimulus_left": "b1_1", "stimulus_right": "b3_1", "value": 0.5},
+        {"stimulus_left": "b2_1", "stimulus_right": "b3_1", "value": 0.7},
+    ]
+
+
 def test_score_rdm_similarity_uses_shared_non_missing_entries_only():
     left = pd.DataFrame(
         {
@@ -385,6 +404,119 @@ def test_summarize_rdm_stability_returns_minimum_similarity_views():
         "pooled_cross_view",
     }
     assert set(result["group_type"]) == {"individual", "date", "pooled"}
+    assert len(result) == 7
     assert result["score_status"].eq("ok").all()
     assert result["n_shared_entries"].eq(3).all()
     assert result["similarity"].tolist() == pytest.approx([1.0] * len(result))
+    assert len(result.loc[result["comparison_scope"] == "within_group_type"]) == 2
+    assert len(result.loc[result["comparison_scope"] == "pooled_vs_group"]) == 4
+    assert len(result.loc[result["comparison_scope"] == "pooled_cross_view"]) == 1
+
+
+def test_summarize_rdm_stability_rejects_duplicate_pooled_matrices_for_view():
+    pair_summary = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "group_type": "individual",
+                "group_id": "ind_a",
+                "stimulus_left": "s1",
+                "stimulus_right": "s2",
+                "same_stimulus": False,
+                "n_pairs": 1,
+                "mean_distance": 0.2,
+                "median_distance": 0.2,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "individual",
+                "group_id": "ind_a",
+                "stimulus_left": "s1",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 1,
+                "mean_distance": 0.8,
+                "median_distance": 0.8,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "individual",
+                "group_id": "ind_a",
+                "stimulus_left": "s2",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 1,
+                "mean_distance": 0.5,
+                "median_distance": 0.5,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s1",
+                "stimulus_right": "s2",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.2,
+                "median_distance": 0.2,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s1",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.8,
+                "median_distance": 0.8,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s2",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.5,
+                "median_distance": 0.5,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled_copy",
+                "stimulus_left": "s1",
+                "stimulus_right": "s2",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.2,
+                "median_distance": 0.2,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled_copy",
+                "stimulus_left": "s1",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.8,
+                "median_distance": 0.8,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled_copy",
+                "stimulus_left": "s2",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 2,
+                "mean_distance": 0.5,
+                "median_distance": 0.5,
+            },
+        ]
+    )
+
+    with pytest.raises(ValueError, match="exactly one pooled matrix for view_name 'response_window'"):
+        summarize_rdm_stability(pair_summary)

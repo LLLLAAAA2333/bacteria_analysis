@@ -162,6 +162,8 @@ def _matrix_upper_triangle_records(matrix: pd.DataFrame) -> pd.DataFrame:
     if matrix.empty:
         return pd.DataFrame(columns=columns)
 
+    matrix = _align_matrix_columns_to_index(matrix)
+
     rows: list[dict[str, object]] = []
     labels = list(matrix.index.astype(str))
     for row_idx, stimulus_left in enumerate(labels):
@@ -267,6 +269,11 @@ def _score_pooled_vs_group(grouped_matrices: pd.DataFrame) -> list[dict[str, obj
         pooled_match = pooled.loc[pooled["view_name"] == group["view_name"]]
         if pooled_match.empty:
             continue
+        if len(pooled_match) != 1:
+            raise ValueError(
+                f"expected exactly one pooled matrix for view_name {group['view_name']!r}; "
+                f"found {len(pooled_match)}"
+            )
         pooled_matrix = pooled_match.iloc[0]
         score = score_rdm_similarity(group["matrix_frame"], pooled_matrix["matrix_frame"])
         rows.append(
@@ -310,3 +317,23 @@ def _spearman_similarity(left_values: pd.Series, right_values: pd.Series) -> flo
     if left_ranks.nunique(dropna=True) < 2 or right_ranks.nunique(dropna=True) < 2:
         return np.nan
     return float(left_ranks.corr(right_ranks, method="pearson"))
+
+
+def _align_matrix_columns_to_index(matrix: pd.DataFrame) -> pd.DataFrame:
+    index_labels = pd.Index(matrix.index.astype(str))
+    column_labels = pd.Index(matrix.columns.astype(str))
+    if not index_labels.is_unique:
+        duplicates = index_labels[index_labels.duplicated()].unique().tolist()
+        raise ValueError(f"matrix index contains duplicate stimulus labels: {duplicates}")
+    if not column_labels.is_unique:
+        duplicates = column_labels[column_labels.duplicated()].unique().tolist()
+        raise ValueError(f"matrix columns contain duplicate stimulus labels: {duplicates}")
+    if set(index_labels) != set(column_labels):
+        raise ValueError(
+            "matrix columns must match stimulus_row labels; "
+            f"index={index_labels.tolist()} columns={column_labels.tolist()}"
+        )
+    aligned = matrix.copy()
+    aligned.index = index_labels
+    aligned.columns = column_labels
+    return aligned.reindex(columns=index_labels)
