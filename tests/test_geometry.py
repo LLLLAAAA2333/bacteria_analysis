@@ -1,6 +1,6 @@
 import pytest
 
-from bacteria_analysis.geometry import summarize_grouped_stimulus_pairs
+from bacteria_analysis.geometry import build_rdm_matrix, summarize_grouped_stimulus_pairs
 
 
 def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pairs(synthetic_geometry_comparisons):
@@ -46,6 +46,22 @@ def test_pooled_grouped_stimulus_pair_summary_uses_single_group(synthetic_geomet
         ("b2_1", "b2_1"),
     }
     assert summary["n_pairs"].sum() == 4
+
+
+def test_build_pooled_rdm_matrix_is_symmetric(synthetic_geometry_comparisons):
+    pair_summary = summarize_grouped_stimulus_pairs(
+        synthetic_geometry_comparisons,
+        view_name="response_window",
+        group_type="pooled",
+    )
+
+    matrix = build_rdm_matrix(pair_summary, group_id="all").set_index("stimulus_row")
+
+    assert matrix.shape[0] == matrix.shape[1]
+    assert matrix.equals(matrix.T)
+    assert matrix.loc["b1_1", "b1_1"] == pytest.approx(0.10)
+    assert matrix.loc["b2_1", "b2_1"] == pytest.approx(0.20)
+    assert matrix.loc["b1_1", "b2_1"] == pytest.approx(0.875)
 
 
 def test_invalid_group_type_raises_value_error(synthetic_geometry_comparisons):

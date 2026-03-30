@@ -17,6 +17,18 @@ def summarize_grouped_stimulus_pairs(comparisons: pd.DataFrame, view_name: str, 
     return _aggregate_grouped_pairs(view_frame, group_type=group_type)
 
 
+def build_rdm_matrix(pair_summary: pd.DataFrame, group_id: str) -> pd.DataFrame:
+    group = pair_summary.loc[pair_summary["group_id"] == group_id].copy()
+    if group.empty and group_id == "all":
+        group = pair_summary.copy()
+    matrix = _pivot_symmetric_distance_matrix(group, value_column="mean_distance")
+    if matrix.empty:
+        return matrix.reset_index()
+    frame = matrix.copy()
+    frame.insert(0, "stimulus_row", frame.index.astype(str))
+    return frame.reset_index(drop=True)
+
+
 def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.DataFrame:
     columns = [
         "view_name",
@@ -74,3 +86,26 @@ def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.D
         )
 
     return pd.DataFrame(rows, columns=columns)
+
+
+def _pivot_symmetric_distance_matrix(group: pd.DataFrame, value_column: str) -> pd.DataFrame:
+    if group.empty:
+        return pd.DataFrame()
+
+    forward = group[["stimulus_left", "stimulus_right", value_column]].rename(
+        columns={"stimulus_left": "stimulus_row", "stimulus_right": "stimulus_column"}
+    )
+    reverse = group.loc[
+        group["stimulus_left"] != group["stimulus_right"], ["stimulus_right", "stimulus_left", value_column]
+    ].rename(columns={"stimulus_right": "stimulus_row", "stimulus_left": "stimulus_column"})
+    matrix_long = pd.concat([forward, reverse], ignore_index=True)
+    if matrix_long.empty:
+        return pd.DataFrame()
+
+    stimuli = sorted(set(matrix_long["stimulus_row"]).union(matrix_long["stimulus_column"]))
+    columns = pd.Index(stimuli, dtype=object)
+    matrix = matrix_long.pivot(index="stimulus_row", columns="stimulus_column", values=value_column)
+    matrix = matrix.reindex(index=columns, columns=columns)
+    matrix.index.name = "stimulus_row"
+    matrix.columns.name = "stimulus_column"
+    return matrix
