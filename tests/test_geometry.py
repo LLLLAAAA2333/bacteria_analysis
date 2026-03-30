@@ -6,13 +6,18 @@ import pytest
 from bacteria_analysis.geometry import (
     build_rdm_matrix,
     build_rdm_group_coverage,
+    build_stimulus_name_map,
+    build_stimulus_overlap_matrix,
     extract_upper_triangle,
     score_rdm_similarity,
     summarize_grouped_stimulus_pairs,
     summarize_rdm_stability,
 )
 from bacteria_analysis.geometry_outputs import (
+    _build_overlap_heatmap_frame,
+    _build_rdm_heatmap_frame,
     _build_similarity_plot_panels,
+    _cluster_reorder_heatmap_frame,
     ensure_stage2_output_dirs,
     write_stage2_outputs,
 )
@@ -156,6 +161,79 @@ def test_build_rdm_group_coverage_surfaces_present_sparse_and_invalid_groups():
     assert date.loc["2026-01-02", "metadata_trial_count"] == 2
     assert date.loc["2026-01-02", "same_group_pair_count"] == 1
     assert date.loc["2026-01-02", "valid_same_group_pair_count"] == 0
+
+
+def test_build_stimulus_name_map_requires_one_name_per_stimulus():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b1_1", "stim_name": "A001 stationary"},
+            {"stimulus": "b1_1", "stim_name": "A001 stationary"},
+            {"stimulus": "b2_1", "stim_name": "A002 stationary"},
+        ]
+    )
+
+    mapping = build_stimulus_name_map(metadata)
+
+    assert mapping == {
+        "b1_1": "A001 stationary",
+        "b2_1": "A002 stationary",
+    }
+
+
+def test_build_stimulus_name_map_rejects_conflicting_names_for_one_stimulus():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b5_2", "stim_name": "A137 stationary"},
+            {"stimulus": "b5_2", "stim_name": "A138 stationary"},
+        ]
+    )
+
+    with pytest.raises(ValueError, match="stimulus to stim_name mapping must be one-to-one"):
+        build_stimulus_name_map(metadata)
+
+
+def test_build_stimulus_overlap_matrix_for_dates_is_binary_and_date_ordered():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b2_1", "stim_name": "A002 stationary", "date": "2026-01-02", "individual_id": "2026-01-02__w2"},
+            {"stimulus": "b1_1", "stim_name": "A001 stationary", "date": "2026-01-01", "individual_id": "2026-01-01__w1"},
+            {"stimulus": "b2_1", "stim_name": "A002 stationary", "date": "2026-01-01", "individual_id": "2026-01-01__w1"},
+        ]
+    )
+
+    matrix = build_stimulus_overlap_matrix(metadata, group_type="date", stimulus_name_map=build_stimulus_name_map(metadata))
+
+    assert matrix.columns.tolist() == ["group_id", "b1_1", "b2_1"]
+    assert matrix["group_id"].tolist() == ["2026-01-01", "2026-01-02"]
+    assert matrix.loc[0, ["b1_1", "b2_1"]].tolist() == [1, 1]
+    assert matrix.loc[1, ["b1_1", "b2_1"]].tolist() == [0, 1]
+    assert matrix.attrs["group_axis_label"] == "Date"
+    assert matrix.attrs["group_display_labels"] == {
+        "2026-01-01": "2026-01-01 (2)",
+        "2026-01-02": "2026-01-02 (1)",
+    }
+
+
+def test_build_stimulus_overlap_matrix_for_individuals_is_date_then_individual_ordered():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b2_1", "stim_name": "A002 stationary", "date": "2026-01-02", "individual_id": "2026-01-02__w2"},
+            {"stimulus": "b1_1", "stim_name": "A001 stationary", "date": "2026-01-01", "individual_id": "2026-01-01__w2"},
+            {"stimulus": "b1_1", "stim_name": "A001 stationary", "date": "2026-01-01", "individual_id": "2026-01-01__w1"},
+        ]
+    )
+
+    matrix = build_stimulus_overlap_matrix(
+        metadata,
+        group_type="individual",
+        stimulus_name_map=build_stimulus_name_map(metadata),
+    )
+
+    assert matrix["group_id"].tolist() == ["2026-01-01__w1", "2026-01-01__w2", "2026-01-02__w2"]
+    assert matrix.columns.tolist() == ["group_id", "b1_1", "b2_1"]
+    assert matrix.loc[0, ["b1_1", "b2_1"]].tolist() == [1, 0]
+    assert matrix.loc[2, ["b1_1", "b2_1"]].tolist() == [0, 1]
+    assert matrix.attrs["group_axis_label"] == "Individual"
 
 
 def test_build_pooled_rdm_matrix_is_symmetric(synthetic_geometry_comparisons):
@@ -743,6 +821,87 @@ def test_build_similarity_plot_panels_keeps_scopes_separate():
     ]
 
 
+def test_build_rdm_heatmap_frame_uses_stim_name_labels():
+    matrix = pd.DataFrame(
+        {
+            "stimulus_row": ["b1_1", "b2_1", "b3_1"],
+            "b1_1": [0.0, 0.2, 0.8],
+            "b2_1": [0.2, 0.0, 0.7],
+            "b3_1": [0.8, 0.7, 0.0],
+        }
+    )
+    matrix.attrs["stimulus_name_map"] = {
+        "b1_1": "A001 stationary",
+        "b2_1": "A002 stationary",
+        "b3_1": "A003 stationary",
+    }
+
+    result = _build_rdm_heatmap_frame(matrix)
+
+    assert result.index.tolist() == ["A001 stationary", "A002 stationary", "A003 stationary"]
+    assert result.columns.tolist() == ["A001 stationary", "A002 stationary", "A003 stationary"]
+
+
+def test_build_rdm_heatmap_frame_rejects_duplicate_stim_name_labels():
+    matrix = pd.DataFrame(
+        {
+            "stimulus_row": ["b22_0", "b5_2"],
+            "b22_0": [0.0, 0.4],
+            "b5_2": [0.4, 0.0],
+        }
+    )
+    matrix.attrs["stimulus_name_map"] = {
+        "b22_0": "A137 stationary",
+        "b5_2": "A137 stationary",
+    }
+
+    with pytest.raises(ValueError, match="stim_name labels must be unique"):
+        _build_rdm_heatmap_frame(matrix)
+
+
+def test_build_overlap_heatmap_frame_uses_stim_name_and_group_display_labels():
+    matrix = pd.DataFrame(
+        {
+            "group_id": ["2026-01-01", "2026-01-02"],
+            "b1_1": [1, 0],
+            "b2_1": [1, 1],
+        }
+    )
+    matrix.attrs["stimulus_name_map"] = {
+        "b1_1": "A001 stationary",
+        "b2_1": "A002 stationary",
+    }
+    matrix.attrs["group_display_labels"] = {
+        "2026-01-01": "2026-01-01 (2)",
+        "2026-01-02": "2026-01-02 (1)",
+    }
+
+    result = _build_overlap_heatmap_frame(matrix)
+
+    assert result.index.tolist() == ["2026-01-01 (2)", "2026-01-02 (1)"]
+    assert result.columns.tolist() == ["A001 stationary", "A002 stationary"]
+
+
+def test_cluster_reorder_heatmap_frame_keeps_closest_pair_adjacent():
+    heatmap_frame = pd.DataFrame(
+        [
+            [0.0, 0.1, 0.9, 0.8],
+            [0.1, 0.0, 0.85, 0.75],
+            [0.9, 0.85, 0.0, 0.2],
+            [0.8, 0.75, 0.2, 0.0],
+        ],
+        index=["A001 stationary", "A002 stationary", "A003 stationary", "A004 stationary"],
+        columns=["A001 stationary", "A002 stationary", "A003 stationary", "A004 stationary"],
+    )
+
+    result = _cluster_reorder_heatmap_frame(heatmap_frame)
+    ordered = result.index.tolist()
+
+    assert set(ordered) == set(heatmap_frame.index.tolist())
+    assert abs(ordered.index("A001 stationary") - ordered.index("A002 stationary")) == 1
+    assert abs(ordered.index("A003 stationary") - ordered.index("A004 stationary")) == 1
+
+
 @pytest.fixture
 def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
     outputs = {
@@ -1059,6 +1218,38 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
                 },
             ]
         ),
+        "stimulus_overlap__date": pd.DataFrame(
+            {
+                "group_id": ["2026-01-01", "2026-01-02"],
+                "b1_1": [1, 0],
+                "b2_1": [1, 1],
+            }
+        ),
+        "stimulus_overlap__individual": pd.DataFrame(
+            {
+                "group_id": ["2026-01-01__worm_a", "2026-01-02__worm_b"],
+                "b1_1": [1, 0],
+                "b2_1": [1, 1],
+            }
+        ),
+    }
+    stimulus_name_map = {
+        "b1_1": "A001 stationary",
+        "b2_1": "A002 stationary",
+    }
+    outputs["rdm_matrix__response_window__pooled"].attrs["stimulus_name_map"] = stimulus_name_map
+    outputs["rdm_matrix__full_trajectory__pooled"].attrs["stimulus_name_map"] = stimulus_name_map
+    outputs["stimulus_overlap__date"].attrs["stimulus_name_map"] = stimulus_name_map
+    outputs["stimulus_overlap__date"].attrs["group_axis_label"] = "Date"
+    outputs["stimulus_overlap__date"].attrs["group_display_labels"] = {
+        "2026-01-01": "2026-01-01 (2)",
+        "2026-01-02": "2026-01-02 (1)",
+    }
+    outputs["stimulus_overlap__individual"].attrs["stimulus_name_map"] = stimulus_name_map
+    outputs["stimulus_overlap__individual"].attrs["group_axis_label"] = "Individual"
+    outputs["stimulus_overlap__individual"].attrs["group_display_labels"] = {
+        "2026-01-01__worm_a": "2026-01-01__worm_a (2)",
+        "2026-01-02__worm_b": "2026-01-02__worm_b (1)",
     }
     return outputs
 
@@ -1092,11 +1283,17 @@ def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometr
     assert (written["tables_dir"] / "rdm_matrix__response_window__pooled.parquet").exists()
     assert (written["tables_dir"] / "rdm_matrix__full_trajectory__pooled.parquet").exists()
     assert (written["qc_dir"] / "rdm_group_coverage.parquet").exists()
+    assert (written["qc_dir"] / "stimulus_overlap__date.parquet").exists()
+    assert (written["qc_dir"] / "stimulus_overlap__individual.parquet").exists()
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
+    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
     assert (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled.png").exists()
+    assert (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled__clustered.png").exists()
     assert (written["figures_dir"] / "rdm_stability_by_individual.png").exists()
     assert (written["figures_dir"] / "rdm_stability_by_date.png").exists()
     assert (written["figures_dir"] / "rdm_view_comparison.png").exists()
+    assert (written["figures_dir"] / "stimulus_overlap__date.png").exists()
+    assert (written["figures_dir"] / "stimulus_overlap__individual.png").exists()
 
 
 def test_write_stage2_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path, synthetic_geometry_outputs):
@@ -1114,6 +1311,7 @@ def test_write_stage2_outputs_handles_empty_pooled_matrix_frames(tmp_path, synth
     written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
 
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
+    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
     assert (written["output_root"] / "run_summary.json").exists()
 
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
@@ -1151,6 +1349,8 @@ def test_write_stage2_outputs_records_only_actual_included_views(tmp_path, synth
         "rdm_group_coverage": synthetic_geometry_outputs["rdm_group_coverage"].loc[
             lambda frame: frame["view_name"] == "full_trajectory"
         ],
+        "stimulus_overlap__date": synthetic_geometry_outputs["stimulus_overlap__date"],
+        "stimulus_overlap__individual": synthetic_geometry_outputs["stimulus_overlap__individual"],
     }
 
     written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
@@ -1182,7 +1382,11 @@ def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_ou
     ]
     assert summary["stability_table_names"] == ["rdm_stability_by_date", "rdm_stability_by_individual"]
     assert summary["view_comparison_table"] == "rdm_view_comparison"
-    assert summary["qc_table_names"] == ["rdm_group_coverage"]
+    assert summary["qc_table_names"] == [
+        "rdm_group_coverage",
+        "stimulus_overlap__date",
+        "stimulus_overlap__individual",
+    ]
     assert summary["tables_dir"].endswith("stage2_geometry\\tables")
     assert summary["figures_dir"].endswith("stage2_geometry\\figures")
 

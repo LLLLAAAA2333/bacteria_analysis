@@ -64,6 +64,7 @@ def run_geometry_pipeline(
         tensor_path=input_paths["tensor"],
     )
     selected_view_names = parse_stage2_views(view_names)
+    stimulus_name_map = build_stimulus_name_map(inputs.metadata)
     view_windows = {view_name: STAGE2_MVP_VIEW_WINDOWS[view_name] for view_name in selected_view_names}
     views = build_trial_views(inputs.metadata, inputs.tensor, view_windows=view_windows)
     comparisons = pd.concat(
@@ -81,10 +82,12 @@ def run_geometry_pipeline(
             pair_summary = summarize_grouped_stimulus_pairs(comparisons, view_name=view_name, group_type=group_type)
             core_outputs[f"rdm_pairs__{view_name}__{group_type}"] = pair_summary
             pair_summary_frames.append(pair_summary)
-        core_outputs[f"rdm_matrix__{view_name}__pooled"] = build_rdm_matrix(
+        pooled_matrix = build_rdm_matrix(
             core_outputs[f"rdm_pairs__{view_name}__pooled"],
             group_id="pooled",
         )
+        pooled_matrix.attrs["stimulus_name_map"] = stimulus_name_map
+        core_outputs[f"rdm_matrix__{view_name}__pooled"] = pooled_matrix
 
     pair_summary_by_group = _concat_frames(pair_summary_frames)
     stability = summarize_rdm_stability(pair_summary_by_group)
@@ -96,7 +99,30 @@ def run_geometry_pipeline(
         comparisons,
         view_names=selected_view_names,
     )
+    core_outputs["stimulus_overlap__date"] = build_stimulus_overlap_matrix(
+        inputs.metadata,
+        group_type="date",
+        stimulus_name_map=stimulus_name_map,
+    )
+    core_outputs["stimulus_overlap__individual"] = build_stimulus_overlap_matrix(
+        inputs.metadata,
+        group_type="individual",
+        stimulus_name_map=stimulus_name_map,
+    )
     return core_outputs
+
+
+def build_stimulus_name_map(metadata: pd.DataFrame) -> dict[str, str]:
+    if metadata.empty or "stim_name" not in metadata.columns:
+        return {}
+
+    labels = metadata[["stimulus", "stim_name"]].drop_duplicates().copy()
+    labels["stimulus"] = labels["stimulus"].astype(str)
+    labels["stim_name"] = labels["stim_name"].astype(str)
+    if labels["stimulus"].duplicated().any():
+        duplicates = labels.loc[labels["stimulus"].duplicated(keep=False), "stimulus"].unique().tolist()
+        raise ValueError(f"stimulus to stim_name mapping must be one-to-one; duplicated stimulus labels: {duplicates}")
+    return dict(zip(labels["stimulus"], labels["stim_name"], strict=True))
 
 
 def summarize_grouped_stimulus_pairs(comparisons: pd.DataFrame, view_name: str, group_type: str) -> pd.DataFrame:
@@ -221,6 +247,65 @@ def build_rdm_group_coverage(
                     }
                 )
     return pd.DataFrame(rows, columns=columns)
+
+
+def build_stimulus_overlap_matrix(
+    metadata: pd.DataFrame,
+    group_type: str,
+    *,
+    stimulus_name_map: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    if group_type not in {"date", "individual"}:
+        raise ValueError(f"unsupported overlap group_type: {group_type}")
+
+    if metadata.empty:
+        return pd.DataFrame(columns=["group_id"])
+
+    required_columns = {"stimulus", "date", "individual_id"}
+    missing = sorted(required_columns.difference(metadata.columns))
+    if missing:
+        raise ValueError(f"metadata is missing required columns for overlap matrix: {missing}")
+
+    cleaned = metadata.loc[:, ["stimulus", "date", "individual_id"]].copy()
+    cleaned["stimulus"] = cleaned["stimulus"].astype(str)
+    cleaned["date"] = cleaned["date"].astype(str)
+    cleaned["individual_id"] = cleaned["individual_id"].astype(str)
+
+    if group_type == "date":
+        group_column = "date"
+        group_order_frame = cleaned[["date"]].drop_duplicates().sort_values(["date"], kind="stable")
+        ordered_group_ids = group_order_frame["date"].tolist()
+    else:
+        group_column = "individual_id"
+        group_order_frame = cleaned[["date", "individual_id"]].drop_duplicates().sort_values(
+            ["date", "individual_id"],
+            kind="stable",
+        )
+        ordered_group_ids = group_order_frame["individual_id"].tolist()
+
+    stimulus_order = sorted(cleaned["stimulus"].drop_duplicates().tolist())
+    overlap = (
+        cleaned.loc[:, [group_column, "stimulus"]]
+        .drop_duplicates()
+        .assign(value=1)
+        .pivot(index=group_column, columns="stimulus", values="value")
+        .fillna(0)
+        .astype(int)
+    )
+    overlap.index = overlap.index.astype(str)
+    overlap.columns = overlap.columns.astype(str)
+    overlap = overlap.reindex(index=ordered_group_ids, columns=stimulus_order, fill_value=0)
+
+    frame = overlap.copy()
+    frame.insert(0, "group_id", frame.index.astype(str))
+    frame = frame.reset_index(drop=True)
+    frame.attrs["stimulus_name_map"] = stimulus_name_map or {}
+    frame.attrs["group_axis_label"] = "Date" if group_type == "date" else "Individual"
+    frame.attrs["group_display_labels"] = {
+        group_id: f"{group_id} ({int(overlap.loc[group_id].sum())})"
+        for group_id in overlap.index
+    }
+    return frame
 
 
 def _aggregate_grouped_pairs(comparisons: pd.DataFrame, group_type: str) -> pd.DataFrame:
