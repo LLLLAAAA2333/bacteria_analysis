@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 import pytest
 
@@ -8,6 +10,7 @@ from bacteria_analysis.geometry import (
     summarize_grouped_stimulus_pairs,
     summarize_rdm_stability,
 )
+from bacteria_analysis.geometry_outputs import ensure_stage2_output_dirs, write_stage2_outputs
 
 
 def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pairs(synthetic_geometry_comparisons):
@@ -520,3 +523,276 @@ def test_summarize_rdm_stability_rejects_duplicate_pooled_matrices_for_view():
 
     with pytest.raises(ValueError, match="exactly one pooled matrix for view_name 'response_window'"):
         summarize_rdm_stability(pair_summary)
+
+
+@pytest.fixture
+def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
+    return {
+        "rdm_pairs__response_window__pooled": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "response_window",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b1_1",
+                    "same_stimulus": True,
+                    "n_pairs": 1,
+                    "mean_distance": 0.10,
+                    "median_distance": 0.10,
+                },
+                {
+                    "view_name": "response_window",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 2,
+                    "mean_distance": 0.85,
+                    "median_distance": 0.85,
+                },
+                {
+                    "view_name": "response_window",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b2_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": True,
+                    "n_pairs": 1,
+                    "mean_distance": 0.20,
+                    "median_distance": 0.20,
+                },
+            ]
+        ),
+        "rdm_pairs__response_window__individual": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "response_window",
+                    "group_type": "individual",
+                    "group_id": "2026-01-01__worm_a",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 1,
+                    "mean_distance": 0.80,
+                    "median_distance": 0.80,
+                }
+            ]
+        ),
+        "rdm_pairs__response_window__date": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "response_window",
+                    "group_type": "date",
+                    "group_id": "2026-01-01",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 1,
+                    "mean_distance": 0.82,
+                    "median_distance": 0.82,
+                }
+            ]
+        ),
+        "rdm_pairs__full_trajectory__pooled": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b1_1",
+                    "same_stimulus": True,
+                    "n_pairs": 1,
+                    "mean_distance": 0.05,
+                    "median_distance": 0.05,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 2,
+                    "mean_distance": 0.65,
+                    "median_distance": 0.65,
+                },
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "stimulus_left": "b2_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": True,
+                    "n_pairs": 1,
+                    "mean_distance": 0.15,
+                    "median_distance": 0.15,
+                },
+            ]
+        ),
+        "rdm_pairs__full_trajectory__individual": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "individual",
+                    "group_id": "2026-01-02__worm_b",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 1,
+                    "mean_distance": 0.60,
+                    "median_distance": 0.60,
+                }
+            ]
+        ),
+        "rdm_pairs__full_trajectory__date": pd.DataFrame.from_records(
+            [
+                {
+                    "view_name": "full_trajectory",
+                    "group_type": "date",
+                    "group_id": "2026-01-02",
+                    "stimulus_left": "b1_1",
+                    "stimulus_right": "b2_1",
+                    "same_stimulus": False,
+                    "n_pairs": 1,
+                    "mean_distance": 0.62,
+                    "median_distance": 0.62,
+                }
+            ]
+        ),
+        "rdm_matrix__response_window__pooled": pd.DataFrame(
+            {
+                "stimulus_row": ["b1_1", "b2_1"],
+                "b1_1": [0.10, 0.85],
+                "b2_1": [0.85, 0.20],
+            }
+        ),
+        "rdm_matrix__full_trajectory__pooled": pd.DataFrame(
+            {
+                "stimulus_row": ["b1_1", "b2_1"],
+                "b1_1": [0.05, 0.65],
+                "b2_1": [0.65, 0.15],
+            }
+        ),
+        "rdm_stability_by_individual": pd.DataFrame.from_records(
+            [
+                {
+                    "comparison_scope": "within_group_type",
+                    "view_name": "response_window",
+                    "reference_view_name": "response_window",
+                    "group_type": "individual",
+                    "group_id": "2026-01-01__worm_a",
+                    "reference_group_id": "2026-01-02__worm_b",
+                    "score_method": "spearman",
+                    "score_status": "ok",
+                    "n_shared_entries": 3,
+                    "similarity": 0.95,
+                },
+                {
+                    "comparison_scope": "pooled_vs_group",
+                    "view_name": "full_trajectory",
+                    "reference_view_name": "full_trajectory",
+                    "group_type": "individual",
+                    "group_id": "2026-01-02__worm_b",
+                    "reference_group_id": "pooled",
+                    "score_method": "spearman",
+                    "score_status": "ok",
+                    "n_shared_entries": 3,
+                    "similarity": 0.90,
+                },
+            ]
+        ),
+        "rdm_stability_by_date": pd.DataFrame.from_records(
+            [
+                {
+                    "comparison_scope": "within_group_type",
+                    "view_name": "response_window",
+                    "reference_view_name": "response_window",
+                    "group_type": "date",
+                    "group_id": "2026-01-01",
+                    "reference_group_id": "2026-01-02",
+                    "score_method": "spearman",
+                    "score_status": "ok",
+                    "n_shared_entries": 3,
+                    "similarity": 0.88,
+                }
+            ]
+        ),
+        "rdm_view_comparison": pd.DataFrame.from_records(
+            [
+                {
+                    "comparison_scope": "pooled_cross_view",
+                    "view_name": "response_window",
+                    "reference_view_name": "full_trajectory",
+                    "group_type": "pooled",
+                    "group_id": "pooled",
+                    "reference_group_id": "pooled",
+                    "score_method": "spearman",
+                    "score_status": "ok",
+                    "n_shared_entries": 3,
+                    "similarity": 0.99,
+                }
+            ]
+        ),
+        "rdm_group_coverage": pd.DataFrame.from_records(
+            [
+                {"view_name": "response_window", "group_type": "individual", "n_groups": 2},
+                {"view_name": "response_window", "group_type": "date", "n_groups": 2},
+                {"view_name": "full_trajectory", "group_type": "individual", "n_groups": 1},
+                {"view_name": "full_trajectory", "group_type": "date", "n_groups": 1},
+            ]
+        ),
+    }
+
+
+def test_ensure_stage2_output_dirs_creates_expected_tree(tmp_path):
+    dirs = ensure_stage2_output_dirs(tmp_path / "stage2_geometry")
+
+    assert dirs["output_root"].exists()
+    assert dirs["tables_dir"].exists()
+    assert dirs["figures_dir"].exists()
+    assert dirs["qc_dir"].exists()
+
+
+def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometry_outputs):
+    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+
+    assert (written["tables_dir"] / "rdm_stability_by_individual.parquet").exists()
+    assert (written["tables_dir"] / "rdm_stability_by_date.parquet").exists()
+    assert (written["tables_dir"] / "rdm_view_comparison.parquet").exists()
+    assert (written["tables_dir"] / "rdm_matrix__response_window__pooled.parquet").exists()
+    assert (written["tables_dir"] / "rdm_matrix__full_trajectory__pooled.parquet").exists()
+    assert (written["qc_dir"] / "rdm_group_coverage.parquet").exists()
+    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
+    assert (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled.png").exists()
+    assert (written["figures_dir"] / "rdm_stability_by_individual.png").exists()
+    assert (written["figures_dir"] / "rdm_stability_by_date.png").exists()
+    assert (written["figures_dir"] / "rdm_view_comparison.png").exists()
+
+
+def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
+    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["views"] == ["full_trajectory", "response_window"]
+    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+    assert summary["pair_table_names"] == [
+        "rdm_pairs__full_trajectory__date",
+        "rdm_pairs__full_trajectory__individual",
+        "rdm_pairs__full_trajectory__pooled",
+        "rdm_pairs__response_window__date",
+        "rdm_pairs__response_window__individual",
+        "rdm_pairs__response_window__pooled",
+    ]
+    assert summary["stability_table_names"] == ["rdm_stability_by_date", "rdm_stability_by_individual"]
+    assert summary["view_comparison_table"] == "rdm_view_comparison"
+    assert summary["qc_table_names"] == ["rdm_group_coverage"]
+    assert summary["tables_dir"].endswith("stage2_geometry\\tables")
+    assert summary["figures_dir"].endswith("stage2_geometry\\figures")
+
+    markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
+    assert "# Stage 2 Geometry Run Summary" in markdown
+    assert "- Views: full_trajectory, response_window" in markdown
