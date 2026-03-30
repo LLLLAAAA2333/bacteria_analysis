@@ -158,14 +158,8 @@ def _is_non_pooled_matrix_artifact(artifact_name: str) -> bool:
 def _build_run_summary(core_outputs: dict[str, pd.DataFrame], written: dict[str, Path]) -> dict[str, Any]:
     pair_table_names = sorted(name for name in core_outputs if name.startswith("rdm_pairs__"))
     pooled_matrix_names = sorted(name for name in core_outputs if name.startswith("rdm_matrix__") and name.endswith("__pooled"))
-    views = sorted(
-        {
-            name.split("__")[1]
-            for name in pair_table_names + pooled_matrix_names
-            if len(name.split("__")) >= 3
-        }
-    )
-    pooled_matrix_views = sorted({name.split("__")[1] for name in pooled_matrix_names})
+    views = _ordered_views_for_summary(core_outputs, pair_table_names, pooled_matrix_names)
+    pooled_matrix_views = [view_name for view_name in views if f"rdm_matrix__{view_name}__pooled" in core_outputs]
     stability_table_names = sorted(name for name in core_outputs if name.startswith("rdm_stability_by_"))
     qc_table_names = sorted(name for name in core_outputs if name == "rdm_group_coverage")
 
@@ -180,6 +174,26 @@ def _build_run_summary(core_outputs: dict[str, pd.DataFrame], written: dict[str,
         "figures_dir": str(written["figures_dir"]),
         "qc_dir": str(written["qc_dir"]),
     }
+
+
+def _ordered_views_for_summary(
+    core_outputs: dict[str, pd.DataFrame],
+    pair_table_names: list[str],
+    pooled_matrix_names: list[str],
+) -> list[str]:
+    coverage = core_outputs.get("rdm_group_coverage")
+    if coverage is not None and not coverage.empty and "view_name" in coverage.columns:
+        return coverage["view_name"].astype(str).drop_duplicates().tolist()
+
+    views: list[str] = []
+    for artifact_name in list(core_outputs) + pair_table_names + pooled_matrix_names:
+        parts = artifact_name.split("__")
+        if len(parts) < 3:
+            continue
+        view_name = parts[1]
+        if view_name not in views:
+            views.append(view_name)
+    return views
 
 
 def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:

@@ -809,7 +809,7 @@ def test_write_stage2_outputs_handles_empty_pooled_matrix_frames(tmp_path, synth
     assert (written["output_root"] / "run_summary.json").exists()
 
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+    assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
 
 
 def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summary(tmp_path, synthetic_geometry_outputs):
@@ -825,7 +825,7 @@ def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summa
     written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+    assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
     assert "novel_view" not in summary["pooled_matrix_views"]
 
 
@@ -834,8 +834,8 @@ def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_ou
 
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert summary["views"] == ["full_trajectory", "response_window"]
-    assert summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+    assert summary["views"] == ["response_window", "full_trajectory"]
+    assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
     assert summary["pair_table_names"] == [
         "rdm_pairs__full_trajectory__date",
         "rdm_pairs__full_trajectory__individual",
@@ -852,4 +852,4 @@ def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_ou
 
     markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
     assert "# Stage 2 Geometry Run Summary" in markdown
-    assert "- Views: full_trajectory, response_window" in markdown
+    assert "- Views: response_window, full_trajectory" in markdown

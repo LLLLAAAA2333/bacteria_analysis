@@ -18,10 +18,11 @@ from bacteria_analysis.reliability import (
 
 GROUP_TYPES = ("pooled", "individual", "date")
 DEFAULT_STAGE2_VIEWS = ("response_window", "full_trajectory")
+STAGE2_MVP_VIEW_WINDOWS = {view_name: VIEW_WINDOWS[view_name] for view_name in DEFAULT_STAGE2_VIEWS}
 
 
 def parse_stage2_views(view_names: str | list[str] | tuple[str, ...] | None = None) -> list[str]:
-    available_views = set(VIEW_WINDOWS)
+    available_views = set(STAGE2_MVP_VIEW_WINDOWS)
     if view_names is None:
         requested = list(DEFAULT_STAGE2_VIEWS)
     elif isinstance(view_names, str):
@@ -63,7 +64,7 @@ def run_geometry_pipeline(
         tensor_path=input_paths["tensor"],
     )
     selected_view_names = parse_stage2_views(view_names)
-    view_windows = {view_name: VIEW_WINDOWS[view_name] for view_name in selected_view_names}
+    view_windows = {view_name: STAGE2_MVP_VIEW_WINDOWS[view_name] for view_name in selected_view_names}
     views = build_trial_views(inputs.metadata, inputs.tensor, view_windows=view_windows)
     comparisons = pd.concat(
         [

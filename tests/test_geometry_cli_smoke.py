@@ -49,4 +49,56 @@ def test_cli_runs_and_writes_stage2_outputs(tmp_path, stage1_stage0_root):
         assert path.exists(), path
 
     run_summary = json.loads((stage2_root / "run_summary.json").read_text(encoding="utf-8"))
+    assert run_summary["views"] == ["response_window", "full_trajectory"]
+
+
+def test_cli_preserves_requested_view_order_in_run_summary(tmp_path, stage1_stage0_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_geometry.py",
+            "--input-root",
+            str(stage1_stage0_root),
+            "--output-root",
+            str(output_root),
+            "--views",
+            "full_trajectory,response_window",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    stage2_root = output_root / "stage2_geometry"
+    run_summary = json.loads((stage2_root / "run_summary.json").read_text(encoding="utf-8"))
     assert run_summary["views"] == ["full_trajectory", "response_window"]
+    assert run_summary["pooled_matrix_views"] == ["full_trajectory", "response_window"]
+
+
+def test_cli_rejects_non_mvp_views(tmp_path, stage1_stage0_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_geometry.py",
+            "--input-root",
+            str(stage1_stage0_root),
+            "--output-root",
+            str(output_root),
+            "--views",
+            "on_window",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "unsupported Stage 2 view" in result.stderr
