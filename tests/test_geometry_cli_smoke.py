@@ -1,5 +1,19 @@
 import json
+import importlib.util
+from pathlib import Path
 import subprocess
+
+
+def _load_run_geometry_module():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_geometry.py"
+    spec = importlib.util.spec_from_file_location("run_geometry_module", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+RUN_GEOMETRY = _load_run_geometry_module()
 
 
 def test_cli_runs_and_writes_stage2_outputs(tmp_path, stage1_stage0_root):
@@ -102,3 +116,22 @@ def test_cli_rejects_non_mvp_views(tmp_path, stage1_stage0_root):
 
     assert result.returncode != 0
     assert "unsupported Stage 2 view" in result.stderr
+
+
+def test_resolve_input_root_uses_shared_repo_data_processed_for_worktrees(tmp_path):
+    repo_root = tmp_path / "repo"
+    worktree_root = repo_root / ".worktrees" / "stage2-geometry"
+    shared_input_root = repo_root / "data" / "processed"
+    shared_input_root.mkdir(parents=True)
+
+    resolved = RUN_GEOMETRY.resolve_input_root(None, root_dir=worktree_root)
+
+    assert resolved == shared_input_root
+
+
+def test_resolve_input_root_prefers_explicit_value(tmp_path):
+    explicit_root = tmp_path / "explicit-input"
+
+    resolved = RUN_GEOMETRY.resolve_input_root(str(explicit_root), root_dir=Path("ignored"))
+
+    assert resolved == explicit_root

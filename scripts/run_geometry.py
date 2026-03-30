@@ -14,6 +14,8 @@ if str(SRC_DIR) not in sys.path:
 from bacteria_analysis.geometry import parse_stage2_views, run_geometry_pipeline
 from bacteria_analysis.geometry_outputs import write_stage2_outputs
 
+DEFAULT_INPUT_ROOT = Path("data/processed")
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Stage 2 neural geometry from Stage 0 trial outputs.")
@@ -23,15 +25,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def resolve_input_root(input_root: str | None, *, root_dir: Path = ROOT_DIR) -> Path:
+    if input_root:
+        return Path(input_root)
+
+    candidates = [root_dir / DEFAULT_INPUT_ROOT]
+    if root_dir.parent.name == ".worktrees":
+        candidates.append(root_dir.parents[1] / DEFAULT_INPUT_ROOT)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if not args.input_root:
-        print("Stage 2 geometry failed: --input-root is required", file=sys.stderr)
-        return 1
 
     try:
+        input_root = resolve_input_root(args.input_root)
         included_views = parse_stage2_views(args.views)
-        core_outputs = run_geometry_pipeline(args.input_root, view_names=included_views)
+        core_outputs = run_geometry_pipeline(input_root, view_names=included_views)
         stage2_output_root = Path(args.output_root) / "stage2_geometry"
         written = write_stage2_outputs(core_outputs, stage2_output_root)
     except Exception as exc:  # pragma: no cover - exercised in CLI smoke tests

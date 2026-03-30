@@ -525,6 +525,68 @@ def test_summarize_rdm_stability_rejects_duplicate_pooled_matrices_for_view():
         summarize_rdm_stability(pair_summary)
 
 
+def test_summarize_rdm_stability_marks_sparse_pooled_vs_group_scores_invalid():
+    pair_summary = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s1",
+                "stimulus_right": "s2",
+                "same_stimulus": False,
+                "n_pairs": 3,
+                "mean_distance": 0.2,
+                "median_distance": 0.2,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s1",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 3,
+                "mean_distance": 0.6,
+                "median_distance": 0.6,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "pooled",
+                "group_id": "pooled",
+                "stimulus_left": "s2",
+                "stimulus_right": "s3",
+                "same_stimulus": False,
+                "n_pairs": 3,
+                "mean_distance": 0.4,
+                "median_distance": 0.4,
+            },
+            {
+                "view_name": "response_window",
+                "group_type": "individual",
+                "group_id": "ind_sparse",
+                "stimulus_left": "s1",
+                "stimulus_right": "s2",
+                "same_stimulus": False,
+                "n_pairs": 1,
+                "mean_distance": 0.3,
+                "median_distance": 0.3,
+            },
+        ]
+    )
+
+    result = summarize_rdm_stability(pair_summary)
+
+    assert len(result) == 1
+    assert result.loc[0, "comparison_scope"] == "pooled_vs_group"
+    assert result.loc[0, "group_type"] == "individual"
+    assert result.loc[0, "group_id"] == "ind_sparse"
+    assert result.loc[0, "reference_group_id"] == "pooled"
+    assert result.loc[0, "score_status"] == "invalid"
+    assert result.loc[0, "n_shared_entries"] == 1
+    assert pd.isna(result.loc[0, "similarity"])
+
+
 @pytest.fixture
 def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
     outputs = {
@@ -827,6 +889,34 @@ def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summa
 
     assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
     assert "novel_view" not in summary["pooled_matrix_views"]
+
+
+def test_write_stage2_outputs_records_only_actual_included_views(tmp_path, synthetic_geometry_outputs):
+    outputs = {
+        "rdm_pairs__full_trajectory__pooled": synthetic_geometry_outputs["rdm_pairs__full_trajectory__pooled"],
+        "rdm_pairs__full_trajectory__individual": synthetic_geometry_outputs["rdm_pairs__full_trajectory__individual"],
+        "rdm_pairs__full_trajectory__date": synthetic_geometry_outputs["rdm_pairs__full_trajectory__date"],
+        "rdm_matrix__full_trajectory__pooled": synthetic_geometry_outputs["rdm_matrix__full_trajectory__pooled"],
+        "rdm_stability_by_individual": synthetic_geometry_outputs["rdm_stability_by_individual"].loc[
+            lambda frame: frame["view_name"] == "full_trajectory"
+        ],
+        "rdm_stability_by_date": pd.DataFrame(columns=synthetic_geometry_outputs["rdm_stability_by_date"].columns),
+        "rdm_view_comparison": pd.DataFrame(columns=synthetic_geometry_outputs["rdm_view_comparison"].columns),
+        "rdm_group_coverage": synthetic_geometry_outputs["rdm_group_coverage"].loc[
+            lambda frame: frame["view_name"] == "full_trajectory"
+        ],
+    }
+
+    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["views"] == ["full_trajectory"]
+    assert summary["pooled_matrix_views"] == ["full_trajectory"]
+    assert summary["pair_table_names"] == [
+        "rdm_pairs__full_trajectory__date",
+        "rdm_pairs__full_trajectory__individual",
+        "rdm_pairs__full_trajectory__pooled",
+    ]
 
 
 def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
