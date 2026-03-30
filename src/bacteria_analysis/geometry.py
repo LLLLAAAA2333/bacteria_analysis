@@ -19,9 +19,20 @@ def summarize_grouped_stimulus_pairs(comparisons: pd.DataFrame, view_name: str, 
 
 def build_rdm_matrix(pair_summary: pd.DataFrame, group_id: str) -> pd.DataFrame:
     group = pair_summary.loc[pair_summary["group_id"] == group_id].copy()
+    if group.empty:
+        return pd.DataFrame(columns=["stimulus_row"])
+
+    combinations = group[["view_name", "group_type"]].drop_duplicates()
+    if len(combinations) != 1:
+        found = combinations.to_dict("records")
+        raise ValueError(
+            "build_rdm_matrix requires exactly one (view_name, group_type) combination "
+            f"for group_id {group_id!r}; found {found}"
+        )
+
     matrix = _pivot_symmetric_distance_matrix(group, value_column="mean_distance")
     if matrix.empty:
-        return matrix.reset_index()
+        return pd.DataFrame(columns=["stimulus_row"])
     frame = matrix.copy()
     frame.insert(0, "stimulus_row", frame.index.astype(str))
     return frame.reset_index(drop=True)
