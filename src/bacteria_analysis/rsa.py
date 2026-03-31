@@ -262,7 +262,13 @@ def run_stage3_rsa(
         if model_status == "excluded":
             continue
 
-        model_matrix = build_model_rdm(resolved_inputs, model_id)
+        try:
+            model_matrix = build_model_rdm(resolved_inputs, model_id)
+        except ValueError as exc:
+            if model_id == "global_profile" or not _should_skip_model_build_error(exc):
+                raise
+            _mark_model_excluded_from_primary_ranking(resolved_inputs, model_id)
+            continue
         core_outputs[f"model_rdm__{model_id}"] = model_matrix.copy()
         model_summary_rows.append(_build_model_rdm_summary_row(model_id, registry_row, model_matrix))
 
@@ -536,6 +542,27 @@ def _concat_summary_frames(frames: list[pd.DataFrame], *, columns: list[str]) ->
     if not non_empty_frames:
         return pd.DataFrame(columns=columns)
     return pd.concat(non_empty_frames, ignore_index=True)[columns]
+
+
+def _should_skip_model_build_error(exc: ValueError) -> bool:
+    message = str(exc)
+    return any(
+        snippet in message
+        for snippet in (
+            "at least 1 retained feature",
+            "at least 2 retained features",
+            "non-constant stimulus rows",
+        )
+    )
+
+
+def _mark_model_excluded_from_primary_ranking(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> None:
+    registry = resolved_inputs["model_registry_resolved"].copy()
+    mask = registry["model_id"].astype(str).str.strip().str.lower() == model_id
+    if "excluded_from_primary_ranking" not in registry.columns:
+        registry["excluded_from_primary_ranking"] = False
+    registry.loc[mask, "excluded_from_primary_ranking"] = True
+    resolved_inputs["model_registry_resolved"] = registry
 
 
 __all__ = [

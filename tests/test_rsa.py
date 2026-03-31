@@ -9,6 +9,7 @@ from bacteria_analysis.rsa import (
     benjamini_hochberg,
     build_permutation_null,
     compute_rsa_score,
+    run_stage3_rsa,
     summarize_cross_view_comparison,
     summarize_leave_one_stimulus_out,
 )
@@ -17,6 +18,77 @@ from bacteria_analysis.rsa_outputs import write_stage3_outputs
 
 def _matrix(rows: list[dict[str, object]]) -> pd.DataFrame:
     return pd.DataFrame.from_records(rows)
+
+
+def _stage3_neural_rdms() -> dict[str, pd.DataFrame]:
+    return {
+        "response_window": _matrix(
+            [
+                {"stimulus_row": "A001", "A001": 0.0, "A002": 0.2, "A003": 0.4},
+                {"stimulus_row": "A002", "A001": 0.2, "A002": 0.0, "A003": 0.3},
+                {"stimulus_row": "A003", "A001": 0.4, "A002": 0.3, "A003": 0.0},
+            ]
+        ),
+        "full_trajectory": _matrix(
+            [
+                {"stimulus_row": "A001", "A001": 0.0, "A002": 0.1, "A003": 0.5},
+                {"stimulus_row": "A002", "A001": 0.1, "A002": 0.0, "A003": 0.2},
+                {"stimulus_row": "A003", "A001": 0.5, "A002": 0.2, "A003": 0.0},
+            ]
+        ),
+    }
+
+
+def _resolved_stage3_inputs(
+    *,
+    matrix_rows: list[dict[str, object]],
+    mapping_rows: list[dict[str, object]],
+    registry_rows: list[dict[str, object]],
+    membership_rows: list[dict[str, object]],
+) -> dict[str, pd.DataFrame]:
+    matrix = pd.DataFrame.from_records(matrix_rows).set_index("sample_id")
+    matrix.index = matrix.index.astype(str)
+    matrix.columns = matrix.columns.astype(str)
+
+    mapping = pd.DataFrame.from_records(mapping_rows)
+    registry = pd.DataFrame.from_records(registry_rows)
+    registry["model_id"] = registry["model_id"].astype(str).str.strip().str.lower()
+    if "excluded_from_primary_ranking" not in registry.columns:
+        registry["excluded_from_primary_ranking"] = False
+    registry["is_primary_family"] = registry["model_tier"].astype(str).str.strip().str.lower().eq("primary")
+    registry["is_supplementary_family"] = registry["model_tier"].astype(str).str.strip().str.lower().eq(
+        "supplementary"
+    )
+
+    membership = pd.DataFrame.from_records(membership_rows)
+    if membership.empty:
+        membership = pd.DataFrame(columns=["model_id", "metabolite_name"])
+    else:
+        membership["model_id"] = membership["model_id"].astype(str).str.strip().str.lower()
+        membership["metabolite_name"] = membership["metabolite_name"].astype(str)
+
+    annotation = pd.DataFrame(
+        {
+            "metabolite_name": matrix.columns.tolist(),
+            "superclass": "",
+            "subclass": "",
+            "pathway_tag": "",
+            "annotation_source": "",
+            "review_status": "",
+            "ambiguous_flag": False,
+            "notes": "",
+        }
+    )
+
+    return {
+        "matrix": matrix,
+        "stimulus_sample_map": mapping,
+        "metabolite_annotation": annotation,
+        "model_registry": registry.copy(),
+        "model_membership": membership.copy(),
+        "model_registry_resolved": registry.copy(),
+        "model_membership_resolved": membership.copy(),
+    }
 
 
 @pytest.fixture
@@ -563,3 +635,84 @@ def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path,
         "response_window": "global_profile",
         "full_trajectory": "global_profile",
     }
+
+
+def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():
+    resolved_inputs = _resolved_stage3_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "f1": 1.0, "f2": 2.0, "f3": 0.5},
+            {"sample_id": "A002", "f1": 2.0, "f2": 1.5, "f3": 1.5},
+            {"sample_id": "A003", "f1": 3.0, "f2": 4.0, "f3": 2.5},
+        ],
+        mapping_rows=[
+            {"stimulus": "A001", "stim_name": "Stimulus A001", "sample_id": "A001"},
+            {"stimulus": "A002", "stim_name": "Stimulus A002", "sample_id": "A002"},
+            {"stimulus": "A003", "stim_name": "Stimulus A003", "sample_id": "A003"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+            },
+            {
+                "model_id": "tiny_primary",
+                "model_label": "Tiny Primary",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+            },
+        ],
+        membership_rows=[
+            {"model_id": "tiny_primary", "metabolite_name": "f1"},
+            {"model_id": "tiny_primary", "metabolite_name": "f2"},
+        ],
+    )
+
+    results = run_stage3_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
+
+    excluded = results["model_registry_resolved"].loc[lambda df: df["model_id"] == "tiny_primary"]
+    assert bool(excluded["excluded_from_primary_ranking"].iloc[0])
+
+
+def test_run_stage3_rsa_keeps_global_profile_when_curated_subset_membership_is_empty():
+    resolved_inputs = _resolved_stage3_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "f1": 1.0, "f2": 2.0, "f3": 0.5, "f4": 3.0, "f5": 4.5},
+            {"sample_id": "A002", "f1": 2.5, "f2": 1.0, "f3": 1.5, "f4": 2.0, "f5": 3.0},
+            {"sample_id": "A003", "f1": 3.0, "f2": 4.0, "f3": 2.5, "f4": 1.0, "f5": 2.0},
+        ],
+        mapping_rows=[
+            {"stimulus": "A001", "stim_name": "Stimulus A001", "sample_id": "A001"},
+            {"stimulus": "A002", "stim_name": "Stimulus A002", "sample_id": "A002"},
+            {"stimulus": "A003", "stim_name": "Stimulus A003", "sample_id": "A003"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+            },
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+            },
+        ],
+        membership_rows=[],
+    )
+
+    results = run_stage3_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
+
+    assert "global_profile" in set(results["rsa_results"]["model_id"])
+    assert "bile_acid" not in set(results["rsa_results"]["model_id"])

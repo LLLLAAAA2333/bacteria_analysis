@@ -1,0 +1,381 @@
+metabolite_name,superclass,subclass,pathway_tag,annotation_source,review_status,ambiguous_flag,notes
+7-Dehydrocholic acid (7-DHCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Beta-Muricholic acid (β-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cholic acid (CA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Deoxycholic acid (DCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycochenodeoxycholic acid (GCDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycocholic acid (GCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycodeoxycholic acid (GDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycohyodeoxycholic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycoursodeoxycholic acid (GUDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hyodeoxycholic acid (HDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-α-muricholic acid (α-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-β-muricholic acid (β-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-α-muricholic acid (ω-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Taurochenodeoxycholic acid (TCDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Taurodeoxycholic acid (TDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Taurohyodeoxycholic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Taurolithocholic acid (TLCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Omega-muricholic acid (ω-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ribonolactone,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Hydroxycinnamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+12-hydroxystearic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Hydroxy-3-methylbutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Hydroxycaproic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Azelaic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Conjugated linoleic acids (CLA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Palmitelaidic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Petroselinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ricinoleic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Sebacic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Suberic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"3,4-Dihydroxyhydrocinnamic acid",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Methyl-2-oxovaleric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ketoleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Methylmalonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Oxoadipic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Indolepropionic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indole-3-carboxylic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indoleacetic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Phenylpropionic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydrocinnamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tryptamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indole,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indoxyl sulfate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indole-3-carboxaldehyde,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Kynurenate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Hydroxyindole-3-acetic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cinnavalininate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indole-3-lactic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Vitamin B7,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Dopamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Epinephrine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Norepinephrine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Methoxytyramine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tyramine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Vanillylmandelic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-(4-Hydroxyphenyl)propionic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+p-Cresol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+p-Cresyl sulfate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Linoleoyl ethanolamide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Anandamide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetyltyrosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxyphenylacetic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Hydroxybenzoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Benzoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hippuric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylserotonin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ortho-Hydroxyphenylacetic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+p-Hydroxymandelic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenylacetic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenyllactic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenylpyruvic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Protocatechuic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenylethylamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxyanthranilic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Dehydrocholic acid (3-DHCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"5Z,8Z,11Z,14Z,17Z-Eicosapentaenoic Acid",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Erucic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Elaidic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hexanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Lignoceric Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Linoleic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Linoelaidic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Oleic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Palmitic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pentadecanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Stearic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Arachidic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Palmitoylcarnitine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5'-Deoxyadenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Dodecanoylcarnitine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylmethionine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Formyl-methionine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Lumichrome,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylphenylalanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Methyltryptamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tryptophanol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+trans-Ferulic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Hydroxyphenethylamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Hydroxy-4-(methylthio)butanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+10-Hydroxydecanoate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5'-Methylthioadenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Hydroxybenzaldehyde,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-(2-Hydroxyphenyl)propanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Indole-3-methyl acetate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Salicylamide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Protoporphyrin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Sabinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Quinoline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Gamma-Aminobutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"2,3-Diaminopropionic acid",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Phenylglycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Chlorotyrosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Glucose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Maltose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Erythronic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"Fructose 1,6-bisphosphate (F1,6BP)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Aminolevulinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glyceraldehyde,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glyceric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Maltotriose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Melibiose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylneuraminic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Rhamnose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ribonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Hydroxylysine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Trehalose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucose 6-phosphate (G6P),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Acetylglycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxyisovaleric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenylacetylglutamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Aminocaproic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Aminoadipic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Citramalic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Beta-Alanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Alanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Methylsuccinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Citrulline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Creatine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Hydroxybutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxybutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Alpha-Hydroxyisobutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+cis-Aconitic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Citric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-2-Hydroxyglutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glutaconic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycylproline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycolic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydroxypropionic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Isocitric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Itaconic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Malic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Malonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Guanidoacetic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Oxalic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Succinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Alloisoleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Hydroxy-tryptophan,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine monophosphate (AMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+S-Adenosylhomocysteine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Guanosine monophosphate (GMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Quinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Alpha-aminobutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Shikimic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Anserine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Carnosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Arginine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Nicotinamide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Picolinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+α-Ketoglutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Guanosine diphosphate(GDP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Riboflavin-5′-monophosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycylleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Asparagine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Phosphoglycerate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine-5′-triphosphate(ATP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine-5′-diphosphate(ADP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"1,4-Dihydronicotinamide adenine dinucleotide (NADH)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Aspartic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"Adenosine-3′,5′-cyclic monophosphate(cAMP)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Histidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Quinolinic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxyl-kynurenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Formyl-kynurenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Homocitrulline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Vitamin B1,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Vitamin B2,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Nicotinic acid(VB3),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pantothenic acid(VB5),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Isoleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydroxocobalamin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Normetanephrine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Leucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Acetylcholine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Trimethylamine-N-oxide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Trimethylamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Betaine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Choline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Kynurenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Creatinine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Carnitine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Taurine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Lactate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Lysine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydroxyproline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Dimethylamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Vitamin B9,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Allantoin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Methionine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"1,3-Diaminopropane",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Norleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cystine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phenylalanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Leucyl-Glycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pipecolic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Proline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Serine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Threonine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tryptophan,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tyrosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Valine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Methylcysteine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylalanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glutamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylaspartic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylserine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pyroglutamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Sarcosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Homoserine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Norvaline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glutamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Gama-glutamylalanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cysteine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Putreanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Aminohippuric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydroxypyruvic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Methoxydimethyltryptamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N6-methyladenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2'-O-methyladenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+7-methylguanosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hordenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Aminooctanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hydroxyisocaproic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylcadaverine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Nicotinuric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Methoxytryptamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Propionylglycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+O-Succinyhomoserine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucuronolactone,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucosamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+trans-Aconitic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+1-Methylhistidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Pyridoxic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Methylguanidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+ 2'-Deoxyguanosine 5'-monophosphate (Deoxy-GMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucuronic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+1-Methyladenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Deoxyuridine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Gluconic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Urocanic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Acetamidobutanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cytidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Citicoline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phosphoserine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+1-Aminocyclopropanecarboxylic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cystathionine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Hydroxymethylglutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phosphonoacetate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-methyl-glutamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Xanthosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cysteic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Methyl-aspartic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylasparagine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+ 2'-Deoxyguanosine 5'-triphosphate(dGTP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Nicotinamide hypoxanthine dinucleotide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+S-Adenosylmethionine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Glucosaminic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Keto-3-deoxy-D-gluconic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Trimethylammoniobutanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"Adenosine 2',3'-cyclic phosphate",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Galactose 1-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phosphorylcholine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Acetylcarnitine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+ 2'-Deoxyguanosine 5'-diphosphate(dGDP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"Cytidine 2',3'-cyclic phosphate",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Trimethyllysine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Inosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Phosphoenolpyruvic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Mannose 6-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+O-Phosphoethanolamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cytidine monophosphate(CMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+ADP-glucose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Fructose 6-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+p-Octopamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Alpha-acetyllysine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cytosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Flavin adenine dinucleotide(FAD),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Deoxyguanosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+AICAR,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uridine diphosphate glucuronic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Asymmetric dimethylarginine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cytidine 5'-diphosphate(CDP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Histamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Thiamine monophosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uracil 5-carboxylate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+4-Guanidinobutanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Mannosamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Deoxyadenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylputrescine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylglutamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Inosine-monophosphate(IMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Aminoisobutyric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Aniline-2-sulfonate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+S-Carboxymethyl-cysteine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Histidinol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Thymideine-monophosphate(dTMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ureidopropionic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+5-Aminopentanoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Formylglycine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Raffinose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+meso-Tartaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Methoxytyrosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Lactose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Galacturonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+cis-4-Hydroxy-D-proline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucosamine 6-sulfate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine diphosphate ribose(ADP-ribose),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ophthalmic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Trigonelline,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"3,4-Dihydroxyphenylglycol",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Stachyose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Deoxycytidine-diphosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Ribose 5-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Galactosamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+ 2'-Deoxyadenosine 5'-triphosphate(dATP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glycerol 3-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uridine 5'-diphosphate(UDP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+p-Aminobenzoic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Methylalanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Phosphoglyceric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Ethylmalonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Thymidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pterin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2-Methylcitric Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Dihydrobiopterin,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Beta-Glycerophosphoric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucose 1-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Porphobilinogen,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Mevalonic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Salsolinol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Diethanolamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+myo-Inositol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uridine 5'-monophosphate(UMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Mannitol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Cellobiose,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+D-Pinitol,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Thymine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uridine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Uracil,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2'-Deoxycytidine 5'-monophosphate(dCMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Hypoxanthine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Dopa,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Purine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Guanosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Guanine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Pyridoxine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+2'-Deoxyadenosine 5'-monophosphate(dAMP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Nicotinamide ribotide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+3-Methylhistidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"2,6-Diaminopimelic acid",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Glucosamine 6-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+N-Acetylmannosamine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Homocysteine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Xylulose 5-phosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31

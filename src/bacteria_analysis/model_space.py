@@ -329,6 +329,8 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if pd.Index(metabolite_column_names).duplicated().any():
         raise ValueError("metabolite column names must be unique")
 
+    metabolite_name_iter = iter(metabolite_column_names)
+    normalized.columns = [column if column == sample_column else next(metabolite_name_iter) for column in normalized.columns]
     normalized[sample_column] = sample_ids
     normalized = normalized.set_index(sample_column)
     normalized.index.name = "sample_id"

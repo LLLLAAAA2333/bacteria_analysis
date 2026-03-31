@@ -185,6 +185,20 @@ def test_read_metabolite_matrix_loads_expected_sample_ids(tmp_path):
     assert matrix.index.tolist() == ["A001", "A002", "A003"]
 
 
+def test_read_metabolite_matrix_strips_metabolite_header_whitespace(tmp_path):
+    matrix_path = tmp_path / "whitespace_metabolite_headers.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["sample_id", " feature_1 ", "feature_2  "])
+    sheet.append(["A001", 0.1, 1.0])
+    sheet.append(["A002", 0.2, 0.8])
+    workbook.save(matrix_path)
+
+    matrix = read_metabolite_matrix(matrix_path)
+
+    assert matrix.columns.tolist() == ["feature_1", "feature_2"]
+
+
 def test_read_metabolite_matrix_rejects_blank_sample_id_cells(tmp_path):
     matrix_path = tmp_path / "blank_matrix.xlsx"
     pd.DataFrame.from_records(
