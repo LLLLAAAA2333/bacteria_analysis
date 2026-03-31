@@ -33,6 +33,8 @@ MODEL_MEMBERSHIP_REQUIRED_COLUMNS = ("model_id", "metabolite_name")
 MODEL_MEMBERSHIP_OPTIONAL_COLUMNS = ("membership_source", "review_status", "ambiguous_flag", "notes")
 PRIMARY_TIER_VALUE = "primary"
 SUPPLEMENTARY_TIER_VALUE = "supplementary"
+MODEL_TIER_ALLOWED_VALUES = (PRIMARY_TIER_VALUE, SUPPLEMENTARY_TIER_VALUE)
+MODEL_STATUS_ALLOWED_VALUES = (PRIMARY_TIER_VALUE, SUPPLEMENTARY_TIER_VALUE, "draft", "excluded")
 BOOL_TRUE_VALUES = {"true", "1", "yes", "y", "t"}
 BOOL_FALSE_VALUES = {"false", "0", "no", "n", "f", ""}
 UNION_LIKE_KEYWORDS = ("union", "broad", "combined", "mixture", "mix")
@@ -122,6 +124,8 @@ def _validate_model_registry(frame: pd.DataFrame) -> pd.DataFrame:
 
     for column in ("model_id", "model_tier", "model_status"):
         _require_non_empty(normalized, column)
+    _require_allowed_values(normalized, "model_tier", MODEL_TIER_ALLOWED_VALUES)
+    _require_allowed_values(normalized, "model_status", MODEL_STATUS_ALLOWED_VALUES)
     _require_unique(normalized, "model_id", "model_registry")
     _reject_primary_union_like_models(normalized)
     return normalized
@@ -221,6 +225,13 @@ def _require_unique(frame: pd.DataFrame, column: str, label: str) -> None:
         raise ValueError(f"{label} {column} values must be unique")
 
 
+def _require_allowed_values(frame: pd.DataFrame, column: str, allowed_values: tuple[str, ...]) -> None:
+    normalized = frame[column].astype(str).str.strip().str.lower()
+    if not normalized.isin(allowed_values).all():
+        allowed = ", ".join(allowed_values)
+        raise ValueError(f"{column} values must be one of: {allowed}")
+
+
 def _require_unique_pairs(frame: pd.DataFrame, columns: tuple[str, str], label: str) -> None:
     duplicated = frame.duplicated(list(columns))
     if duplicated.any():
@@ -241,11 +252,10 @@ def _reject_primary_union_like_models(registry: pd.DataFrame) -> None:
     if primary_rows.empty:
         return
 
-    status_is_supplementary = primary_rows["model_status"].str.lower().eq(SUPPLEMENTARY_TIER_VALUE)
     broad_text = primary_rows[["model_id", "model_label", "description"]].apply(
         lambda column: column.str.contains("|".join(UNION_LIKE_KEYWORDS), case=False, na=False)
     ).any(axis=1)
-    invalid = primary_rows.loc[status_is_supplementary | broad_text]
+    invalid = primary_rows.loc[broad_text]
     if not invalid.empty:
         raise ValueError("broad union models must be marked supplementary instead of primary")
 

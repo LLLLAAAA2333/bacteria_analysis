@@ -224,6 +224,49 @@ def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_p
         resolve_model_inputs(root, matrix_path)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("model_tier", "secondary"),
+        ("model_status", "pending"),
+    ],
+)
+def test_load_model_registry_rejects_invalid_classification_values(tmp_path, field, value):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    registry_rows = [
+        {
+            "model_id": "global_profile",
+            "model_label": "Global Metabolite Profile",
+            "model_tier": "primary",
+            "model_status": "primary",
+            "feature_kind": "continuous_abundance",
+            "distance_kind": "correlation",
+            "description": "All matrix metabolites",
+            "authority": "user",
+            "notes": "",
+        },
+        {
+            "model_id": "broad_union",
+            "model_label": "Broad Union Model",
+            "model_tier": "primary",
+            "model_status": "supplementary",
+            "feature_kind": "continuous_abundance",
+            "distance_kind": "correlation",
+            "description": "Exploratory broad union",
+            "authority": "exploratory",
+            "notes": "",
+        },
+    ]
+    registry_rows[1][field] = value
+    pd.DataFrame.from_records(registry_rows, columns=MODEL_REGISTRY_COLUMNS).to_csv(
+        root / "model_registry.csv", index=False
+    )
+
+    with pytest.raises(ValueError, match=f"{field} values must be one of"):
+        load_model_registry(root / "model_registry.csv")
+
+
 @pytest.mark.parametrize("blank_field", ["model_tier", "model_status"])
 def test_load_model_registry_rejects_blank_required_fields(tmp_path, blank_field):
     root = tmp_path / "model_space"
@@ -323,6 +366,72 @@ def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
 
     with pytest.raises(ValueError, match="supplementary"):
         resolve_model_inputs(root, matrix_path)
+
+
+def test_resolve_model_inputs_allows_primary_supplementary_status_when_not_broad_union(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "supplementary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Narrow bile acid family",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+        annotation_rows=[
+            {
+                "metabolite_name": "feature_1",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "feature_2",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+    row = resolved["model_registry_resolved"].loc[resolved["model_registry_resolved"]["model_id"] == "bile_acid"].iloc[0]
+    assert row["model_status"] == "supplementary"
+    assert row["is_primary_family"]
 
 
 def test_resolve_model_inputs_seeds_global_profile_for_header_only_empty_membership(tmp_path):
