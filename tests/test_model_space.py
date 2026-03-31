@@ -169,6 +169,124 @@ def test_read_metabolite_matrix_rejects_blank_metabolite_headers(tmp_path):
         read_metabolite_matrix(matrix_path)
 
 
+def test_read_metabolite_matrix_uses_first_worksheet_for_validation_and_loading(tmp_path):
+    matrix_path = tmp_path / "multi_sheet_matrix.xlsx"
+    workbook = Workbook()
+    first_sheet = workbook.active
+    first_sheet.title = "matrix"
+    first_sheet.append(["sample_id", "feature_1", "feature_2"])
+    first_sheet.append(["A001", 0.1, 1.0])
+    first_sheet.append(["A002", 0.2, 0.8])
+    second_sheet = workbook.create_sheet("active_sheet")
+    second_sheet.append(["sample_id", None, "feature_2"])
+    second_sheet.append(["B001", 0.4, 0.6])
+    workbook.active = 1
+    workbook.save(matrix_path)
+
+    matrix = read_metabolite_matrix(matrix_path)
+
+    assert matrix.index.tolist() == ["A001", "A002"]
+    assert matrix.columns.tolist() == ["feature_1", "feature_2"]
+
+
+@pytest.mark.parametrize(
+    ("annotation_rows", "message"),
+    [
+        (
+            [
+                {
+                    "metabolite_name": "feature_1",
+                    "superclass": "",
+                    "subclass": "",
+                    "pathway_tag": "",
+                    "annotation_source": "",
+                    "review_status": "",
+                    "ambiguous_flag": False,
+                    "notes": "",
+                }
+            ],
+            "annotation metabolites must cover all matrix metabolites: feature_2",
+        ),
+        (
+            [
+                {
+                    "metabolite_name": "feature_1",
+                    "superclass": "",
+                    "subclass": "",
+                    "pathway_tag": "",
+                    "annotation_source": "",
+                    "review_status": "",
+                    "ambiguous_flag": False,
+                    "notes": "",
+                },
+                {
+                    "metabolite_name": "feature_2",
+                    "superclass": "",
+                    "subclass": "",
+                    "pathway_tag": "",
+                    "annotation_source": "",
+                    "review_status": "",
+                    "ambiguous_flag": False,
+                    "notes": "",
+                },
+                {
+                    "metabolite_name": "feature_3",
+                    "superclass": "",
+                    "subclass": "",
+                    "pathway_tag": "",
+                    "annotation_source": "",
+                    "review_status": "",
+                    "ambiguous_flag": False,
+                    "notes": "",
+                },
+            ],
+            "annotation metabolites must exist in the matrix: feature_3",
+        ),
+    ],
+)
+def test_resolve_model_inputs_rejects_annotation_mismatches(tmp_path, annotation_rows, message):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+        annotation_rows=annotation_rows,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        resolve_model_inputs(root, matrix_path)
+
+
 def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is_valid(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()

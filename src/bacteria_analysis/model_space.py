@@ -66,7 +66,8 @@ def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
     path = Path(path)
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
-        header_row = next(workbook.active.iter_rows(min_row=1, max_row=1, values_only=True), ())
+        first_sheet = workbook.worksheets[0]
+        header_row = next(first_sheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
     finally:
         workbook.close()
 
@@ -74,7 +75,7 @@ def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
     if header_values and pd.Index(header_values).duplicated().any():
         raise ValueError("metabolite column names must be unique")
 
-    frame = pd.read_excel(path, engine="openpyxl")
+    frame = pd.read_excel(path, engine="openpyxl", sheet_name=0)
     return _normalize_matrix_frame(frame)
 
 
@@ -282,9 +283,13 @@ def _validate_mapping_against_matrix(mapping: pd.DataFrame, matrix: pd.DataFrame
 def _validate_annotation_against_matrix(annotation: pd.DataFrame, matrix: pd.DataFrame) -> None:
     matrix_metabolites = set(matrix.columns.astype(str))
     annotation_metabolites = set(annotation["metabolite_name"].astype(str))
-    if annotation_metabolites and not annotation_metabolites.issubset(matrix_metabolites):
-        missing = sorted(annotation_metabolites.difference(matrix_metabolites))
-        raise ValueError(f"annotation metabolites must exist in the matrix: {', '.join(missing)}")
+    missing = sorted(matrix_metabolites.difference(annotation_metabolites))
+    if missing:
+        raise ValueError(f"annotation metabolites must cover all matrix metabolites: {', '.join(missing)}")
+
+    extra = sorted(annotation_metabolites.difference(matrix_metabolites))
+    if extra:
+        raise ValueError(f"annotation metabolites must exist in the matrix: {', '.join(extra)}")
 
 
 def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFrame) -> pd.DataFrame:
