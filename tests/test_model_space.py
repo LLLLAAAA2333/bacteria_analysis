@@ -1,8 +1,11 @@
+import numpy as np
 import pandas as pd
 import pytest
 from openpyxl import Workbook
 
 from bacteria_analysis.model_space import (
+    build_model_feature_matrix,
+    build_model_rdm,
     build_metabolite_annotation_skeleton,
     load_stimulus_sample_map,
     load_model_registry,
@@ -39,6 +42,60 @@ METABOLITE_ANNOTATION_COLUMNS = [
     "ambiguous_flag",
     "notes",
 ]
+
+
+def _make_task3_resolved_inputs(*, matrix_rows, mapping_rows, registry_rows, membership_rows):
+    matrix = pd.DataFrame.from_records(matrix_rows).set_index("sample_id")
+    matrix.index = matrix.index.astype(str)
+    matrix.index.name = "sample_id"
+
+    mapping = pd.DataFrame.from_records(mapping_rows, columns=["sample_id", "stimulus", "stim_name"])
+    mapping["sample_id"] = mapping["sample_id"].astype(str)
+    mapping["stimulus"] = mapping["stimulus"].astype(str)
+    mapping["stim_name"] = mapping["stim_name"].astype(str)
+
+    registry = pd.DataFrame.from_records(registry_rows, columns=MODEL_REGISTRY_COLUMNS)
+    registry["model_id"] = registry["model_id"].astype(str).str.lower()
+    registry["model_tier"] = registry["model_tier"].astype(str).str.lower()
+    registry["model_status"] = registry["model_status"].astype(str).str.lower()
+    registry["feature_kind"] = registry["feature_kind"].astype(str).str.lower()
+    registry["distance_kind"] = registry["distance_kind"].astype(str).str.lower()
+    registry_resolved = registry.copy()
+    registry_resolved["is_primary_family"] = registry_resolved["model_tier"].eq("primary")
+    registry_resolved["is_supplementary_family"] = registry_resolved["model_tier"].eq("supplementary")
+
+    membership = pd.DataFrame.from_records(membership_rows, columns=MODEL_MEMBERSHIP_COLUMNS)
+    if membership.empty:
+        membership = pd.DataFrame(columns=MODEL_MEMBERSHIP_COLUMNS)
+    membership["model_id"] = membership["model_id"].astype(str).str.lower()
+    membership["metabolite_name"] = membership["metabolite_name"].astype(str)
+    membership_resolved = membership.copy()
+
+    annotation = pd.DataFrame.from_records(
+        [
+            {
+                "metabolite_name": metabolite_name,
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            }
+            for metabolite_name in matrix.columns.astype(str).tolist()
+        ],
+        columns=METABOLITE_ANNOTATION_COLUMNS,
+    )
+    return {
+        "matrix": matrix,
+        "stimulus_sample_map": mapping,
+        "metabolite_annotation": annotation,
+        "model_registry": registry,
+        "model_membership": membership,
+        "model_registry_resolved": registry_resolved,
+        "model_membership_resolved": membership_resolved,
+    }
 
 
 def _write_stage3_model_space_files(root, *, registry_rows, membership_rows, annotation_rows):
@@ -976,3 +1033,224 @@ def test_build_annotation_skeleton_emits_all_matrix_metabolites(tmp_path):
     annotation = build_metabolite_annotation_skeleton(matrix_path)
     assert {"metabolite_name", "review_status", "ambiguous_flag"}.issubset(annotation.columns)
     assert "Cholic acid (CA)" in set(annotation["metabolite_name"])
+
+
+def test_build_model_feature_matrix_drops_zero_variance_columns_for_global_profile():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "keep_1": 0.0, "drop_me": 1.0, "keep_2": 1.0},
+            {"sample_id": "A002", "keep_1": 2.0, "drop_me": 1.0, "keep_2": 3.0},
+            {"sample_id": "A003", "keep_1": 4.0, "drop_me": 1.0, "keep_2": 5.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+    )
+
+    feature_matrix, qc = build_model_feature_matrix(resolved_inputs, model_id="global_profile")
+
+    assert feature_matrix.index.tolist() == ["b2_1", "b1_1", "b3_1"]
+    assert feature_matrix.columns.tolist() == ["keep_1", "keep_2"]
+    assert not bool(qc.loc[qc["metabolite_name"] == "drop_me", "retained"].iloc[0])
+    assert qc.loc[qc["metabolite_name"] == "drop_me", "filter_reason"].iloc[0] == "zero_variance"
+    np.testing.assert_allclose(feature_matrix.mean(axis=0).to_numpy(), np.zeros(2), atol=1e-9)
+    assert "model_feature_qc" in resolved_inputs
+
+
+def test_build_model_rdm_keeps_fixed_stimulus_order():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0},
+            {"sample_id": "A002", "m1": 1.0, "m2": 0.0},
+            {"sample_id": "A003", "m1": 2.0, "m2": 2.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "euclidean",
+                "description": "Subset model",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "bile_acid",
+                "metabolite_name": "m1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "bile_acid",
+                "metabolite_name": "m2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    matrix_frame = build_model_rdm(resolved_inputs, model_id="bile_acid")
+
+    assert matrix_frame["stimulus_row"].tolist() == ["b3_1", "b1_1", "b2_1"]
+    assert matrix_frame.columns.tolist() == ["stimulus_row", "b3_1", "b1_1", "b2_1"]
+
+
+def test_build_model_rdm_uses_binary_presence_with_jaccard_distance():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "p1": 1.0, "p2": 0.0, "p3": 0.0},
+            {"sample_id": "A002", "p1": 1.0, "p2": 1.0, "p3": 0.0},
+            {"sample_id": "A003", "p1": 0.0, "p2": 1.0, "p3": 1.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "presence_profile",
+                "model_label": "Presence Profile",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "binary_presence",
+                "distance_kind": "jaccard",
+                "description": "Binary presence subset",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "presence_profile",
+                "metabolite_name": "p1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "presence_profile",
+                "metabolite_name": "p2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "presence_profile",
+                "metabolite_name": "p3",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    matrix_frame = build_model_rdm(resolved_inputs, model_id="presence_profile")
+
+    assert matrix_frame.loc[0, "b2_1"] == pytest.approx(0.5)
+    assert matrix_frame.loc[0, "b3_1"] == pytest.approx(1.0)
+    assert matrix_frame.loc[1, "b3_1"] == pytest.approx(2.0 / 3.0)
+    assert set(resolved_inputs["model_feature_qc"]["threshold"]) == {0.0}
+
+
+def test_build_model_feature_matrix_marks_tiny_primary_model_excluded_from_ranking():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0, "m3": 2.0, "m4": 3.0},
+            {"sample_id": "A002", "m1": 1.0, "m2": 2.0, "m3": 3.0, "m4": 4.0},
+            {"sample_id": "A003", "m1": 2.0, "m2": 3.0, "m3": 4.0, "m4": 5.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "tiny_primary",
+                "model_label": "Tiny Primary",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Too few informative features",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "tiny_primary",
+                "metabolite_name": "m1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "tiny_primary",
+                "metabolite_name": "m2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "tiny_primary",
+                "metabolite_name": "m3",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "tiny_primary",
+                "metabolite_name": "m4",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    feature_matrix, _ = build_model_feature_matrix(resolved_inputs, model_id="tiny_primary")
+
+    assert feature_matrix.shape == (3, 4)
+    excluded = resolved_inputs["model_registry_resolved"].loc[
+        resolved_inputs["model_registry_resolved"]["model_id"] == "tiny_primary",
+        "excluded_from_primary_ranking",
+    ]
+    assert bool(excluded.iloc[0])

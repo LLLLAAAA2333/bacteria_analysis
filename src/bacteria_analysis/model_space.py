@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 
@@ -40,6 +41,18 @@ FEATURE_KIND_ALLOWED_VALUES = ("continuous_abundance", "binary_presence")
 DISTANCE_KIND_ALLOWED_VALUES = ("correlation", "euclidean", "jaccard")
 BOOL_TRUE_VALUES = {"true", "1", "yes", "y", "t"}
 BOOL_FALSE_VALUES = {"false", "0", "no", "n", "f", ""}
+GLOBAL_PROFILE_MODEL_ID = "global_profile"
+PRIMARY_FEATURE_COUNT_MINIMUM = 5
+DEFAULT_BINARY_PRESENCE_THRESHOLD = 0.0
+MODEL_FEATURE_QC_COLUMNS = (
+    "model_id",
+    "metabolite_name",
+    "feature_kind",
+    "retained",
+    "status",
+    "filter_reason",
+    "threshold",
+)
 
 
 def load_stimulus_sample_map(path: str | Path) -> pd.DataFrame:
@@ -103,6 +116,57 @@ def resolve_model_inputs(model_input_root: str | Path, matrix_path: str | Path) 
     registry = load_model_registry(model_input_root / "model_registry.csv")
     membership = load_model_membership(model_input_root / "model_membership.csv")
     return _resolve_stage3_inputs(mapping, annotation, registry, membership, matrix_path)
+
+
+def build_model_feature_matrix(
+    resolved_inputs: dict[str, pd.DataFrame],
+    model_id: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    normalized_model_id = str(model_id).strip().lower()
+    registry_row = _get_model_registry_row(resolved_inputs, normalized_model_id)
+    ordered_matrix = _select_model_input_matrix(resolved_inputs, normalized_model_id)
+    feature_kind = str(registry_row["feature_kind"]).strip().lower()
+
+    if feature_kind == "continuous_abundance":
+        transformed = np.log1p(ordered_matrix.astype(float))
+        filtered, feature_qc = _drop_zero_variance_features(
+            transformed,
+            model_id=normalized_model_id,
+            feature_kind=feature_kind,
+        )
+        feature_matrix = _zscore_columns(filtered)
+    elif feature_kind == "binary_presence":
+        transformed = ordered_matrix.astype(float).gt(DEFAULT_BINARY_PRESENCE_THRESHOLD).astype(int)
+        filtered, feature_qc = _drop_zero_variance_features(
+            transformed,
+            model_id=normalized_model_id,
+            feature_kind=feature_kind,
+            threshold=DEFAULT_BINARY_PRESENCE_THRESHOLD,
+        )
+        feature_matrix = filtered
+    else:
+        raise ValueError(f"unsupported feature_kind for model {normalized_model_id!r}: {feature_kind}")
+
+    _update_primary_ranking_exclusion(
+        resolved_inputs,
+        normalized_model_id,
+        retained_feature_count=feature_matrix.shape[1],
+    )
+    _store_model_feature_qc(resolved_inputs, feature_qc)
+    return feature_matrix, feature_qc
+
+
+def build_model_rdm(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> pd.DataFrame:
+    normalized_model_id = str(model_id).strip().lower()
+    feature_matrix, _ = build_model_feature_matrix(resolved_inputs, normalized_model_id)
+    registry_row = _get_model_registry_row(resolved_inputs, normalized_model_id)
+    distance_kind = str(registry_row["distance_kind"]).strip().lower()
+
+    distance_matrix = _compute_model_distance_matrix(feature_matrix, distance_kind=distance_kind)
+    matrix = pd.DataFrame(distance_matrix, index=feature_matrix.index, columns=feature_matrix.index)
+    frame = matrix.copy()
+    frame.insert(0, "stimulus_row", frame.index.astype(str))
+    return frame.reset_index(drop=True)
 
 
 def _validate_stimulus_sample_map(frame: pd.DataFrame) -> pd.DataFrame:
@@ -272,6 +336,8 @@ def _coerce_boolean_column(series: pd.Series, column_name: str) -> pd.Series:
     if invalid.any():
         raise ValueError(f"{column_name} values must be boolean-like")
     return normalized.isin(BOOL_TRUE_VALUES)
+
+
 def _validate_mapping_against_matrix(mapping: pd.DataFrame, matrix: pd.DataFrame) -> None:
     matrix_sample_ids = set(matrix.index.astype(str))
     mapped_sample_ids = set(mapping["sample_id"].astype(str))
@@ -295,10 +361,10 @@ def _validate_annotation_against_matrix(annotation: pd.DataFrame, matrix: pd.Dat
 def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFrame) -> pd.DataFrame:
     resolved = _ensure_membership_columns(membership)
     matrix_metabolites = matrix.columns.astype(str).tolist()
-    global_profile_mask = resolved["model_id"].astype(str).str.strip().str.lower() == "global_profile"
+    global_profile_mask = resolved["model_id"].astype(str).str.strip().str.lower() == GLOBAL_PROFILE_MODEL_ID
     global_profile_rows = resolved.loc[global_profile_mask]
 
-    seed_model_id = "global_profile"
+    seed_model_id = GLOBAL_PROFILE_MODEL_ID
     if not global_profile_rows.empty:
         seed_model_id = global_profile_rows["model_id"].astype(str).iloc[0].strip()
 
@@ -325,13 +391,13 @@ def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFra
 
 def _seed_global_profile_registry(registry: pd.DataFrame) -> pd.DataFrame:
     resolved = registry.copy()
-    if resolved["model_id"].astype(str).str.strip().str.lower().eq("global_profile").any():
+    if resolved["model_id"].astype(str).str.strip().str.lower().eq(GLOBAL_PROFILE_MODEL_ID).any():
         return resolved
 
     global_profile = pd.DataFrame.from_records(
         [
             {
-                "model_id": "global_profile",
+                "model_id": GLOBAL_PROFILE_MODEL_ID,
                 "model_label": "Global Metabolite Profile",
                 "model_tier": "primary",
                 "model_status": "primary",
@@ -378,3 +444,176 @@ def _validate_membership_against_matrix(membership: pd.DataFrame, matrix: pd.Dat
     unknown = sorted(membership_metabolites.difference(matrix_metabolites))
     if unknown:
         raise ValueError(f"model_membership metabolites must exist in the matrix: {', '.join(unknown)}")
+
+
+def _get_model_registry_row(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> pd.Series:
+    registry = resolved_inputs["model_registry_resolved"]
+    matches = registry.loc[registry["model_id"].astype(str).str.strip().str.lower() == model_id]
+    if matches.empty:
+        raise ValueError(f"unknown model_id: {model_id}")
+    if len(matches) != 1:
+        raise ValueError(f"model_id must resolve to exactly one row: {model_id}")
+    return matches.iloc[0]
+
+
+def _select_model_input_matrix(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> pd.DataFrame:
+    matrix = resolved_inputs["matrix"]
+    mapping = resolved_inputs["stimulus_sample_map"]
+    ordered_sample_ids = mapping["sample_id"].astype(str).tolist()
+    ordered_stimuli = mapping["stimulus"].astype(str).tolist()
+    selected_metabolites = _select_model_metabolites(resolved_inputs, model_id)
+    ordered_matrix = matrix.loc[ordered_sample_ids, selected_metabolites].copy()
+    ordered_matrix.index = pd.Index(ordered_stimuli, name="stimulus")
+    ordered_matrix.columns = ordered_matrix.columns.astype(str)
+    return ordered_matrix
+
+
+def _select_model_metabolites(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> list[str]:
+    matrix = resolved_inputs["matrix"]
+    if model_id == GLOBAL_PROFILE_MODEL_ID:
+        return matrix.columns.astype(str).tolist()
+
+    membership = resolved_inputs["model_membership_resolved"]
+    selected = membership.loc[
+        membership["model_id"].astype(str).str.strip().str.lower() == model_id,
+        "metabolite_name",
+    ].astype(str)
+    return selected.drop_duplicates().tolist()
+
+
+def _drop_zero_variance_features(
+    feature_matrix: pd.DataFrame,
+    *,
+    model_id: str,
+    feature_kind: str,
+    threshold: float | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if feature_matrix.shape[1] == 0:
+        return feature_matrix.copy(), pd.DataFrame(columns=list(MODEL_FEATURE_QC_COLUMNS))
+
+    variances = feature_matrix.var(axis=0, ddof=0).fillna(0.0)
+    retained_mask = variances.gt(0.0)
+    qc_rows: list[dict[str, object]] = []
+    for metabolite_name in feature_matrix.columns.astype(str):
+        retained = bool(retained_mask.loc[metabolite_name])
+        qc_rows.append(
+            {
+                "model_id": model_id,
+                "metabolite_name": metabolite_name,
+                "feature_kind": feature_kind,
+                "retained": retained,
+                "status": "retained" if retained else "dropped",
+                "filter_reason": "retained" if retained else "zero_variance",
+                "threshold": threshold,
+            }
+        )
+
+    filtered = feature_matrix.loc[:, retained_mask].copy()
+    qc = pd.DataFrame.from_records(qc_rows, columns=list(MODEL_FEATURE_QC_COLUMNS))
+    return filtered, qc
+
+
+def _zscore_columns(feature_matrix: pd.DataFrame) -> pd.DataFrame:
+    if feature_matrix.shape[1] == 0:
+        return feature_matrix.copy()
+
+    means = feature_matrix.mean(axis=0)
+    stds = feature_matrix.std(axis=0, ddof=0).replace(0.0, 1.0)
+    standardized = feature_matrix.subtract(means, axis="columns").divide(stds, axis="columns")
+    standardized.index = feature_matrix.index
+    standardized.columns = feature_matrix.columns
+    return standardized
+
+
+def _update_primary_ranking_exclusion(
+    resolved_inputs: dict[str, pd.DataFrame],
+    model_id: str,
+    *,
+    retained_feature_count: int,
+) -> None:
+    registry = resolved_inputs["model_registry_resolved"].copy()
+    if "excluded_from_primary_ranking" not in registry.columns:
+        registry["excluded_from_primary_ranking"] = False
+
+    model_mask = registry["model_id"].astype(str).str.strip().str.lower() == model_id
+    if not model_mask.any():
+        raise ValueError(f"unknown model_id: {model_id}")
+
+    is_primary = registry.loc[model_mask, "model_tier"].astype(str).str.strip().str.lower().eq(PRIMARY_TIER_VALUE)
+    exclude = bool(is_primary.iloc[0] and retained_feature_count < PRIMARY_FEATURE_COUNT_MINIMUM)
+    registry.loc[model_mask, "excluded_from_primary_ranking"] = exclude
+    resolved_inputs["model_registry_resolved"] = registry
+
+
+def _store_model_feature_qc(resolved_inputs: dict[str, pd.DataFrame], feature_qc: pd.DataFrame) -> None:
+    existing = resolved_inputs.get("model_feature_qc")
+    if existing is None or existing.empty:
+        resolved_inputs["model_feature_qc"] = feature_qc.copy()
+        return
+
+    model_ids = feature_qc["model_id"].drop_duplicates().astype(str).tolist() if not feature_qc.empty else []
+    remaining = existing.loc[~existing["model_id"].astype(str).isin(model_ids)].copy()
+    resolved_inputs["model_feature_qc"] = pd.concat([remaining, feature_qc], ignore_index=True)
+
+
+def _compute_model_distance_matrix(feature_matrix: pd.DataFrame, *, distance_kind: str) -> np.ndarray:
+    values = feature_matrix.to_numpy(dtype=float, copy=False)
+    if distance_kind == "correlation":
+        return _pairwise_correlation_distance(values)
+    if distance_kind == "euclidean":
+        return _pairwise_euclidean_distance(values)
+    if distance_kind == "jaccard":
+        return _pairwise_jaccard_distance(values)
+    raise ValueError(f"unsupported distance_kind: {distance_kind}")
+
+
+def _pairwise_correlation_distance(values: np.ndarray) -> np.ndarray:
+    n_rows = values.shape[0]
+    if values.shape[1] == 0:
+        return _empty_distance_matrix(n_rows)
+
+    centered = values - values.mean(axis=1, keepdims=True)
+    norms = np.linalg.norm(centered, axis=1)
+    denominator = np.outer(norms, norms)
+    similarity = np.divide(
+        centered @ centered.T,
+        denominator,
+        out=np.zeros((n_rows, n_rows), dtype=float),
+        where=denominator > 0,
+    )
+    np.fill_diagonal(similarity, 1.0)
+    distance = 1.0 - similarity
+    np.fill_diagonal(distance, 0.0)
+    return distance
+
+
+def _pairwise_euclidean_distance(values: np.ndarray) -> np.ndarray:
+    n_rows = values.shape[0]
+    if values.shape[1] == 0:
+        return _empty_distance_matrix(n_rows)
+
+    deltas = values[:, np.newaxis, :] - values[np.newaxis, :, :]
+    distance = np.sqrt(np.sum(deltas * deltas, axis=2))
+    np.fill_diagonal(distance, 0.0)
+    return distance
+
+
+def _pairwise_jaccard_distance(values: np.ndarray) -> np.ndarray:
+    binary = values.astype(bool)
+    intersections = np.logical_and(binary[:, np.newaxis, :], binary[np.newaxis, :, :]).sum(axis=2)
+    unions = np.logical_or(binary[:, np.newaxis, :], binary[np.newaxis, :, :]).sum(axis=2)
+    similarity = np.divide(
+        intersections,
+        unions,
+        out=np.ones(intersections.shape, dtype=float),
+        where=unions > 0,
+    )
+    distance = 1.0 - similarity
+    np.fill_diagonal(distance, 0.0)
+    return distance
+
+
+def _empty_distance_matrix(n_rows: int) -> np.ndarray:
+    distance = np.full((n_rows, n_rows), np.nan, dtype=float)
+    np.fill_diagonal(distance, 0.0)
+    return distance
