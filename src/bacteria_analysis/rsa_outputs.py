@@ -101,11 +101,13 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     view_comparison = required_tables["rsa_view_comparison"]
     family_summary = _collect_model_families(registry)
     top_primary_models = _build_top_primary_models_by_view(rsa_results, family_summary["primary_models"])
+    primary_view = _choose_primary_view(rsa_results)
 
     written["ranked_primary_model_rsa"] = _plot_ranked_primary_model_rsa(
         rsa_results,
         family_summary["primary_models"],
-        dirs["figures_dir"] / "ranked_primary_model_rsa.png",
+        path=dirs["figures_dir"] / "ranked_primary_model_rsa.png",
+        primary_view=primary_view,
     )
     written["neural_vs_top_model_rdm_panel"] = _plot_neural_vs_top_model_rdm_panel(
         core_outputs,
@@ -128,6 +130,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         written=written,
         family_summary=family_summary,
         top_primary_models=top_primary_models,
+        primary_view=primary_view,
     )
     written["run_summary_json"] = write_json(summary, dirs["output_root"] / "run_summary.json")
     written["run_summary_md"] = _write_markdown_summary(summary, dirs["output_root"] / "run_summary.md")
@@ -223,6 +226,8 @@ def _build_top_primary_models_by_view(rsa_results: pd.DataFrame, primary_models:
 def _plot_ranked_primary_model_rsa(
     rsa_results: pd.DataFrame,
     primary_models: list[str],
+    *,
+    primary_view: str | None,
     path: Path,
 ) -> Path:
     if rsa_results.empty or not primary_models:
@@ -237,43 +242,23 @@ def _plot_ranked_primary_model_rsa(
     ranked["view_name"] = ranked["view_name"].astype(str)
     ranked["rsa_similarity"] = pd.to_numeric(ranked["rsa_similarity"], errors="coerce")
     ranked = ranked.loc[ranked["model_id"].isin(primary_models)]
+    if primary_view is not None:
+        ranked = ranked.loc[ranked["view_name"] == primary_view]
     ranked = ranked.loc[np.isfinite(ranked["rsa_similarity"])]
     if ranked.empty:
         return _plot_empty_figure(path, title="Ranked Primary-Model RSA", message="No finite primary RSA values")
 
-    pivot = ranked.pivot_table(
-        index="model_id",
-        columns="view_name",
-        values="rsa_similarity",
-        aggfunc="max",
-    )
-    if pivot.empty:
-        return _plot_empty_figure(path, title="Ranked Primary-Model RSA", message="No ranked primary models")
-
-    order = pivot.max(axis=1).sort_values(ascending=True).index.tolist()
-    pivot = pivot.loc[order]
-
-    view_names = list(pivot.columns.astype(str))
-    n_views = max(len(view_names), 1)
-    y_positions = np.arange(len(pivot.index), dtype=float)
-    bar_height = 0.8 / n_views
-
-    plt.figure(figsize=(7.5, max(3.5, 0.8 * len(pivot.index) + 1.5)))
-    for offset, view_name in enumerate(view_names):
-        position = y_positions + (offset - (n_views - 1) / 2) * bar_height
-        plt.barh(
-            position,
-            pivot[view_name].fillna(0.0).to_numpy(dtype=float),
-            height=bar_height,
-            label=view_name,
-        )
-
-    plt.yticks(y_positions, pivot.index.tolist())
+    ranked = ranked.sort_values(["rsa_similarity", "model_id"], ascending=[True, True])
+    y_positions = np.arange(len(ranked), dtype=float)
+    plt.figure(figsize=(7.5, max(3.5, 0.8 * len(ranked) + 1.5)))
+    plt.barh(y_positions, ranked["rsa_similarity"].to_numpy(dtype=float))
+    plt.yticks(y_positions, ranked["model_id"].tolist())
     plt.xlabel("RSA similarity")
     plt.ylabel("Model")
-    plt.title("Ranked Primary-Model RSA")
-    if view_names:
-        plt.legend(title="View")
+    if primary_view is None:
+        plt.title("Ranked Primary-Model RSA")
+    else:
+        plt.title(f"Ranked Primary-Model RSA ({primary_view})")
     return _save_figure(path)
 
 
@@ -468,6 +453,7 @@ def _build_run_summary(
     written: dict[str, Path],
     family_summary: dict[str, list[str]],
     top_primary_models: dict[str, str],
+    primary_view: str | None,
 ) -> dict[str, Any]:
     table_names = [artifact_name for artifact_name, _ in TABLE_ARTIFACT_SPECS]
     qc_table_names = [artifact_name for artifact_name, _ in QC_ARTIFACT_SPECS]
@@ -483,6 +469,8 @@ def _build_run_summary(
 
     return {
         "views": view_names,
+        "primary_view": primary_view,
+        "sensitivity_views": [view_name for view_name in view_names if view_name != primary_view],
         "primary_models": family_summary["primary_models"],
         "supplementary_models": family_summary["supplementary_models"],
         "excluded_models": family_summary["excluded_models"],
@@ -523,9 +511,22 @@ def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> 
     return views
 
 
+def _choose_primary_view(rsa_results: pd.DataFrame) -> str | None:
+    views = _ordered_views(rsa_results, pd.DataFrame())
+    if not views:
+        return None
+    if "response_window" in views:
+        return "response_window"
+    return views[0]
+
+
 def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     lines = [
         "# Stage 3 Biochemical RSA Run Summary",
+        "",
+        "## Views",
+        f"- Primary view: {summary['primary_view'] or 'None'}",
+        f"- Sensitivity views: {', '.join(summary['sensitivity_views']) if summary['sensitivity_views'] else 'None'}",
         "",
         "## Model Families",
         f"- Primary models: {', '.join(summary['primary_models']) if summary['primary_models'] else 'None'}",

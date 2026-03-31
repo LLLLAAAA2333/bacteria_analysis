@@ -555,6 +555,7 @@ def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path,
     written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
+    assert summary["primary_view"] == "response_window"
     assert summary["primary_models"] == ["global_profile", "bile_acid"]
     assert summary["supplementary_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
