@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+from bacteria_analysis.io import read_parquet
+from bacteria_analysis.model_space import build_model_rdm, summarize_model_input_coverage
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
 
@@ -207,6 +212,198 @@ def summarize_cross_view_comparison(
     return summary
 
 
+def load_stage2_pooled_neural_rdms(
+    stage2_root: str | Path,
+    *,
+    view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
+) -> dict[str, pd.DataFrame]:
+    root = Path(stage2_root)
+    tables_dir = root / "tables"
+    neural_rdms: dict[str, pd.DataFrame] = {}
+
+    for view_name in view_names:
+        normalized_view = str(view_name)
+        matrix_path = tables_dir / f"rdm_matrix__{normalized_view}__pooled.parquet"
+        if not matrix_path.exists():
+            raise FileNotFoundError(f"missing Stage 2 pooled RDM for view {normalized_view!r}: {matrix_path}")
+        neural_rdms[normalized_view] = read_parquet(matrix_path)
+
+    return neural_rdms
+
+
+def run_stage3_rsa(
+    resolved_inputs: dict[str, pd.DataFrame],
+    *,
+    neural_matrices: dict[str, pd.DataFrame],
+    permutations: int = 0,
+    seed: int = 0,
+    view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
+    primary_view: str = "response_window",
+) -> dict[str, pd.DataFrame]:
+    requested_views = _resolve_requested_views(neural_matrices, view_names)
+    resolved_primary_view = primary_view if primary_view in requested_views else requested_views[0]
+    registry = resolved_inputs["model_registry_resolved"].copy()
+    results_rows: list[dict[str, object]] = []
+    leave_one_out_frames: list[pd.DataFrame] = []
+    cross_view_frames: list[pd.DataFrame] = []
+    model_summary_rows: list[dict[str, object]] = []
+
+    core_outputs: dict[str, pd.DataFrame] = {
+        "stimulus_sample_map": resolved_inputs["stimulus_sample_map"].copy(),
+        "metabolite_annotation_resolved": resolved_inputs["metabolite_annotation"].copy(),
+        "model_membership_resolved": resolved_inputs["model_membership_resolved"].copy(),
+    }
+    for view_name in requested_views:
+        core_outputs[f"neural_rdm__{view_name}"] = neural_matrices[view_name].copy()
+
+    for _, registry_row in registry.iterrows():
+        model_id = str(registry_row["model_id"]).strip().lower()
+        model_status = str(registry_row["model_status"]).strip().lower()
+        if model_status == "excluded":
+            continue
+
+        model_matrix = build_model_rdm(resolved_inputs, model_id)
+        core_outputs[f"model_rdm__{model_id}"] = model_matrix.copy()
+        model_summary_rows.append(_build_model_rdm_summary_row(model_id, registry_row, model_matrix))
+
+        for view_index, view_name in enumerate(requested_views):
+            score = compute_rsa_score(neural_matrices[view_name], model_matrix)
+            p_value_raw = np.nan
+            if permutations > 0 and score["score_status"] == "ok":
+                null = build_permutation_null(
+                    neural_matrices[view_name],
+                    model_matrix,
+                    n_iterations=permutations,
+                    seed=seed + (1000 * view_index),
+                )
+                p_value_raw = _empirical_p_value(
+                    score["rsa_similarity"],
+                    null["rsa_similarity"].to_numpy(dtype=float),
+                )
+
+            results_rows.append(
+                {
+                    "view_name": view_name,
+                    "reference_view_name": "model_rdm",
+                    "comparison_scope": "neural_vs_model",
+                    "primary_view": resolved_primary_view,
+                    "model_id": model_id,
+                    "model_label": str(registry_row["model_label"]).strip(),
+                    "model_tier": str(registry_row["model_tier"]).strip().lower(),
+                    "model_status": model_status,
+                    "feature_kind": str(registry_row["feature_kind"]).strip().lower(),
+                    "distance_kind": str(registry_row["distance_kind"]).strip().lower(),
+                    "excluded_from_primary_ranking": bool(registry_row.get("excluded_from_primary_ranking", False)),
+                    **score,
+                    "p_value_raw": p_value_raw,
+                    "p_value_fdr": np.nan,
+                }
+            )
+
+        leave_one_out = summarize_leave_one_stimulus_out(
+            neural_matrices[resolved_primary_view],
+            model_matrix,
+            n_iterations=permutations,
+            seed=seed,
+        )
+        if not leave_one_out.empty:
+            leave_one_out = leave_one_out.assign(
+                view_name=resolved_primary_view,
+                reference_view_name="model_rdm",
+                comparison_scope="neural_vs_model",
+                primary_view=resolved_primary_view,
+                model_id=model_id,
+                model_label=str(registry_row["model_label"]).strip(),
+                model_tier=str(registry_row["model_tier"]).strip().lower(),
+                model_status=model_status,
+                distance_kind=str(registry_row["distance_kind"]).strip().lower(),
+            )
+        leave_one_out_frames.append(leave_one_out)
+
+        cross_view = summarize_cross_view_comparison(
+            {view_name: neural_matrices[view_name] for view_name in requested_views},
+            model_matrix,
+            view_names=requested_views,
+            n_iterations=permutations,
+            seed=seed,
+        )
+        if not cross_view.empty:
+            cross_view = cross_view.assign(
+                reference_view_name="model_rdm",
+                comparison_scope="neural_vs_model",
+                primary_view=resolved_primary_view,
+                model_id=model_id,
+                model_label=str(registry_row["model_label"]).strip(),
+                model_tier=str(registry_row["model_tier"]).strip().lower(),
+                model_status=model_status,
+                distance_kind=str(registry_row["distance_kind"]).strip().lower(),
+            )
+        cross_view_frames.append(cross_view)
+
+    rsa_results = pd.DataFrame.from_records(results_rows)
+    if not rsa_results.empty:
+        rsa_results["p_value_fdr"] = benjamini_hochberg(rsa_results["p_value_raw"].to_numpy(dtype=float))
+        rsa_results["is_top_model"] = False
+        for view_name, group in rsa_results.groupby("view_name", sort=False):
+            valid_group = group.loc[
+                group["score_status"].astype(str).str.strip().str.lower().eq("ok")
+                & np.isfinite(pd.to_numeric(group["rsa_similarity"], errors="coerce"))
+            ]
+            if valid_group.empty:
+                continue
+            top_index = valid_group["rsa_similarity"].astype(float).idxmax()
+            rsa_results.loc[top_index, "is_top_model"] = True
+
+    core_outputs["model_registry_resolved"] = resolved_inputs["model_registry_resolved"].copy()
+    core_outputs["model_input_coverage"] = summarize_model_input_coverage(resolved_inputs)
+    core_outputs["model_feature_qc"] = resolved_inputs.get("model_feature_qc", pd.DataFrame()).copy()
+    core_outputs["model_feature_filtering"] = core_outputs["model_feature_qc"].copy()
+    core_outputs["model_rdm_summary"] = pd.DataFrame.from_records(model_summary_rows)
+    core_outputs["rsa_results"] = rsa_results
+    core_outputs["rsa_leave_one_stimulus_out"] = _concat_summary_frames(
+        leave_one_out_frames,
+        columns=[
+            "excluded_stimulus",
+            "view_name",
+            "reference_view_name",
+            "comparison_scope",
+            "primary_view",
+            "model_id",
+            "model_label",
+            "model_tier",
+            "model_status",
+            "distance_kind",
+            "score_method",
+            "score_status",
+            "n_shared_entries",
+            "rsa_similarity",
+            "p_value_raw",
+            "p_value_fdr",
+        ],
+    )
+    core_outputs["rsa_view_comparison"] = _concat_summary_frames(
+        cross_view_frames,
+        columns=[
+            "view_name",
+            "reference_view_name",
+            "comparison_scope",
+            "primary_view",
+            "model_id",
+            "model_label",
+            "model_tier",
+            "model_status",
+            "distance_kind",
+            "score_method",
+            "score_status",
+            "n_shared_entries",
+            "rsa_similarity",
+            "p_value_raw",
+            "p_value_fdr",
+        ],
+    )
+    return core_outputs
+
+
 def _prepare_square_matrix(matrix_frame: pd.DataFrame) -> pd.DataFrame:
     if "stimulus_row" not in matrix_frame.columns:
         raise ValueError("matrix_frame must include a stimulus_row column")
@@ -301,12 +498,54 @@ def _empirical_p_value(observed_similarity: float, null_values: np.ndarray) -> f
     return float((1 + np.sum(finite_null >= observed_similarity)) / (finite_null.size + 1))
 
 
+def _resolve_requested_views(
+    neural_matrices: dict[str, pd.DataFrame],
+    view_names: tuple[str, ...] | list[str],
+) -> list[str]:
+    requested_views: list[str] = []
+    for view_name in view_names:
+        normalized_view = str(view_name)
+        if normalized_view not in neural_matrices:
+            raise ValueError(f"missing neural matrix for view_name {normalized_view!r}")
+        if normalized_view not in requested_views:
+            requested_views.append(normalized_view)
+    return requested_views
+
+
+def _build_model_rdm_summary_row(
+    model_id: str,
+    registry_row: pd.Series,
+    model_matrix: pd.DataFrame,
+) -> dict[str, object]:
+    distances = _extract_upper_triangle(model_matrix)["value"].to_numpy(dtype=float, copy=False)
+    finite_distances = distances[np.isfinite(distances)]
+    return {
+        "model_id": model_id,
+        "model_label": str(registry_row["model_label"]).strip(),
+        "model_tier": str(registry_row["model_tier"]).strip().lower(),
+        "model_status": str(registry_row["model_status"]).strip().lower(),
+        "distance_kind": str(registry_row["distance_kind"]).strip().lower(),
+        "n_stimuli": int(len(model_matrix)),
+        "n_pairwise_distances": int(finite_distances.size),
+        "mean_distance": float(finite_distances.mean()) if finite_distances.size else np.nan,
+    }
+
+
+def _concat_summary_frames(frames: list[pd.DataFrame], *, columns: list[str]) -> pd.DataFrame:
+    non_empty_frames = [frame for frame in frames if frame is not None and not frame.empty]
+    if not non_empty_frames:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(non_empty_frames, ignore_index=True)[columns]
+
+
 __all__ = [
     "DEFAULT_CROSS_VIEW_NAMES",
     "align_rdm_upper_triangles",
     "benjamini_hochberg",
     "build_permutation_null",
     "compute_rsa_score",
+    "load_stage2_pooled_neural_rdms",
+    "run_stage3_rsa",
     "summarize_cross_view_comparison",
     "summarize_leave_one_stimulus_out",
 ]

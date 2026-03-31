@@ -53,6 +53,14 @@ MODEL_FEATURE_QC_COLUMNS = (
     "filter_reason",
     "threshold",
 )
+MODEL_INPUT_COVERAGE_COLUMNS = (
+    "model_id",
+    "model_tier",
+    "model_status",
+    "excluded_from_primary_ranking",
+    "n_resolved_metabolites",
+    "coverage_status",
+)
 
 
 def load_stimulus_sample_map(path: str | Path) -> pd.DataFrame:
@@ -175,6 +183,27 @@ def build_model_rdm(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> 
     frame = matrix.copy()
     frame.insert(0, "stimulus_row", frame.index.astype(str))
     return frame.reset_index(drop=True)
+
+
+def summarize_model_input_coverage(resolved_inputs: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    registry = resolved_inputs["model_registry_resolved"]
+    rows: list[dict[str, object]] = []
+
+    for _, registry_row in registry.iterrows():
+        model_id = str(registry_row["model_id"]).strip().lower()
+        n_resolved_metabolites = len(_select_model_metabolites(resolved_inputs, model_id))
+        rows.append(
+            {
+                "model_id": model_id,
+                "model_tier": str(registry_row["model_tier"]).strip().lower(),
+                "model_status": str(registry_row["model_status"]).strip().lower(),
+                "excluded_from_primary_ranking": bool(registry_row.get("excluded_from_primary_ranking", False)),
+                "n_resolved_metabolites": int(n_resolved_metabolites),
+                "coverage_status": "ok" if n_resolved_metabolites > 0 else "empty",
+            }
+        )
+
+    return pd.DataFrame.from_records(rows, columns=list(MODEL_INPUT_COVERAGE_COLUMNS))
 
 
 def _validate_stimulus_sample_map(frame: pd.DataFrame) -> pd.DataFrame:
