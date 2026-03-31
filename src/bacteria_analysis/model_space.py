@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
+from openpyxl import load_workbook
 
 STIMULUS_SAMPLE_MAP_REQUIRED_COLUMNS = ("stimulus", "stim_name", "sample_id")
 METABOLITE_ANNOTATION_REQUIRED_COLUMNS = (
@@ -62,7 +63,18 @@ def load_model_membership(path: str | Path) -> pd.DataFrame:
 
 
 def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
-    frame = pd.read_excel(Path(path), engine="openpyxl")
+    path = Path(path)
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        header_row = next(workbook.active.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    finally:
+        workbook.close()
+
+    header_values = ["" if value is None else str(value).strip() for value in header_row]
+    if header_values and pd.Index(header_values).duplicated().any():
+        raise ValueError("metabolite column names must be unique")
+
+    frame = pd.read_excel(path, engine="openpyxl")
     return _normalize_matrix_frame(frame)
 
 
@@ -206,6 +218,10 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if sample_ids.duplicated().any():
         raise ValueError("sample_id values must be unique")
 
+    metabolite_columns = [column for column in normalized.columns if column != sample_column]
+    if pd.Index(metabolite_columns).duplicated().any():
+        raise ValueError("metabolite column names must be unique")
+
     normalized[sample_column] = sample_ids
     normalized = normalized.set_index(sample_column)
     normalized.index.name = "sample_id"
@@ -269,7 +285,13 @@ def _validate_annotation_against_matrix(annotation: pd.DataFrame, matrix: pd.Dat
 def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFrame) -> pd.DataFrame:
     resolved = _ensure_membership_columns(membership)
     matrix_metabolites = matrix.columns.astype(str).tolist()
-    global_profile_rows = resolved.loc[resolved["model_id"].astype(str) == "global_profile"]
+    global_profile_mask = resolved["model_id"].astype(str).str.strip().str.lower() == "global_profile"
+    global_profile_rows = resolved.loc[global_profile_mask]
+
+    seed_model_id = "global_profile"
+    if not global_profile_rows.empty:
+        seed_model_id = global_profile_rows["model_id"].astype(str).iloc[0].strip()
+
     existing_metabolites = set(global_profile_rows["metabolite_name"].astype(str))
     missing_metabolites = [name for name in matrix_metabolites if name not in existing_metabolites]
 
@@ -278,7 +300,7 @@ def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFra
 
     seeded_rows = pd.DataFrame(
         {
-            "model_id": ["global_profile"] * len(missing_metabolites),
+            "model_id": [seed_model_id] * len(missing_metabolites),
             "metabolite_name": missing_metabolites,
             "membership_source": ["matrix_all_columns"] * len(missing_metabolites),
             "review_status": [""] * len(missing_metabolites),
@@ -293,7 +315,7 @@ def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFra
 
 def _seed_global_profile_registry(registry: pd.DataFrame) -> pd.DataFrame:
     resolved = registry.copy()
-    if "global_profile" in set(resolved["model_id"].astype(str)):
+    if resolved["model_id"].astype(str).str.strip().str.lower().eq("global_profile").any():
         return resolved
 
     global_profile = pd.DataFrame.from_records(

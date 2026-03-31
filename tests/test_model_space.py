@@ -140,6 +140,21 @@ def test_read_metabolite_matrix_rejects_blank_sample_id_cells(tmp_path):
         read_metabolite_matrix(matrix_path)
 
 
+def test_read_metabolite_matrix_rejects_duplicate_metabolite_columns(tmp_path):
+    matrix_path = tmp_path / "duplicate_metabolite_columns.xlsx"
+    pd.DataFrame(
+        [
+            ["A001", 0.1, 1.0],
+            ["A002", 0.2, 0.8],
+            ["A003", 0.3, 0.6],
+        ],
+        columns=["sample_id", "feature_1", "feature_1"],
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    with pytest.raises(ValueError, match="metabolite column names must be unique"):
+        read_metabolite_matrix(matrix_path)
+
+
 def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is_valid(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
@@ -227,6 +242,82 @@ def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is
 
     assert broad_union_row["model_tier"] == "primary"
     assert broad_union_row["model_status"] == "supplementary"
+
+
+def test_resolve_model_inputs_preserves_case_variant_global_profile_rows(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "GLOBAL_PROFILE",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "GLOBAL_PROFILE",
+                "metabolite_name": "feature_1",
+                "membership_source": "seed",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            }
+        ],
+        annotation_rows=[
+            {
+                "metabolite_name": "feature_1",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "feature_2",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+
+    assert resolved["model_registry_resolved"]["model_id"].tolist() == ["GLOBAL_PROFILE"]
+    assert resolved["model_membership_resolved"]["model_id"].tolist() == ["GLOBAL_PROFILE", "GLOBAL_PROFILE"]
+    assert set(resolved["model_membership_resolved"]["metabolite_name"]) == {"feature_1", "feature_2"}
 
 
 @pytest.mark.parametrize(
