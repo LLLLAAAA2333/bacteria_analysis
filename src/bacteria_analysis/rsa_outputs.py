@@ -188,12 +188,14 @@ def _collect_model_families(registry: pd.DataFrame) -> dict[str, list[str]]:
     model_ids = registry["model_id"].astype(str)
     model_tier = _string_column(registry, "model_tier")
     model_status = _string_column(registry, "model_status")
-    excluded_mask = _bool_column(registry, "excluded_from_primary_ranking") | model_status.eq("excluded")
+    excluded_from_primary_ranking = _bool_column(registry, "excluded_from_primary_ranking")
+    hard_excluded_mask = model_status.eq("excluded")
+    primary_excluded_mask = model_tier.eq("primary") & excluded_from_primary_ranking
 
     return {
-        "primary_models": model_ids.loc[model_tier.eq("primary") & ~excluded_mask].tolist(),
-        "supplementary_models": model_ids.loc[model_tier.eq("supplementary") & ~excluded_mask].tolist(),
-        "excluded_models": model_ids.loc[excluded_mask].tolist(),
+        "primary_models": model_ids.loc[model_tier.eq("primary") & ~primary_excluded_mask & ~hard_excluded_mask].tolist(),
+        "supplementary_models": model_ids.loc[model_tier.eq("supplementary") & ~hard_excluded_mask].tolist(),
+        "excluded_models": model_ids.loc[hard_excluded_mask | primary_excluded_mask].tolist(),
     }
 
 

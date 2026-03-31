@@ -637,6 +637,20 @@ def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path,
     }
 
 
+def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
+    tmp_path, synthetic_stage3_outputs
+):
+    registry = synthetic_stage3_outputs["model_registry_resolved"].copy()
+    registry.loc[registry["model_id"] == "lipid_panel", "excluded_from_primary_ranking"] = True
+    synthetic_stage3_outputs["model_registry_resolved"] = registry
+
+    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["supplementary_models"] == ["lipid_panel"]
+    assert summary["excluded_models"] == ["excluded_sparse"]
+
+
 def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():
     resolved_inputs = _resolved_stage3_inputs(
         matrix_rows=[
