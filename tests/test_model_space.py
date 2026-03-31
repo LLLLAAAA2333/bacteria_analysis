@@ -67,6 +67,21 @@ def test_load_stimulus_sample_map_requires_unique_sample_ids(tmp_path):
         load_stimulus_sample_map(root / "duplicate_stimulus_sample_map.csv")
 
 
+def test_load_stimulus_sample_map_requires_unique_stimulus_values(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_a", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "duplicate_stimulus_values_map.csv", index=False)
+
+    with pytest.raises(ValueError, match="stimulus values must be unique"):
+        load_stimulus_sample_map(root / "duplicate_stimulus_values_map.csv")
+
+
 def test_load_stimulus_sample_map_allows_duplicate_stim_name_values(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
