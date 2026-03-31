@@ -9,6 +9,8 @@ version = "0.1.0"
 test = "pytest -q"
 preprocess = "python scripts/run_preprocessing.py"
 reliability = "python scripts/run_reliability.py"
+geometry = "python scripts/run_geometry.py"
+
 
 [dependencies]
 python = "3.11.*"
