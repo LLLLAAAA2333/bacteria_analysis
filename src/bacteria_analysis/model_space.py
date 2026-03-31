@@ -201,37 +201,6 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
-def _read_minimal_xlsx(path: Path) -> pd.DataFrame:
-    namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    with ZipFile(path) as archive:
-        sheet_path = "xl/worksheets/sheet1.xml"
-        if sheet_path not in archive.namelist():
-            raise ValueError("matrix workbook must include xl/worksheets/sheet1.xml")
-        root = ET.fromstring(archive.read(sheet_path))
-
-    rows: list[list[object]] = []
-    for row_element in root.findall(".//main:sheetData/main:row", namespace):
-        values_by_index: dict[int, object] = {}
-        max_index = 0
-        for cell in row_element.findall("main:c", namespace):
-            ref = cell.attrib.get("r", "")
-            column_index = _excel_column_to_index(_split_cell_reference(ref))
-            max_index = max(max_index, column_index)
-            values_by_index[column_index] = _read_xlsx_cell_value(cell, namespace)
-        rows.append([values_by_index.get(index) for index in range(1, max_index + 1)])
-
-    if not rows:
-        return pd.DataFrame()
-
-    headers = ["" if value is None else str(value).strip() for value in rows[0]]
-    data = []
-    for row_values in rows[1:]:
-        padded = list(row_values) + [None] * max(0, len(headers) - len(row_values))
-        data.append({headers[index]: padded[index] for index in range(len(headers))})
-
-    return pd.DataFrame.from_records(data, columns=headers)
-
-
 def _require_columns(frame: pd.DataFrame, required_columns: Iterable[str], label: str) -> pd.DataFrame:
     missing = [column for column in required_columns if column not in frame.columns]
     if missing:
@@ -271,11 +240,10 @@ def _reject_primary_union_like_models(registry: pd.DataFrame) -> None:
         return
 
     status_is_supplementary = primary_rows["model_status"].str.lower().eq(SUPPLEMENTARY_TIER_VALUE)
-    status_is_draft = primary_rows["model_status"].str.lower().eq("draft")
     broad_text = primary_rows[["model_id", "model_label", "description"]].apply(
         lambda column: column.str.contains("|".join(UNION_LIKE_KEYWORDS), case=False, na=False)
     ).any(axis=1)
-    invalid = primary_rows.loc[status_is_supplementary | (broad_text & ~status_is_draft)]
+    invalid = primary_rows.loc[status_is_supplementary | broad_text]
     if not invalid.empty:
         raise ValueError("broad union models must be marked supplementary instead of primary")
 

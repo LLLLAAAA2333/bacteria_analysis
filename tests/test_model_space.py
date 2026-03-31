@@ -142,6 +142,70 @@ def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_p
         resolve_model_inputs(root, matrix_path)
 
 
+def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "draft_broad_union",
+                "model_label": "Draft Broad Union Model",
+                "model_tier": "primary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Draft broad union candidate",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+        annotation_rows=[
+            {
+                "metabolite_name": "feature_1",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "feature_2",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="supplementary"):
+        resolve_model_inputs(root, matrix_path)
+
+
 def test_build_annotation_skeleton_emits_all_matrix_metabolites(tmp_path):
     matrix_path = tmp_path / "matrix.xlsx"
     pd.DataFrame.from_records(
