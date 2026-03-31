@@ -129,6 +129,8 @@ def _validate_model_registry(frame: pd.DataFrame) -> pd.DataFrame:
     _require_allowed_values(normalized, "model_status", MODEL_STATUS_ALLOWED_VALUES)
     _require_allowed_values(normalized, "feature_kind", FEATURE_KIND_ALLOWED_VALUES)
     _require_allowed_values(normalized, "distance_kind", DISTANCE_KIND_ALLOWED_VALUES)
+    for column in ("model_tier", "model_status", "feature_kind", "distance_kind"):
+        normalized[column] = normalized[column].astype(str).str.strip().str.lower()
     _require_unique(normalized, "model_id", "model_registry")
     return normalized
 
@@ -163,6 +165,7 @@ def _resolve_stage3_inputs(
     matrix = read_metabolite_matrix(matrix_path)
     _validate_mapping_against_matrix(mapping, matrix)
     _validate_annotation_against_matrix(annotation, matrix)
+    _validate_membership_against_matrix(membership, matrix)
 
     resolved_registry = _seed_global_profile_registry(registry)
     resolved_membership = _seed_global_profile_membership(membership, matrix)
@@ -335,3 +338,11 @@ def _validate_membership_against_registry(membership: pd.DataFrame, registry: pd
         raise ValueError(f"model_membership references unknown model_id values: {', '.join(unknown)}")
 
     return membership
+
+
+def _validate_membership_against_matrix(membership: pd.DataFrame, matrix: pd.DataFrame) -> None:
+    matrix_metabolites = set(matrix.columns.astype(str))
+    membership_metabolites = set(membership["metabolite_name"].astype(str))
+    unknown = sorted(membership_metabolites.difference(matrix_metabolites))
+    if unknown:
+        raise ValueError(f"model_membership metabolites must exist in the matrix: {', '.join(unknown)}")
