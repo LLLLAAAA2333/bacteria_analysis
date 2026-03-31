@@ -1185,6 +1185,87 @@ def test_build_model_rdm_uses_binary_presence_with_jaccard_distance():
     assert set(resolved_inputs["model_feature_qc"]["threshold"]) == {0.0}
 
 
+def test_build_model_rdm_rejects_correlation_models_with_no_resolved_features():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0},
+            {"sample_id": "A002", "m1": 1.0, "m2": 0.0},
+            {"sample_id": "A003", "m1": 2.0, "m2": 2.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "subset_model",
+                "model_label": "Subset Model",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Model with no resolved metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+    )
+
+    with pytest.raises(ValueError, match="at least 2 retained features"):
+        build_model_rdm(resolved_inputs, model_id="subset_model")
+
+
+def test_build_model_rdm_rejects_degenerate_correlation_rows_after_preprocessing():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0},
+            {"sample_id": "A002", "m1": 1.0, "m2": 0.0},
+            {"sample_id": "A003", "m1": 2.0, "m2": 2.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "degenerate_correlation",
+                "model_label": "Degenerate Correlation",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Model with a zero-norm stimulus row after preprocessing",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "degenerate_correlation",
+                "metabolite_name": "m1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "degenerate_correlation",
+                "metabolite_name": "m2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="non-constant stimulus rows"):
+        build_model_rdm(resolved_inputs, model_id="degenerate_correlation")
+
+
 def test_build_model_feature_matrix_marks_tiny_primary_model_excluded_from_ranking():
     resolved_inputs = _make_task3_resolved_inputs(
         matrix_rows=[

@@ -162,6 +162,8 @@ def build_model_rdm(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> 
     registry_row = _get_model_registry_row(resolved_inputs, normalized_model_id)
     distance_kind = str(registry_row["distance_kind"]).strip().lower()
 
+    if distance_kind == "correlation":
+        _validate_correlation_distance_inputs(feature_matrix, model_id=normalized_model_id)
     distance_matrix = _compute_model_distance_matrix(feature_matrix, distance_kind=distance_kind)
     matrix = pd.DataFrame(distance_matrix, index=feature_matrix.index, columns=feature_matrix.index)
     frame = matrix.copy()
@@ -565,6 +567,19 @@ def _compute_model_distance_matrix(feature_matrix: pd.DataFrame, *, distance_kin
     if distance_kind == "jaccard":
         return _pairwise_jaccard_distance(values)
     raise ValueError(f"unsupported distance_kind: {distance_kind}")
+
+
+def _validate_correlation_distance_inputs(feature_matrix: pd.DataFrame, *, model_id: str) -> None:
+    if feature_matrix.shape[1] < 2:
+        raise ValueError(
+            f"correlation-based RDMs require at least 2 retained features for model {model_id}"
+        )
+
+    values = feature_matrix.to_numpy(dtype=float, copy=False)
+    centered = values - values.mean(axis=1, keepdims=True)
+    row_norms = np.linalg.norm(centered, axis=1)
+    if np.any(row_norms == 0.0):
+        raise ValueError(f"correlation-based RDMs require non-constant stimulus rows for model {model_id}")
 
 
 def _pairwise_correlation_distance(values: np.ndarray) -> np.ndarray:
