@@ -1,4 +1,5 @@
 import json
+import importlib.util
 from pathlib import Path
 import subprocess
 
@@ -6,6 +7,18 @@ import pandas as pd
 import pytest
 
 from bacteria_analysis.io import write_parquet
+
+
+def _load_run_rsa_module():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "run_rsa.py"
+    spec = importlib.util.spec_from_file_location("run_rsa_module", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+RUN_RSA = _load_run_rsa_module()
 
 
 @pytest.fixture
@@ -247,3 +260,20 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
     assert summary["primary_view"] == "response_window"
     assert summary["primary_models"] == ["global_profile", "bile_acid"]
     assert "Included primary models: global_profile, bile_acid" in result.stdout
+
+
+def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path):
+    repo_root = tmp_path / "repo"
+    worktree_root = repo_root / ".worktrees" / "stage3-rsa"
+    shared_stage2_root = repo_root / "results" / "stage2_geometry"
+    shared_model_input_root = repo_root / "data" / "model_space"
+    shared_matrix_path = repo_root / "data" / "matrix.xlsx"
+
+    shared_stage2_root.mkdir(parents=True)
+    shared_model_input_root.mkdir(parents=True)
+    shared_matrix_path.parent.mkdir(parents=True, exist_ok=True)
+    shared_matrix_path.write_bytes(b"matrix")
+
+    assert RUN_RSA.resolve_stage2_root(str(RUN_RSA.DEFAULT_STAGE2_ROOT), root_dir=worktree_root) == shared_stage2_root
+    assert RUN_RSA.resolve_model_input_root(str(RUN_RSA.DEFAULT_MODEL_INPUT_ROOT), root_dir=worktree_root) == shared_model_input_root
+    assert RUN_RSA.resolve_matrix_path(str(RUN_RSA.DEFAULT_MATRIX_PATH), root_dir=worktree_root) == shared_matrix_path

@@ -55,7 +55,9 @@ def resolve_model_input_root(model_input_root: str | None, *, root_dir: Path = R
 
 def _resolve_repo_path(explicit_path: str | None, *, default_relative: Path, root_dir: Path) -> Path:
     if explicit_path:
-        return Path(explicit_path)
+        explicit = Path(explicit_path)
+        if explicit.is_absolute() or explicit != default_relative:
+            return explicit
 
     candidates = [root_dir / default_relative]
     if root_dir.parent.name == ".worktrees":
