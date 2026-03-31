@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
-from bacteria_analysis.preprocessing import run_preprocessing_pipeline
 from bacteria_analysis.io import write_json, write_markdown_report, write_parquet, write_tensor_npz
+from bacteria_analysis.preprocessing import run_preprocessing_pipeline
 
 STAGE1_STIMULI = ("b1_1", "b2_1", "b3_1")
 STAGE1_STIMULUS_META = {
@@ -309,3 +309,64 @@ def synthetic_geometry_comparisons() -> pd.DataFrame:
     ]
 
     return pd.DataFrame.from_records(rows)
+
+
+@pytest.fixture
+def stage3_model_input_root(tmp_path):
+    root = tmp_path / "model_space"
+    stage2_root = root / "stage2_pooled"
+    tables_dir = stage2_root / "tables"
+    model_space_dir = root / "model_space"
+
+    for directory in (root, tables_dir, model_space_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    response_window_matrix = pd.DataFrame(
+        [
+            {"stimulus_row": "A001", "A001": 0.0, "A002": 0.2, "A003": 0.4},
+            {"stimulus_row": "A002", "A001": 0.2, "A002": 0.0, "A003": 0.3},
+            {"stimulus_row": "A003", "A001": 0.4, "A002": 0.3, "A003": 0.0},
+        ]
+    )
+    full_trajectory_matrix = pd.DataFrame(
+        [
+            {"stimulus_row": "A001", "A001": 0.0, "A002": 0.1, "A003": 0.5},
+            {"stimulus_row": "A002", "A001": 0.1, "A002": 0.0, "A003": 0.2},
+            {"stimulus_row": "A003", "A001": 0.5, "A002": 0.2, "A003": 0.0},
+        ]
+    )
+    write_parquet(response_window_matrix, tables_dir / "rdm_matrix__response_window__pooled.parquet")
+    write_parquet(full_trajectory_matrix, tables_dir / "rdm_matrix__full_trajectory__pooled.parquet")
+
+    unique_sample_map = pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a"},
+            {"sample_id": "A002", "stimulus": "stimulus_b"},
+            {"sample_id": "A003", "stimulus": "stimulus_c"},
+        ]
+    )
+    duplicate_sample_map = pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a"},
+            {"sample_id": "A001", "stimulus": "stimulus_b"},
+            {"sample_id": "A003", "stimulus": "stimulus_c"},
+        ]
+    )
+    unique_sample_map.to_csv(root / "stimulus_sample_map.csv", index=False)
+    duplicate_sample_map.to_csv(root / "duplicate_stimulus_sample_map.csv", index=False)
+
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False)
+
+    return root
+
+
+@pytest.fixture
+def stage3_matrix_path(stage3_model_input_root):
+    return stage3_model_input_root / "matrix.xlsx"

@@ -1,0 +1,20 @@
+from pathlib import Path
+import sys
+
+SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+import pytest
+
+from bacteria_analysis.model_space import load_stimulus_sample_map, read_metabolite_matrix
+
+
+def test_load_stimulus_sample_map_requires_unique_sample_ids(stage3_model_input_root):
+    with pytest.raises(ValueError, match="sample_id values must be unique"):
+        load_stimulus_sample_map(stage3_model_input_root / "duplicate_stimulus_sample_map.csv")
+
+
+def test_read_metabolite_matrix_loads_expected_sample_ids(stage3_matrix_path):
+    matrix = read_metabolite_matrix(stage3_matrix_path)
+    assert matrix.index.tolist() == ["A001", "A002", "A003"]

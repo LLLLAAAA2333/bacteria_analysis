@@ -10,6 +10,7 @@ test = "pytest -q"
 preprocess = "python scripts/run_preprocessing.py"
 reliability = "python scripts/run_reliability.py"
 geometry = "python scripts/run_geometry.py"
+rsa = "python scripts/run_rsa.py"
 
 
 [dependencies]
@@ -20,3 +21,4 @@ numpy = ">=1.26,<3"
 pytest = ">=8.0,<9"
 matplotlib = ">=3.8,<4"
 seaborn = ">=0.13,<0.14"
+openpyxl = ">=3.1,<4"
