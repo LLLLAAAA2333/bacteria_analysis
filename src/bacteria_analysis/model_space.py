@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from zipfile import ZipFile
-from xml.etree import ElementTree as ET
 
 import pandas as pd
 
@@ -61,11 +59,7 @@ def load_model_membership(path: str | Path) -> pd.DataFrame:
 
 
 def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
-    path = Path(path)
-    try:
-        frame = pd.read_excel(path, engine="openpyxl")
-    except (ImportError, ModuleNotFoundError, ValueError):
-        frame = _read_minimal_xlsx(path)
+    frame = pd.read_excel(Path(path), engine="openpyxl")
     return _normalize_matrix_frame(frame)
 
 
@@ -277,11 +271,11 @@ def _reject_primary_union_like_models(registry: pd.DataFrame) -> None:
         return
 
     status_is_supplementary = primary_rows["model_status"].str.lower().eq(SUPPLEMENTARY_TIER_VALUE)
-    status_is_other_non_primary = ~primary_rows["model_status"].str.lower().isin({PRIMARY_TIER_VALUE, SUPPLEMENTARY_TIER_VALUE})
+    status_is_draft = primary_rows["model_status"].str.lower().eq("draft")
     broad_text = primary_rows[["model_id", "model_label", "description"]].apply(
         lambda column: column.str.contains("|".join(UNION_LIKE_KEYWORDS), case=False, na=False)
     ).any(axis=1)
-    invalid = primary_rows.loc[status_is_supplementary | status_is_other_non_primary | broad_text]
+    invalid = primary_rows.loc[status_is_supplementary | (broad_text & ~status_is_draft)]
     if not invalid.empty:
         raise ValueError("broad union models must be marked supplementary instead of primary")
 
@@ -372,41 +366,3 @@ def _validate_membership_against_registry(membership: pd.DataFrame, registry: pd
         raise ValueError(f"model_membership references unknown model_id values: {', '.join(unknown)}")
 
     return membership
-
-
-def _split_cell_reference(reference: str) -> str:
-    letters = "".join(character for character in reference if character.isalpha())
-    if not letters:
-        raise ValueError("xlsx cell reference is missing a column")
-    return letters
-
-
-def _excel_column_to_index(column_reference: str) -> int:
-    index = 0
-    for character in column_reference.upper():
-        index = index * 26 + (ord(character) - ord("A") + 1)
-    return index
-
-
-def _read_xlsx_cell_value(cell: ET.Element, namespace: dict[str, str]) -> object:
-    cell_type = cell.attrib.get("t", "")
-    if cell_type == "inlineStr":
-        text_element = cell.find("main:is/main:t", namespace)
-        return "" if text_element is None or text_element.text is None else text_element.text
-
-    value_element = cell.find("main:v", namespace)
-    if value_element is None or value_element.text is None:
-        return None
-
-    text = value_element.text.strip()
-    if cell_type == "b":
-        return text == "1"
-
-    try:
-        number = float(text)
-    except ValueError:
-        return text
-
-    if number.is_integer():
-        return int(number)
-    return number
