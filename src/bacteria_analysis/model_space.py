@@ -96,6 +96,7 @@ def _validate_stimulus_sample_map(frame: pd.DataFrame) -> pd.DataFrame:
 
     for column in STIMULUS_SAMPLE_MAP_REQUIRED_COLUMNS:
         _require_non_empty(normalized, column)
+    for column in ("stimulus", "sample_id"):
         _require_unique(normalized, column, "stimulus_sample_map")
 
     return normalized
@@ -119,7 +120,8 @@ def _validate_model_registry(frame: pd.DataFrame) -> pd.DataFrame:
     for column in MODEL_REGISTRY_REQUIRED_COLUMNS:
         normalized[column] = normalized[column].astype(str).str.strip()
 
-    _require_non_empty(normalized, "model_id")
+    for column in ("model_id", "model_tier", "model_status"):
+        _require_non_empty(normalized, column)
     _require_unique(normalized, "model_id", "model_registry")
     _reject_primary_union_like_models(normalized)
     return normalized

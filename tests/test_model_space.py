@@ -4,6 +4,7 @@ import pytest
 from bacteria_analysis.model_space import (
     build_metabolite_annotation_skeleton,
     load_stimulus_sample_map,
+    load_model_registry,
     read_metabolite_matrix,
     resolve_model_inputs,
 )
@@ -64,6 +65,36 @@ def test_load_stimulus_sample_map_requires_unique_sample_ids(tmp_path):
 
     with pytest.raises(ValueError, match="sample_id values must be unique"):
         load_stimulus_sample_map(root / "duplicate_stimulus_sample_map.csv")
+
+
+def test_load_stimulus_sample_map_allows_duplicate_stim_name_values(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Shared Stimulus"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Shared Stimulus"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Shared Stimulus"},
+        ]
+    ).to_csv(root / "duplicate_stim_name_map.csv", index=False)
+
+    frame = load_stimulus_sample_map(root / "duplicate_stim_name_map.csv")
+    assert frame["stim_name"].tolist() == ["Shared Stimulus", "Shared Stimulus", "Shared Stimulus"]
+
+
+def test_load_stimulus_sample_map_rejects_blank_stim_name_values(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": ""},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "blank_stim_name_map.csv", index=False)
+
+    with pytest.raises(ValueError, match="stim_name values must be non-empty"):
+        load_stimulus_sample_map(root / "blank_stim_name_map.csv")
 
 
 def test_read_metabolite_matrix_loads_expected_sample_ids(tmp_path):
@@ -176,6 +207,43 @@ def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_p
 
     with pytest.raises(ValueError, match="supplementary"):
         resolve_model_inputs(root, matrix_path)
+
+
+@pytest.mark.parametrize("blank_field", ["model_tier", "model_status"])
+def test_load_model_registry_rejects_blank_required_fields(tmp_path, blank_field):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    registry_rows = [
+        {
+            "model_id": "global_profile",
+            "model_label": "Global Metabolite Profile",
+            "model_tier": "primary",
+            "model_status": "primary",
+            "feature_kind": "continuous_abundance",
+            "distance_kind": "correlation",
+            "description": "All matrix metabolites",
+            "authority": "user",
+            "notes": "",
+        },
+        {
+            "model_id": "broad_union",
+            "model_label": "Broad Union Model",
+            "model_tier": "primary",
+            "model_status": "supplementary",
+            "feature_kind": "continuous_abundance",
+            "distance_kind": "correlation",
+            "description": "Exploratory broad union",
+            "authority": "exploratory",
+            "notes": "",
+        },
+    ]
+    registry_rows[1][blank_field] = ""
+    pd.DataFrame.from_records(registry_rows, columns=MODEL_REGISTRY_COLUMNS).to_csv(
+        root / "model_registry.csv", index=False
+    )
+
+    with pytest.raises(ValueError, match=f"{blank_field} values must be non-empty"):
+        load_model_registry(root / "model_registry.csv")
 
 
 def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
