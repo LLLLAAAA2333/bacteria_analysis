@@ -11,6 +11,7 @@ from bacteria_analysis.model_space import (
     load_model_registry,
     read_metabolite_matrix,
     resolve_model_inputs,
+    _validate_correlation_distance_inputs,
 )
 
 MODEL_REGISTRY_COLUMNS = [
@@ -1264,6 +1265,22 @@ def test_build_model_rdm_rejects_degenerate_correlation_rows_after_preprocessing
 
     with pytest.raises(ValueError, match="non-constant stimulus rows"):
         build_model_rdm(resolved_inputs, model_id="degenerate_correlation")
+
+
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_validate_correlation_distance_inputs_rejects_non_finite_feature_values(bad_value):
+    feature_matrix = pd.DataFrame(
+        [
+            [0.0, 1.0],
+            [1.0, bad_value],
+            [2.0, 2.0],
+        ],
+        index=["b1_1", "b2_1", "b3_1"],
+        columns=["m1", "m2"],
+    )
+
+    with pytest.raises(ValueError, match="finite feature values"):
+        _validate_correlation_distance_inputs(feature_matrix, model_id="non_finite_correlation")
 
 
 def test_build_model_feature_matrix_marks_tiny_primary_model_excluded_from_ranking():

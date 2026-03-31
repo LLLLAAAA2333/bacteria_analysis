@@ -576,6 +576,9 @@ def _validate_correlation_distance_inputs(feature_matrix: pd.DataFrame, *, model
         )
 
     values = feature_matrix.to_numpy(dtype=float, copy=False)
+    if not np.isfinite(values).all():
+        raise ValueError(f"correlation-based RDMs require finite feature values for model {model_id}")
+
     centered = values - values.mean(axis=1, keepdims=True)
     row_norms = np.linalg.norm(centered, axis=1)
     if np.any(row_norms == 0.0):
