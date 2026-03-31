@@ -1218,6 +1218,137 @@ def test_build_model_rdm_rejects_correlation_models_with_no_resolved_features():
         build_model_rdm(resolved_inputs, model_id="subset_model")
 
 
+def test_build_model_rdm_rejects_non_correlation_models_with_no_resolved_features():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "p1": 1.0, "p2": 0.0},
+            {"sample_id": "A002", "p1": 0.0, "p2": 1.0},
+            {"sample_id": "A003", "p1": 1.0, "p2": 1.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "empty_binary",
+                "model_label": "Empty Binary",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "binary_presence",
+                "distance_kind": "jaccard",
+                "description": "Binary model with no resolved metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+    )
+
+    with pytest.raises(ValueError, match="at least 1 retained feature"):
+        build_model_rdm(resolved_inputs, model_id="empty_binary")
+
+
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_build_model_rdm_rejects_non_correlation_models_with_non_finite_features(bad_value):
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "p1": 1.0, "p2": 0.0},
+            {"sample_id": "A002", "p1": bad_value, "p2": 1.0},
+            {"sample_id": "A003", "p1": 1.0, "p2": 1.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "non_finite_binary",
+                "model_label": "Non-finite Binary",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "binary_presence",
+                "distance_kind": "jaccard",
+                "description": "Binary model with non-finite feature values",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "non_finite_binary",
+                "metabolite_name": "p1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "non_finite_binary",
+                "metabolite_name": "p2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="finite feature values"):
+        build_model_rdm(resolved_inputs, model_id="non_finite_binary")
+
+
+def test_build_model_rdm_rejects_non_correlation_models_with_non_finite_log1p_output():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0},
+            {"sample_id": "A002", "m1": -2.0, "m2": 2.0},
+            {"sample_id": "A003", "m1": 1.0, "m2": 3.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "non_finite_euclidean",
+                "model_label": "Non-finite Euclidean",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "euclidean",
+                "description": "Continuous model with invalid log1p output",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "non_finite_euclidean",
+                "metabolite_name": "m1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "non_finite_euclidean",
+                "metabolite_name": "m2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="values greater than -1"):
+        build_model_rdm(resolved_inputs, model_id="non_finite_euclidean")
+
+
 def test_build_model_rdm_rejects_degenerate_correlation_rows_after_preprocessing():
     resolved_inputs = _make_task3_resolved_inputs(
         matrix_rows=[
@@ -1352,3 +1483,63 @@ def test_build_model_feature_matrix_marks_tiny_primary_model_excluded_from_ranki
         "excluded_from_primary_ranking",
     ]
     assert bool(excluded.iloc[0])
+
+
+def test_build_model_feature_matrix_clears_stale_qc_when_model_loses_all_features():
+    resolved_inputs = _make_task3_resolved_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "m1": 0.0, "m2": 1.0},
+            {"sample_id": "A002", "m1": 1.0, "m2": 2.0},
+            {"sample_id": "A003", "m1": 2.0, "m2": 3.0},
+        ],
+        mapping_rows=[
+            {"sample_id": "A001", "stimulus": "b1_1", "stim_name": "Stimulus B1"},
+            {"sample_id": "A002", "stimulus": "b2_1", "stim_name": "Stimulus B2"},
+            {"sample_id": "A003", "stimulus": "b3_1", "stim_name": "Stimulus B3"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "stale_qc_model",
+                "model_label": "Stale QC Model",
+                "model_tier": "supplementary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "euclidean",
+                "description": "Model used to verify QC replacement",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "stale_qc_model",
+                "metabolite_name": "m1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "stale_qc_model",
+                "metabolite_name": "m2",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    feature_matrix, feature_qc = build_model_feature_matrix(resolved_inputs, model_id="stale_qc_model")
+
+    assert feature_matrix.shape == (3, 2)
+    assert not feature_qc.empty
+
+    resolved_inputs["model_membership_resolved"] = resolved_inputs["model_membership_resolved"].loc[
+        resolved_inputs["model_membership_resolved"]["model_id"] != "stale_qc_model"
+    ].copy()
+    feature_matrix, feature_qc = build_model_feature_matrix(resolved_inputs, model_id="stale_qc_model")
+
+    assert feature_matrix.shape == (3, 0)
+    assert feature_qc.empty
+    assert resolved_inputs["model_feature_qc"].empty

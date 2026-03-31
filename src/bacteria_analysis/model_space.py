@@ -126,9 +126,13 @@ def build_model_feature_matrix(
     registry_row = _get_model_registry_row(resolved_inputs, normalized_model_id)
     ordered_matrix = _select_model_input_matrix(resolved_inputs, normalized_model_id)
     feature_kind = str(registry_row["feature_kind"]).strip().lower()
+    numeric_matrix = ordered_matrix.astype(float)
+    _validate_finite_feature_values(numeric_matrix, model_id=normalized_model_id)
 
     if feature_kind == "continuous_abundance":
-        transformed = np.log1p(ordered_matrix.astype(float))
+        _validate_log1p_domain(numeric_matrix, model_id=normalized_model_id)
+        transformed = np.log1p(numeric_matrix)
+        _validate_finite_feature_values(transformed, model_id=normalized_model_id)
         filtered, feature_qc = _drop_zero_variance_features(
             transformed,
             model_id=normalized_model_id,
@@ -136,7 +140,7 @@ def build_model_feature_matrix(
         )
         feature_matrix = _zscore_columns(filtered)
     elif feature_kind == "binary_presence":
-        transformed = ordered_matrix.astype(float).gt(DEFAULT_BINARY_PRESENCE_THRESHOLD).astype(int)
+        transformed = numeric_matrix.gt(DEFAULT_BINARY_PRESENCE_THRESHOLD).astype(int)
         filtered, feature_qc = _drop_zero_variance_features(
             transformed,
             model_id=normalized_model_id,
@@ -152,7 +156,7 @@ def build_model_feature_matrix(
         normalized_model_id,
         retained_feature_count=feature_matrix.shape[1],
     )
-    _store_model_feature_qc(resolved_inputs, feature_qc)
+    _store_model_feature_qc(resolved_inputs, normalized_model_id, feature_qc)
     return feature_matrix, feature_qc
 
 
@@ -164,6 +168,8 @@ def build_model_rdm(resolved_inputs: dict[str, pd.DataFrame], model_id: str) -> 
 
     if distance_kind == "correlation":
         _validate_correlation_distance_inputs(feature_matrix, model_id=normalized_model_id)
+    elif feature_matrix.shape[1] == 0:
+        raise ValueError(f"model RDMs require at least 1 retained feature for model {normalized_model_id}")
     distance_matrix = _compute_model_distance_matrix(feature_matrix, distance_kind=distance_kind)
     matrix = pd.DataFrame(distance_matrix, index=feature_matrix.index, columns=feature_matrix.index)
     frame = matrix.copy()
@@ -547,14 +553,24 @@ def _update_primary_ranking_exclusion(
     resolved_inputs["model_registry_resolved"] = registry
 
 
-def _store_model_feature_qc(resolved_inputs: dict[str, pd.DataFrame], feature_qc: pd.DataFrame) -> None:
+def _store_model_feature_qc(
+    resolved_inputs: dict[str, pd.DataFrame],
+    model_id: str,
+    feature_qc: pd.DataFrame,
+) -> None:
     existing = resolved_inputs.get("model_feature_qc")
     if existing is None or existing.empty:
-        resolved_inputs["model_feature_qc"] = feature_qc.copy()
+        if feature_qc.empty:
+            resolved_inputs["model_feature_qc"] = pd.DataFrame(columns=list(MODEL_FEATURE_QC_COLUMNS))
+        else:
+            resolved_inputs["model_feature_qc"] = feature_qc.copy()
         return
 
-    model_ids = feature_qc["model_id"].drop_duplicates().astype(str).tolist() if not feature_qc.empty else []
-    remaining = existing.loc[~existing["model_id"].astype(str).isin(model_ids)].copy()
+    remaining = existing.loc[existing["model_id"].astype(str) != model_id].copy()
+    if feature_qc.empty:
+        resolved_inputs["model_feature_qc"] = remaining.reset_index(drop=True)
+        return
+
     resolved_inputs["model_feature_qc"] = pd.concat([remaining, feature_qc], ignore_index=True)
 
 
@@ -567,6 +583,18 @@ def _compute_model_distance_matrix(feature_matrix: pd.DataFrame, *, distance_kin
     if distance_kind == "jaccard":
         return _pairwise_jaccard_distance(values)
     raise ValueError(f"unsupported distance_kind: {distance_kind}")
+
+
+def _validate_finite_feature_values(feature_matrix: pd.DataFrame, *, model_id: str) -> None:
+    values = feature_matrix.to_numpy(dtype=float, copy=False)
+    if not np.isfinite(values).all():
+        raise ValueError(f"model feature matrices require finite feature values for model {model_id}")
+
+
+def _validate_log1p_domain(feature_matrix: pd.DataFrame, *, model_id: str) -> None:
+    values = feature_matrix.to_numpy(dtype=float, copy=False)
+    if np.any(values <= -1.0):
+        raise ValueError(f"continuous-abundance models require values greater than -1 for model {model_id}")
 
 
 def _validate_correlation_distance_inputs(feature_matrix: pd.DataFrame, *, model_id: str) -> None:
