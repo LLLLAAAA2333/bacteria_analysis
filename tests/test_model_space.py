@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from openpyxl import Workbook
 
 from bacteria_analysis.model_space import (
     build_metabolite_annotation_skeleton,
@@ -155,6 +156,19 @@ def test_read_metabolite_matrix_rejects_duplicate_metabolite_columns(tmp_path):
         read_metabolite_matrix(matrix_path)
 
 
+def test_read_metabolite_matrix_rejects_blank_metabolite_headers(tmp_path):
+    matrix_path = tmp_path / "blank_metabolite_header.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["sample_id", None, "feature_2"])
+    sheet.append(["A001", 0.1, 1.0])
+    sheet.append(["A002", 0.2, 0.8])
+    workbook.save(matrix_path)
+
+    with pytest.raises(ValueError, match="metabolite column names must be non-empty"):
+        read_metabolite_matrix(matrix_path)
+
+
 def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is_valid(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
@@ -244,7 +258,42 @@ def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is
     assert broad_union_row["model_status"] == "supplementary"
 
 
-def test_resolve_model_inputs_preserves_case_variant_global_profile_rows(tmp_path):
+def test_load_model_registry_rejects_case_variant_duplicate_model_ids(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    pd.DataFrame.from_records(
+        [
+            {
+                "model_id": "GLOBAL_PROFILE",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            },
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            },
+        ],
+        columns=MODEL_REGISTRY_COLUMNS,
+    ).to_csv(root / "model_registry.csv", index=False)
+
+    with pytest.raises(ValueError, match="model_id values must be unique"):
+        load_model_registry(root / "model_registry.csv")
+
+
+def test_resolve_model_inputs_canonicalizes_case_variant_global_profile_rows(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
     matrix_path = root / "matrix.xlsx"
@@ -315,8 +364,8 @@ def test_resolve_model_inputs_preserves_case_variant_global_profile_rows(tmp_pat
 
     resolved = resolve_model_inputs(root, matrix_path)
 
-    assert resolved["model_registry_resolved"]["model_id"].tolist() == ["GLOBAL_PROFILE"]
-    assert resolved["model_membership_resolved"]["model_id"].tolist() == ["GLOBAL_PROFILE", "GLOBAL_PROFILE"]
+    assert resolved["model_registry_resolved"]["model_id"].tolist() == ["global_profile"]
+    assert resolved["model_membership_resolved"]["model_id"].tolist() == ["global_profile", "global_profile"]
     assert set(resolved["model_membership_resolved"]["metabolite_name"]) == {"feature_1", "feature_2"}
 
 

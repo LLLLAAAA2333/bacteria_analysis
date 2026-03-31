@@ -135,6 +135,7 @@ def _validate_model_registry(frame: pd.DataFrame) -> pd.DataFrame:
     for column in MODEL_REGISTRY_REQUIRED_COLUMNS:
         normalized[column] = normalized[column].astype(str).str.strip()
 
+    normalized["model_id"] = normalized["model_id"].astype(str).str.strip().str.lower()
     for column in ("model_id", "model_tier", "model_status"):
         _require_non_empty(normalized, column)
     _require_allowed_values(normalized, "model_tier", MODEL_TIER_ALLOWED_VALUES)
@@ -158,6 +159,7 @@ def _validate_model_membership(frame: pd.DataFrame) -> pd.DataFrame:
         elif column != "ambiguous_flag":
             normalized[column] = normalized[column].astype(str).str.strip()
 
+    normalized["model_id"] = normalized["model_id"].astype(str).str.strip().str.lower()
     normalized["ambiguous_flag"] = _coerce_boolean_column(normalized["ambiguous_flag"], "ambiguous_flag")
     if not normalized.empty:
         _require_non_empty(normalized, "model_id")
@@ -219,7 +221,10 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("sample_id values must be unique")
 
     metabolite_columns = [column for column in normalized.columns if column != sample_column]
-    if pd.Index(metabolite_columns).duplicated().any():
+    metabolite_column_names = ["" if column is None else str(column).strip() for column in metabolite_columns]
+    if any(not name or name.lower().startswith("unnamed:") for name in metabolite_column_names):
+        raise ValueError("metabolite column names must be non-empty")
+    if pd.Index(metabolite_column_names).duplicated().any():
         raise ValueError("metabolite column names must be unique")
 
     normalized[sample_column] = sample_ids
