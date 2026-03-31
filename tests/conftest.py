@@ -370,3 +370,16 @@ def stage3_model_input_root(tmp_path):
 @pytest.fixture
 def stage3_matrix_path(stage3_model_input_root):
     return stage3_model_input_root / "matrix.xlsx"
+
+
+@pytest.fixture
+def stage3_blank_matrix_path(tmp_path):
+    matrix_path = tmp_path / "blank_matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": None, "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False)
+    return matrix_path

@@ -42,10 +42,17 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     else:
         sample_column = normalized.columns[0]
 
-    normalized[sample_column] = normalized[sample_column].astype(str).str.strip()
-    if normalized[sample_column].duplicated().any():
+    sample_ids = normalized[sample_column]
+    if sample_ids.isna().any():
+        raise ValueError("sample_id values must be non-empty")
+
+    sample_ids = sample_ids.astype(str).str.strip()
+    if (sample_ids == "").any():
+        raise ValueError("sample_id values must be non-empty")
+    if sample_ids.duplicated().any():
         raise ValueError("sample_id values must be unique")
 
+    normalized[sample_column] = sample_ids
     normalized = normalized.set_index(sample_column)
     normalized.index.name = "sample_id"
     return normalized

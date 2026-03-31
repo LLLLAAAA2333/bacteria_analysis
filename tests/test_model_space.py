@@ -18,3 +18,8 @@ def test_load_stimulus_sample_map_requires_unique_sample_ids(stage3_model_input_
 def test_read_metabolite_matrix_loads_expected_sample_ids(stage3_matrix_path):
     matrix = read_metabolite_matrix(stage3_matrix_path)
     assert matrix.index.tolist() == ["A001", "A002", "A003"]
+
+
+def test_read_metabolite_matrix_rejects_blank_sample_id_cells(stage3_blank_matrix_path):
+    with pytest.raises(ValueError, match="sample_id values must be non-empty"):
+        read_metabolite_matrix(stage3_blank_matrix_path)
