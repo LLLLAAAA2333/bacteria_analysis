@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
+from zipfile import ZipFile
+from xml.etree import ElementTree as ET
 
 import pandas as pd
 
@@ -63,7 +65,7 @@ def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
     try:
         frame = pd.read_excel(path, engine="openpyxl")
     except (ImportError, ModuleNotFoundError, ValueError):
-        frame = pd.read_csv(path, dtype=str).fillna("")
+        frame = _read_minimal_xlsx(path)
     return _normalize_matrix_frame(frame)
 
 
@@ -205,6 +207,37 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
+def _read_minimal_xlsx(path: Path) -> pd.DataFrame:
+    namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with ZipFile(path) as archive:
+        sheet_path = "xl/worksheets/sheet1.xml"
+        if sheet_path not in archive.namelist():
+            raise ValueError("matrix workbook must include xl/worksheets/sheet1.xml")
+        root = ET.fromstring(archive.read(sheet_path))
+
+    rows: list[list[object]] = []
+    for row_element in root.findall(".//main:sheetData/main:row", namespace):
+        values_by_index: dict[int, object] = {}
+        max_index = 0
+        for cell in row_element.findall("main:c", namespace):
+            ref = cell.attrib.get("r", "")
+            column_index = _excel_column_to_index(_split_cell_reference(ref))
+            max_index = max(max_index, column_index)
+            values_by_index[column_index] = _read_xlsx_cell_value(cell, namespace)
+        rows.append([values_by_index.get(index) for index in range(1, max_index + 1)])
+
+    if not rows:
+        return pd.DataFrame()
+
+    headers = ["" if value is None else str(value).strip() for value in rows[0]]
+    data = []
+    for row_values in rows[1:]:
+        padded = list(row_values) + [None] * max(0, len(headers) - len(row_values))
+        data.append({headers[index]: padded[index] for index in range(len(headers))})
+
+    return pd.DataFrame.from_records(data, columns=headers)
+
+
 def _require_columns(frame: pd.DataFrame, required_columns: Iterable[str], label: str) -> pd.DataFrame:
     missing = [column for column in required_columns if column not in frame.columns]
     if missing:
@@ -339,3 +372,41 @@ def _validate_membership_against_registry(membership: pd.DataFrame, registry: pd
         raise ValueError(f"model_membership references unknown model_id values: {', '.join(unknown)}")
 
     return membership
+
+
+def _split_cell_reference(reference: str) -> str:
+    letters = "".join(character for character in reference if character.isalpha())
+    if not letters:
+        raise ValueError("xlsx cell reference is missing a column")
+    return letters
+
+
+def _excel_column_to_index(column_reference: str) -> int:
+    index = 0
+    for character in column_reference.upper():
+        index = index * 26 + (ord(character) - ord("A") + 1)
+    return index
+
+
+def _read_xlsx_cell_value(cell: ET.Element, namespace: dict[str, str]) -> object:
+    cell_type = cell.attrib.get("t", "")
+    if cell_type == "inlineStr":
+        text_element = cell.find("main:is/main:t", namespace)
+        return "" if text_element is None or text_element.text is None else text_element.text
+
+    value_element = cell.find("main:v", namespace)
+    if value_element is None or value_element.text is None:
+        return None
+
+    text = value_element.text.strip()
+    if cell_type == "b":
+        return text == "1"
+
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+
+    if number.is_integer():
+        return int(number)
+    return number
