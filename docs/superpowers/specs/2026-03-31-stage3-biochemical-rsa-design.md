@@ -191,6 +191,33 @@ Recommended distance kinds:
 
 The MVP should keep this registry small and explicit.
 
+## Metabolite Annotation Contract
+
+Stage 3 should separate metabolite annotation from model membership.
+
+Required annotation unit:
+
+`metabolite_name`
+
+Recommended annotation fields:
+
+- `superclass`
+- `subclass`
+- `pathway_tag`
+- `annotation_source`
+- `review_status`
+- `ambiguous_flag`
+- `notes`
+
+Rules:
+
+- the annotation table is the upstream source of truth for curated subset construction
+- broad name-pattern heuristics may be used only as an initial draft aid
+- primary model definitions must be frozen after annotation review, not after seeing RSA results
+- neural results must never be used to decide whether a metabolite belongs to a biochemical family
+
+This layer keeps Stage 3 maintainable: the code resolves models from a reviewed annotation table rather than from ad hoc lists scattered through analysis modules.
+
 ## Model Membership Contract
 
 Curated subset models should be defined through an explicit long-form membership table rather than wide boolean flags embedded in code.
@@ -210,9 +237,12 @@ Rules:
 
 - model membership may be overlapping when biologically justified
 - ambiguous metabolites must be allowed to remain excluded from primary models
+- primary models should be chemically coherent rather than widened just to increase feature count
+- broad union models that mix multiple biochemical families should default to supplementary status
+- primary models with fewer than `5` informative retained features after preprocessing should fail QC by default and be excluded from primary ranking
 - models with too few informative features must be surfaced in QC rather than silently scored as if robust
 
-This design lets the user supply research-backed model memberships without requiring code edits for each new hypothesis.
+This design lets the user supply research-backed model memberships without requiring code edits for each new hypothesis. In practice, the membership table should usually be derived from the reviewed metabolite annotation table plus a small model-definition file, not typed freehand inside the analysis code.
 
 ## Initial Model Space Strategy
 
@@ -233,12 +263,25 @@ This model does not depend on curated subset membership.
 
 These are the main scientific hypothesis models.
 
-Examples may include bile acids, lipid-related groups, indole-related groups, phenyl/phenol-related groups, sugar and central-carbon groups, nucleotide-energy groups, or other user-defined biochemical subsets.
+Recommended first-pass primary family templates are:
+
+- `bile_acid`
+- `fatty_acid`
+- `indole_tryptophan`
+- `phenyl_phenol`
+- `catecholamine_aromatic_amine`
+- `sugars_sugar_phosphates`
+- `tca_organic_acid`
+- `nucleotide_energy`
+
+These template names are intentionally narrower than broad buckets like `aromatic` or `central_carbon`. The goal is to keep primary models interpretable and chemically coherent.
 
 Important rule:
 
 - the spec supports these model families
 - the exact primary subset definitions must come from user research, not from unreviewed experience grouping
+- lipid-signaling compounds, acylcarnitines, or other boundary-case metabolites must not be silently merged into the primary `fatty_acid` family unless the curated annotation explicitly justifies that choice
+- if the user later wants fewer headline models, narrow reviewed families may be merged deliberately, but the spec should start from the narrower reviewed units rather than from a broad union
 
 ### C. Exploratory Supplement Models
 
@@ -247,9 +290,10 @@ Broad experience-based groupings are allowed only as supplementary outputs.
 Examples:
 
 - quick name-based bile-acid grouping
-- broad fatty-acid-like grouping
-- broad aromatic grouping
-- broad central-carbon-like grouping
+- broad fatty-acid-plus-lipid grouping
+- broad aromatic union
+- broad central-carbon union
+- broad lipid-related union
 
 These can help exploration, but must be clearly separated from the user-curated primary model family in all outputs and figures.
 
@@ -405,6 +449,7 @@ Stage 3 should write outputs under:
 ### Required Tables
 
 - `stimulus_sample_map.parquet`
+- `metabolite_annotation_resolved.parquet`
 - `model_registry_resolved.parquet`
 - `model_membership_resolved.parquet`
 - `model_feature_qc.parquet`
@@ -448,7 +493,7 @@ Recommended additions:
 
 Responsibilities:
 
-- `model_space.py`: stimulus mapping, model registry resolution, model membership resolution, feature preprocessing, and model RDM construction
+- `model_space.py`: stimulus mapping, metabolite annotation resolution, model registry resolution, model membership resolution, feature preprocessing, and model RDM construction
 - `rsa.py`: upper-triangle extraction, RSA statistics, permutation logic, multiple-testing adjustment, and leave-one-stimulus-out summaries
 - `rsa_outputs.py`: parquet, JSON, markdown, and figure writing
 - `run_rsa.py`: thin CLI wrapper
