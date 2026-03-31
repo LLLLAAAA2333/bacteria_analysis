@@ -35,9 +35,10 @@ PRIMARY_TIER_VALUE = "primary"
 SUPPLEMENTARY_TIER_VALUE = "supplementary"
 MODEL_TIER_ALLOWED_VALUES = (PRIMARY_TIER_VALUE, SUPPLEMENTARY_TIER_VALUE)
 MODEL_STATUS_ALLOWED_VALUES = (PRIMARY_TIER_VALUE, SUPPLEMENTARY_TIER_VALUE, "draft", "excluded")
+FEATURE_KIND_ALLOWED_VALUES = ("continuous_abundance", "binary_presence")
+DISTANCE_KIND_ALLOWED_VALUES = ("correlation", "euclidean", "jaccard")
 BOOL_TRUE_VALUES = {"true", "1", "yes", "y", "t"}
 BOOL_FALSE_VALUES = {"false", "0", "no", "n", "f", ""}
-UNION_LIKE_KEYWORDS = ("union", "broad", "combined", "mixture", "mix")
 
 
 def load_stimulus_sample_map(path: str | Path) -> pd.DataFrame:
@@ -126,8 +127,9 @@ def _validate_model_registry(frame: pd.DataFrame) -> pd.DataFrame:
         _require_non_empty(normalized, column)
     _require_allowed_values(normalized, "model_tier", MODEL_TIER_ALLOWED_VALUES)
     _require_allowed_values(normalized, "model_status", MODEL_STATUS_ALLOWED_VALUES)
+    _require_allowed_values(normalized, "feature_kind", FEATURE_KIND_ALLOWED_VALUES)
+    _require_allowed_values(normalized, "distance_kind", DISTANCE_KIND_ALLOWED_VALUES)
     _require_unique(normalized, "model_id", "model_registry")
-    _reject_primary_union_like_models(normalized)
     return normalized
 
 
@@ -245,21 +247,6 @@ def _coerce_boolean_column(series: pd.Series, column_name: str) -> pd.Series:
     if invalid.any():
         raise ValueError(f"{column_name} values must be boolean-like")
     return normalized.isin(BOOL_TRUE_VALUES)
-
-
-def _reject_primary_union_like_models(registry: pd.DataFrame) -> None:
-    primary_rows = registry.loc[registry["model_tier"].str.lower().eq(PRIMARY_TIER_VALUE)].copy()
-    if primary_rows.empty:
-        return
-
-    broad_text = primary_rows[["model_id", "model_label", "description"]].apply(
-        lambda column: column.str.contains("|".join(UNION_LIKE_KEYWORDS), case=False, na=False)
-    ).any(axis=1)
-    invalid = primary_rows.loc[broad_text]
-    if not invalid.empty:
-        raise ValueError("broad union models must be marked supplementary instead of primary")
-
-
 def _validate_mapping_against_matrix(mapping: pd.DataFrame, matrix: pd.DataFrame) -> None:
     matrix_sample_ids = set(matrix.index.astype(str))
     mapped_sample_ids = set(mapping["sample_id"].astype(str))

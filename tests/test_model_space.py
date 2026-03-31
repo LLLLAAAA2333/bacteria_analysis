@@ -140,7 +140,7 @@ def test_read_metabolite_matrix_rejects_blank_sample_id_cells(tmp_path):
         read_metabolite_matrix(matrix_path)
 
 
-def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_path):
+def test_resolve_model_inputs_accepts_broad_union_text_when_registry_metadata_is_valid(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
     matrix_path = root / "matrix.xlsx"
@@ -220,8 +220,13 @@ def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_p
         ],
     )
 
-    with pytest.raises(ValueError, match="supplementary"):
-        resolve_model_inputs(root, matrix_path)
+    resolved = resolve_model_inputs(root, matrix_path)
+    broad_union_row = resolved["model_registry_resolved"].loc[
+        resolved["model_registry_resolved"]["model_id"] == "broad_union"
+    ].iloc[0]
+
+    assert broad_union_row["model_tier"] == "primary"
+    assert broad_union_row["model_status"] == "supplementary"
 
 
 @pytest.mark.parametrize(
@@ -229,6 +234,8 @@ def test_resolve_model_inputs_rejects_primary_model_with_union_like_status(tmp_p
     [
         ("model_tier", "secondary"),
         ("model_status", "pending"),
+        ("feature_kind", "rank_abundance"),
+        ("distance_kind", "cosine"),
     ],
 )
 def test_load_model_registry_rejects_invalid_classification_values(tmp_path, field, value):
@@ -304,7 +311,7 @@ def test_load_model_registry_rejects_blank_required_fields(tmp_path, blank_field
         load_model_registry(root / "model_registry.csv")
 
 
-def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
+def test_resolve_model_inputs_accepts_draft_broad_union_text_without_keyword_inference(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
     matrix_path = root / "matrix.xlsx"
@@ -364,8 +371,13 @@ def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
         ],
     )
 
-    with pytest.raises(ValueError, match="supplementary"):
-        resolve_model_inputs(root, matrix_path)
+    resolved = resolve_model_inputs(root, matrix_path)
+    draft_row = resolved["model_registry_resolved"].loc[
+        resolved["model_registry_resolved"]["model_id"] == "draft_broad_union"
+    ].iloc[0]
+
+    assert draft_row["model_tier"] == "primary"
+    assert draft_row["model_status"] == "draft"
 
 
 def test_resolve_model_inputs_allows_primary_supplementary_status_when_not_broad_union(tmp_path):
