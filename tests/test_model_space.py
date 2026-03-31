@@ -8,11 +8,47 @@ from bacteria_analysis.model_space import (
     resolve_model_inputs,
 )
 
+MODEL_REGISTRY_COLUMNS = [
+    "model_id",
+    "model_label",
+    "model_tier",
+    "model_status",
+    "feature_kind",
+    "distance_kind",
+    "description",
+    "authority",
+    "notes",
+]
+MODEL_MEMBERSHIP_COLUMNS = [
+    "model_id",
+    "metabolite_name",
+    "membership_source",
+    "review_status",
+    "ambiguous_flag",
+    "notes",
+]
+METABOLITE_ANNOTATION_COLUMNS = [
+    "metabolite_name",
+    "superclass",
+    "subclass",
+    "pathway_tag",
+    "annotation_source",
+    "review_status",
+    "ambiguous_flag",
+    "notes",
+]
+
 
 def _write_stage3_model_space_files(root, *, registry_rows, membership_rows, annotation_rows):
-    pd.DataFrame.from_records(registry_rows).to_csv(root / "model_registry.csv", index=False)
-    pd.DataFrame.from_records(membership_rows).to_csv(root / "model_membership.csv", index=False)
-    pd.DataFrame.from_records(annotation_rows).to_csv(root / "metabolite_annotation.csv", index=False)
+    pd.DataFrame.from_records(registry_rows, columns=MODEL_REGISTRY_COLUMNS).to_csv(
+        root / "model_registry.csv", index=False
+    )
+    pd.DataFrame.from_records(membership_rows, columns=MODEL_MEMBERSHIP_COLUMNS).to_csv(
+        root / "model_membership.csv", index=False
+    )
+    pd.DataFrame.from_records(annotation_rows, columns=METABOLITE_ANNOTATION_COLUMNS).to_csv(
+        root / "metabolite_annotation.csv", index=False
+    )
 
 
 def test_load_stimulus_sample_map_requires_unique_sample_ids(tmp_path):
@@ -204,6 +240,153 @@ def test_resolve_model_inputs_rejects_primary_draft_broad_union_model(tmp_path):
 
     with pytest.raises(ValueError, match="supplementary"):
         resolve_model_inputs(root, matrix_path)
+
+
+def test_resolve_model_inputs_seeds_global_profile_for_header_only_empty_membership(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Narrow bile acid family",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+        annotation_rows=[
+            {
+                "metabolite_name": "feature_1",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "feature_2",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+
+    global_profile_rows = resolved["model_membership_resolved"].loc[
+        resolved["model_membership_resolved"]["model_id"] == "global_profile"
+    ]
+    assert set(global_profile_rows["metabolite_name"]) == {"feature_1", "feature_2"}
+
+
+def test_resolve_model_inputs_backfills_missing_global_profile_metabolites(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+            {"sample_id": "A003", "feature_1": 0.3, "feature_2": 0.6},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "draft",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Narrow bile acid family",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "global_profile",
+                "metabolite_name": "feature_1",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            }
+        ],
+        annotation_rows=[
+            {
+                "metabolite_name": "feature_1",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "feature_2",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+
+    global_profile_rows = resolved["model_membership_resolved"].loc[
+        resolved["model_membership_resolved"]["model_id"] == "global_profile"
+    ]
+    assert set(global_profile_rows["metabolite_name"]) == {"feature_1", "feature_2"}
+    seeded_row = global_profile_rows.loc[global_profile_rows["metabolite_name"] == "feature_2"].iloc[0]
+    assert seeded_row["membership_source"] == "matrix_all_columns"
 
 
 def test_build_annotation_skeleton_emits_all_matrix_metabolites(tmp_path):

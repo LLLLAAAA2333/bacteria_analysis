@@ -265,26 +265,28 @@ def _validate_annotation_against_matrix(annotation: pd.DataFrame, matrix: pd.Dat
 
 
 def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFrame) -> pd.DataFrame:
-    resolved = membership.copy()
-    if "global_profile" in set(resolved["model_id"].astype(str)):
+    resolved = _ensure_membership_columns(membership)
+    matrix_metabolites = matrix.columns.astype(str).tolist()
+    global_profile_rows = resolved.loc[resolved["model_id"].astype(str) == "global_profile"]
+    existing_metabolites = set(global_profile_rows["metabolite_name"].astype(str))
+    missing_metabolites = [name for name in matrix_metabolites if name not in existing_metabolites]
+
+    if not missing_metabolites:
         return resolved
 
-    resolved = _ensure_membership_columns(resolved)
-    global_rows = pd.DataFrame(
+    seeded_rows = pd.DataFrame(
         {
-            "model_id": ["global_profile"] * len(matrix.columns),
-            "metabolite_name": matrix.columns.astype(str).tolist(),
-            "membership_source": ["matrix_all_columns"] * len(matrix.columns),
-            "review_status": [""] * len(matrix.columns),
-            "ambiguous_flag": [False] * len(matrix.columns),
-            "notes": [""] * len(matrix.columns),
+            "model_id": ["global_profile"] * len(missing_metabolites),
+            "metabolite_name": missing_metabolites,
+            "membership_source": ["matrix_all_columns"] * len(missing_metabolites),
+            "review_status": [""] * len(missing_metabolites),
+            "ambiguous_flag": [False] * len(missing_metabolites),
+            "notes": [""] * len(missing_metabolites),
         }
     )
-
     if resolved.empty:
-        return global_rows
-
-    return pd.concat([resolved, global_rows], ignore_index=True)
+        return seeded_rows
+    return pd.concat([resolved, seeded_rows], ignore_index=True)
 
 
 def _seed_global_profile_registry(registry: pd.DataFrame) -> pd.DataFrame:
