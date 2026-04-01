@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import warnings
 
 import numpy as np
@@ -108,7 +109,7 @@ def build_prototype_rdm(prototypes: pd.DataFrame, *, id_columns: tuple[str, ...]
         raise ValueError("id_columns must include at least one column")
 
     prototype_frame = prototypes.reset_index(drop=True).copy()
-    feature_columns = [column for column in prototype_frame.columns if column not in id_columns]
+    feature_columns = _select_prototype_feature_columns(prototype_frame, id_columns)
     if not feature_columns:
         raise ValueError("prototype RDMs require at least one feature column")
 
@@ -150,3 +151,17 @@ def _build_prototype_labels(frame: pd.DataFrame, id_columns: tuple[str, ...]) ->
         return frame[id_columns[0]].astype(str).tolist()
 
     return frame.loc[:, list(id_columns)].astype(str).agg("__".join, axis=1).tolist()
+
+
+def _select_prototype_feature_columns(frame: pd.DataFrame, id_columns: tuple[str, ...]) -> list[str]:
+    excluded = set(id_columns)
+    feature_columns = [column for column in frame.columns if column not in excluded and _is_prototype_feature_column(column)]
+    return sorted(feature_columns, key=_prototype_feature_column_key)
+
+
+def _is_prototype_feature_column(column: object) -> bool:
+    return bool(re.fullmatch(r"f\d{3}", str(column)))
+
+
+def _prototype_feature_column_key(column: str) -> int:
+    return int(str(column)[1:])

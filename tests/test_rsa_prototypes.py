@@ -71,6 +71,42 @@ def test_build_pooled_prototype_support_tracks_contributing_dates():
     assert support_row["n_dates_contributed"] == 2
 
 
+def test_build_prototype_rdm_ignores_grouped_metadata_columns():
+    from bacteria_analysis import rsa_prototypes
+
+    metadata = pd.DataFrame(
+        {
+            "date": ["2026-03-11", "2026-03-12"],
+            "stimulus": ["b1_1", "b2_1"],
+            "stim_name": ["A001 stationary", "A002 stationary"],
+        }
+    )
+    values = np.array(
+        [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[2.0, 4.0], [6.0, 8.0]],
+        ],
+        dtype=float,
+    )
+    view = _trial_view(metadata, values)
+    prototypes, _ = rsa_prototypes.build_grouped_prototypes(
+        view,
+        group_columns=("date", "stimulus", "stim_name"),
+    )
+
+    matrix = rsa_prototypes.build_prototype_rdm(prototypes, id_columns=("date", "stimulus", "stim_name"))
+
+    assert set(matrix["stimulus_row"]) == {
+        "2026-03-11__b1_1__A001 stationary",
+        "2026-03-12__b2_1__A002 stationary",
+    }
+    assert matrix.shape == (2, 3)
+    assert (
+        matrix.loc[matrix["stimulus_row"] == "2026-03-11__b1_1__A001 stationary", "2026-03-12__b2_1__A002 stationary"].iloc[0]
+        == pytest.approx(0.0)
+    )
+
+
 def test_load_prototype_supplement_inputs_allows_missing_wide_table(stage1_stage0_root):
     from bacteria_analysis import rsa_prototypes
 
