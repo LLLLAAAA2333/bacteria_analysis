@@ -864,11 +864,7 @@ def _prototype_table_names(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
 
 
 def _prototype_descriptive_outputs(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
-    return [
-        artifact_name
-        for artifact_name in PROTOTYPE_QC_ARTIFACT_NAMES
-        if _dataframe_or_none(core_outputs, artifact_name) is not None
-    ]
+    return _build_prototype_rdm_figure_names(_prototype_rdm_views(core_outputs))
 
 
 def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> list[str]:

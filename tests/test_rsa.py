@@ -1300,8 +1300,8 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
         "prototype_rdm__pooled__full_trajectory",
     ]
     assert summary["prototype_descriptive_outputs"] == [
-        "prototype_support__per_date",
-        "prototype_support__pooled",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
     ]
     assert summary["figure_names"] == [
         "ranked_primary_model_rsa",
@@ -1353,6 +1353,9 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     assert summary["prototype_views"] == ["response_window"]
     assert summary["prototype_figure_names"] == [
         "prototype_rsa__per_date__response_window",
+        "prototype_rdm__pooled__response_window",
+    ]
+    assert summary["prototype_descriptive_outputs"] == [
         "prototype_rdm__pooled__response_window",
     ]
 
