@@ -43,6 +43,17 @@ def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
     return [f"neural_vs_top_model_rdm__{view_name}" for view_name in view_names]
 
 
+def _canonicalize_view_order(view_names: list[str]) -> list[str]:
+    unique_views = sorted({str(view_name) for view_name in view_names})
+    ordered_views: list[str] = []
+    for preferred_view in ("response_window", "full_trajectory"):
+        if preferred_view in unique_views:
+            ordered_views.append(preferred_view)
+            unique_views.remove(preferred_view)
+    ordered_views.extend(unique_views)
+    return ordered_views
+
+
 def ensure_stage3_output_dirs(output_root: str | Path) -> dict[str, Path]:
     root = Path(output_root)
     return _mkdir_stage3_dirs(root)
@@ -506,14 +517,10 @@ def _build_run_summary(
 def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> list[str]:
     views: list[str] = []
     if not rsa_results.empty and "view_name" in rsa_results.columns:
-        for view_name in rsa_results["view_name"].astype(str).tolist():
-            if view_name not in views:
-                views.append(view_name)
+        views.extend(rsa_results["view_name"].astype(str).tolist())
     if not view_comparison.empty and "view_name" in view_comparison.columns:
-        for view_name in view_comparison["view_name"].astype(str).tolist():
-            if view_name not in views:
-                views.append(view_name)
-    return views
+        views.extend(view_comparison["view_name"].astype(str).tolist())
+    return _canonicalize_view_order(views)
 
 
 def _choose_primary_view(rsa_results: pd.DataFrame, *, view_candidates: list[str] | None = None) -> str | None:

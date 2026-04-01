@@ -635,9 +635,118 @@ def test_write_stage3_outputs_reports_per_view_figure_names(tmp_path, synthetic_
     written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert "neural_vs_top_model_rdm__response_window" in summary["figure_names"]
-    assert "neural_vs_top_model_rdm__full_trajectory" in summary["figure_names"]
-    assert "neural_vs_top_model_rdm_panel" not in summary["figure_names"]
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+    ]
+
+
+def test_write_stage3_outputs_reports_canonical_per_view_figure_name_order(tmp_path, synthetic_stage3_outputs):
+    rsa_results = synthetic_stage3_outputs["rsa_results"].copy()
+    rsa_results["view_name"] = pd.Categorical(
+        rsa_results["view_name"],
+        categories=["sorted_view", "full_trajectory", "response_window", "alpha_view"],
+        ordered=True,
+    )
+    rsa_results = pd.concat(
+        [
+            pd.DataFrame.from_records(
+                [
+                    {
+                        "view_name": "sorted_view",
+                        "reference_view_name": "model_rdm",
+                        "comparison_scope": "neural_vs_model",
+                        "model_id": "global_profile",
+                        "model_tier": "primary",
+                        "model_status": "primary",
+                        "score_method": "spearman",
+                        "score_status": "ok",
+                        "n_shared_entries": 3,
+                        "rsa_similarity": 0.89,
+                        "p_value_raw": 0.011,
+                        "p_value_fdr": 0.016,
+                        "is_top_model": True,
+                    },
+                    {
+                        "view_name": "alpha_view",
+                        "reference_view_name": "model_rdm",
+                        "comparison_scope": "neural_vs_model",
+                        "model_id": "global_profile",
+                        "model_tier": "primary",
+                        "model_status": "primary",
+                        "score_method": "spearman",
+                        "score_status": "ok",
+                        "n_shared_entries": 3,
+                        "rsa_similarity": 0.87,
+                        "p_value_raw": 0.012,
+                        "p_value_fdr": 0.017,
+                        "is_top_model": True,
+                    },
+                ]
+            ),
+            rsa_results,
+        ],
+        ignore_index=True,
+    )
+    cross_view_comparison = synthetic_stage3_outputs["cross_view_comparison"].copy()
+    cross_view_comparison = pd.concat(
+        [
+            pd.DataFrame.from_records(
+                [
+                    {
+                        "view_name": "sorted_view",
+                        "reference_view_name": "response_window",
+                        "comparison_scope": "neural_vs_neural",
+                        "model_id": "global_profile",
+                        "score_method": "spearman",
+                        "score_status": "ok",
+                        "n_shared_entries": 3,
+                        "rsa_similarity": 0.95,
+                        "p_value_raw": 0.013,
+                        "p_value_fdr": 0.018,
+                    },
+                    {
+                        "view_name": "alpha_view",
+                        "reference_view_name": "full_trajectory",
+                        "comparison_scope": "neural_vs_neural",
+                        "model_id": "global_profile",
+                        "score_method": "spearman",
+                        "score_status": "ok",
+                        "n_shared_entries": 3,
+                        "rsa_similarity": 0.93,
+                        "p_value_raw": 0.014,
+                        "p_value_fdr": 0.019,
+                    },
+                ]
+            ),
+            cross_view_comparison,
+        ],
+        ignore_index=True,
+    )
+    synthetic_stage3_outputs["rsa_results"] = rsa_results
+    synthetic_stage3_outputs["cross_view_comparison"] = cross_view_comparison
+
+    for view_name in ("sorted_view", "alpha_view"):
+        synthetic_stage3_outputs[f"neural_rdm__{view_name}"] = synthetic_stage3_outputs["neural_rdm__response_window"].copy()
+        synthetic_stage3_outputs[f"model_rdm__global_profile__{view_name}"] = synthetic_stage3_outputs[
+            "model_rdm__global_profile__response_window"
+        ].copy()
+
+    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+        "neural_vs_top_model_rdm__alpha_view",
+        "neural_vs_top_model_rdm__sorted_view",
+    ]
 
 
 def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path, synthetic_stage3_outputs):
