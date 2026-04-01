@@ -12,6 +12,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.spatial.distance import squareform
 
 from bacteria_analysis.io import write_json, write_parquet
 
@@ -320,12 +322,17 @@ def _plot_neural_vs_top_model_rdm_view(
             ),
         )
 
+    neural_order_labels: list[str] | None = None
+    if neural_matrix is not None:
+        _, neural_order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+
     _render_rdm_axis(
         axes[0, 0],
         neural_matrix,
         stimulus_sample_map=stimulus_sample_map,
         title=f"{view_name}: neural",
         fallback_message="No neural matrix provided",
+        order_labels=neural_order_labels,
     )
     _render_rdm_axis(
         axes[0, 1],
@@ -333,6 +340,7 @@ def _plot_neural_vs_top_model_rdm_view(
         stimulus_sample_map=stimulus_sample_map,
         title=f"{view_name}: {top_model_id or 'no top model'}",
         fallback_message="No top-model matrix provided",
+        order_labels=neural_order_labels,
     )
 
     return _save_figure(path)
@@ -423,6 +431,7 @@ def _render_rdm_axis(
     stimulus_sample_map: pd.DataFrame | None,
     title: str,
     fallback_message: str,
+    order_labels: list[str] | None = None,
 ) -> None:
     axis.set_title(title)
     if matrix_frame is None:
@@ -430,7 +439,7 @@ def _render_rdm_axis(
         axis.axis("off")
         return
 
-    heatmap_frame = _resolve_rdm_heatmap_frame(matrix_frame, stimulus_sample_map)
+    heatmap_frame, _ = _prepare_rdm_heatmap_frame(matrix_frame, stimulus_sample_map, order_labels=order_labels)
     if heatmap_frame.empty:
         axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
         axis.axis("off")
@@ -460,6 +469,53 @@ def _resolve_rdm_heatmap_frame(
     resolved_frame.index = pd.Index(resolved_labels)
     resolved_frame.columns = pd.Index(resolved_labels)
     return resolved_frame
+
+
+def _prepare_rdm_heatmap_frame(
+    matrix_frame: pd.DataFrame,
+    stimulus_sample_map: pd.DataFrame | None,
+    *,
+    order_labels: list[str] | None = None,
+) -> tuple[pd.DataFrame, list[str]]:
+    heatmap_frame = _coerce_rdm_heatmap_frame(matrix_frame)
+    if heatmap_frame.empty:
+        return heatmap_frame, []
+
+    if order_labels is None:
+        ordered_labels = _cluster_reorder_heatmap_labels(heatmap_frame)
+    else:
+        ordered_labels = [str(label) for label in order_labels]
+        if set(ordered_labels) != set(heatmap_frame.index):
+            ordered_labels = heatmap_frame.index.tolist()
+
+    ordered_frame = heatmap_frame.reindex(index=ordered_labels, columns=ordered_labels)
+    if stimulus_sample_map is None or stimulus_sample_map.empty:
+        return ordered_frame, ordered_labels
+
+    resolved_labels = _resolve_display_labels(ordered_labels, stimulus_sample_map)
+    if resolved_labels is None:
+        return ordered_frame, ordered_labels
+
+    resolved_frame = ordered_frame.copy()
+    resolved_frame.index = pd.Index(resolved_labels)
+    resolved_frame.columns = pd.Index(resolved_labels)
+    return resolved_frame, ordered_labels
+
+
+def _cluster_reorder_heatmap_labels(heatmap_frame: pd.DataFrame) -> list[str]:
+    original_order = heatmap_frame.index.tolist()
+    if len(original_order) < 3:
+        return original_order
+
+    numeric = heatmap_frame.apply(pd.to_numeric, errors="coerce")
+    values = numeric.to_numpy(dtype=float, copy=True)
+    if np.isnan(values).any() or not np.isfinite(values).all():
+        return original_order
+
+    np.fill_diagonal(values, 0.0)
+    linkage_matrix = linkage(squareform(values, checks=False), method="average", optimal_ordering=True)
+    order = leaves_list(linkage_matrix).tolist()
+    return [original_order[position] for position in order]
 
 
 def _coerce_rdm_heatmap_frame(matrix_frame: pd.DataFrame) -> pd.DataFrame:

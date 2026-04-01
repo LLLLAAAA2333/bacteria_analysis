@@ -903,6 +903,84 @@ def test_resolve_rdm_heatmap_frame_falls_back_to_raw_stimulus_when_other_layers_
     assert resolved.loc["b2_1", "b1_1"] == pytest.approx(0.2)
 
 
+def test_prepare_rdm_heatmap_frame_reuses_neural_cluster_order_for_model_matrix():
+    neural_matrix = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": 8.0, "b4_1": 1.0, "b2_1": 8.0},
+            {"stimulus_row": "b1_1", "b3_1": 8.0, "b1_1": 0.0, "b4_1": 8.0, "b2_1": 1.0},
+            {"stimulus_row": "b4_1", "b3_1": 1.0, "b1_1": 8.0, "b4_1": 0.0, "b2_1": 8.0},
+            {"stimulus_row": "b2_1", "b3_1": 8.0, "b1_1": 1.0, "b4_1": 8.0, "b2_1": 0.0},
+        ]
+    )
+    model_matrix = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": 30.0, "b4_1": 10.0, "b2_1": 40.0},
+            {"stimulus_row": "b1_1", "b3_1": 30.0, "b1_1": 0.0, "b4_1": 50.0, "b2_1": 20.0},
+            {"stimulus_row": "b4_1", "b3_1": 10.0, "b1_1": 50.0, "b4_1": 0.0, "b2_1": 60.0},
+            {"stimulus_row": "b2_1", "b3_1": 40.0, "b1_1": 20.0, "b4_1": 60.0, "b2_1": 0.0},
+        ]
+    )
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+            {"stimulus": "b4_1", "stim_name": "Stimulus B4", "sample_id": "S004"},
+        ]
+    )
+
+    neural_heatmap, order_labels = rsa_outputs._prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+    model_heatmap, model_order_labels = rsa_outputs._prepare_rdm_heatmap_frame(
+        model_matrix,
+        stimulus_sample_map,
+        order_labels=order_labels,
+    )
+
+    assert order_labels != ["b3_1", "b1_1", "b4_1", "b2_1"]
+    assert order_labels == model_order_labels
+    assert neural_heatmap.index.tolist() == model_heatmap.index.tolist()
+    assert neural_heatmap.columns.tolist() == model_heatmap.columns.tolist()
+    assert model_heatmap.loc["S003", "S004"] == pytest.approx(10.0)
+    assert model_heatmap.loc["S001", "S002"] == pytest.approx(20.0)
+
+
+def test_prepare_rdm_heatmap_frame_falls_back_to_aligned_original_order_when_neural_matrix_is_not_clusterable():
+    neural_matrix = _matrix(
+        [
+            {"stimulus_row": "b2_1", "b2_1": 0.0, "b1_1": np.nan, "b3_1": 0.5},
+            {"stimulus_row": "b1_1", "b2_1": np.nan, "b1_1": 0.0, "b3_1": 0.4},
+            {"stimulus_row": "b3_1", "b2_1": 0.5, "b1_1": 0.4, "b3_1": 0.0},
+        ]
+    )
+    model_matrix = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b2_1": 0.7, "b1_1": 0.6},
+            {"stimulus_row": "b2_1", "b3_1": 0.7, "b2_1": 0.0, "b1_1": 0.2},
+            {"stimulus_row": "b1_1", "b3_1": 0.6, "b2_1": 0.2, "b1_1": 0.0},
+        ]
+    )
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+        ]
+    )
+
+    neural_heatmap, order_labels = rsa_outputs._prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+    model_heatmap, model_order_labels = rsa_outputs._prepare_rdm_heatmap_frame(
+        model_matrix,
+        stimulus_sample_map,
+        order_labels=order_labels,
+    )
+
+    assert order_labels == ["b2_1", "b1_1", "b3_1"]
+    assert model_order_labels == ["b2_1", "b1_1", "b3_1"]
+    assert neural_heatmap.index.tolist() == ["S002", "S001", "S003"]
+    assert model_heatmap.index.tolist() == ["S002", "S001", "S003"]
+    assert model_heatmap.loc["S002", "S001"] == pytest.approx(0.2)
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):
