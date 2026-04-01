@@ -513,8 +513,11 @@ def _cluster_reorder_heatmap_labels(heatmap_frame: pd.DataFrame) -> list[str]:
         return original_order
 
     np.fill_diagonal(values, 0.0)
-    linkage_matrix = linkage(squareform(values, checks=False), method="average", optimal_ordering=True)
-    order = leaves_list(linkage_matrix).tolist()
+    try:
+        linkage_matrix = linkage(squareform(values, checks=False), method="average", optimal_ordering=True)
+        order = leaves_list(linkage_matrix).tolist()
+    except Exception:
+        return original_order
     return [original_order[position] for position in order]
 
 

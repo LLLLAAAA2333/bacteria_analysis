@@ -981,6 +981,30 @@ def test_prepare_rdm_heatmap_frame_falls_back_to_aligned_original_order_when_neu
     assert model_heatmap.loc["S002", "S001"] == pytest.approx(0.2)
 
 
+def test_prepare_rdm_heatmap_frame_falls_back_when_linkage_raises_on_invalid_distances():
+    neural_matrix = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": -1.0, "b2_1": 0.6},
+            {"stimulus_row": "b1_1", "b3_1": -1.0, "b1_1": 0.0, "b2_1": 0.4},
+            {"stimulus_row": "b2_1", "b3_1": 0.6, "b1_1": 0.4, "b2_1": 0.0},
+        ]
+    )
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+        ]
+    )
+
+    heatmap_frame, order_labels = rsa_outputs._prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+
+    assert order_labels == ["b3_1", "b1_1", "b2_1"]
+    assert heatmap_frame.index.tolist() == ["S003", "S001", "S002"]
+    assert heatmap_frame.columns.tolist() == ["S003", "S001", "S002"]
+    assert heatmap_frame.loc["S003", "S001"] == pytest.approx(-1.0)
+
+
 def test_plot_neural_vs_top_model_rdm_view_keeps_model_in_original_order_when_neural_matrix_is_missing(tmp_path):
     stimulus_sample_map = pd.DataFrame.from_records(
         [
