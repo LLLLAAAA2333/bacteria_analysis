@@ -1322,9 +1322,15 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
     stale_prototype_rsa = first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png"
     stale_prototype_rdm = first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png"
+    stale_prototype_rsa_table = first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet"
+    stale_prototype_rdm_table = first_written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet"
+    stale_prototype_support_qc = first_written["qc_dir"] / "prototype_support__per_date.parquet"
 
     assert stale_prototype_rsa.exists()
     assert stale_prototype_rdm.exists()
+    assert stale_prototype_rsa_table.exists()
+    assert stale_prototype_rdm_table.exists()
+    assert stale_prototype_support_qc.exists()
 
     narrowed_outputs = {
         key: value.copy() if isinstance(value, pd.DataFrame) else value
@@ -1350,6 +1356,18 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     assert not stale_prototype_rdm.exists()
     assert not (second_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
     assert not (second_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
+    assert (second_written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
+    assert (second_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet").exists()
+    assert not stale_prototype_rdm_table.exists()
+    assert (second_written["qc_dir"] / "prototype_support__per_date.parquet").exists()
+    assert (second_written["qc_dir"] / "prototype_support__pooled.parquet").exists()
+    assert stale_prototype_support_qc.exists()
+    narrowed_prototype_rsa = pd.read_parquet(second_written["tables_dir"] / "prototype_rsa_results__per_date.parquet")
+    narrowed_prototype_support = pd.read_parquet(second_written["qc_dir"] / "prototype_support__per_date.parquet")
+    narrowed_prototype_support_pooled = pd.read_parquet(second_written["qc_dir"] / "prototype_support__pooled.parquet")
+    assert narrowed_prototype_rsa["view_name"].astype(str).unique().tolist() == ["response_window"]
+    assert narrowed_prototype_support["view_name"].astype(str).unique().tolist() == ["response_window"]
+    assert narrowed_prototype_support_pooled["view_name"].astype(str).unique().tolist() == ["response_window"]
     assert summary["prototype_views"] == ["response_window"]
     assert summary["prototype_figure_names"] == [
         "prototype_rsa__per_date__response_window",
@@ -1358,6 +1376,40 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     assert summary["prototype_descriptive_outputs"] == [
         "prototype_rdm__pooled__response_window",
     ]
+
+
+def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_without_supplement(
+    tmp_path, synthetic_stage3_outputs
+):
+    output_root = tmp_path / "stage3_rsa"
+
+    first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
+    stale_paths = [
+        first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet",
+        first_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet",
+        first_written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet",
+        first_written["qc_dir"] / "prototype_support__per_date.parquet",
+        first_written["qc_dir"] / "prototype_support__pooled.parquet",
+        first_written["figures_dir"] / "prototype_rsa__per_date__response_window.png",
+        first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png",
+        first_written["figures_dir"] / "prototype_rdm__pooled__response_window.png",
+        first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png",
+    ]
+
+    for stale_path in stale_paths:
+        assert stale_path.exists()
+
+    second_written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+    summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    for stale_path in stale_paths:
+        assert not stale_path.exists()
+    assert summary["prototype_supplement_enabled"] is False
+    assert summary["prototype_views"] == []
+    assert summary["prototype_dates"] == []
+    assert summary["prototype_table_names"] == []
+    assert summary["prototype_figure_names"] == []
+    assert summary["prototype_descriptive_outputs"] == []
 
 
 def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():

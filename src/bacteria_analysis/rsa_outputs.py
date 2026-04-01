@@ -105,6 +105,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     consumed_keys: set[str] = set()
 
     _remove_legacy_stage3_figures(dirs["figures_dir"])
+    _remove_stale_prototype_parquets(dirs["tables_dir"], dirs["qc_dir"])
 
     required_tables = _resolve_artifact_family(core_outputs, TABLE_ARTIFACT_SPECS, consumed_keys)
     required_qc = _resolve_artifact_family(core_outputs, QC_ARTIFACT_SPECS, consumed_keys)
@@ -185,6 +186,12 @@ def _remove_legacy_stage3_figures(figures_dir: Path) -> None:
         stale_figure.unlink()
     for stale_figure in figures_dir.glob("prototype_*.png"):
         stale_figure.unlink()
+
+
+def _remove_stale_prototype_parquets(tables_dir: Path, qc_dir: Path) -> None:
+    for directory in (tables_dir, qc_dir):
+        for stale_artifact in directory.glob("prototype_*.parquet"):
+            stale_artifact.unlink()
 
 
 def _resolve_artifact_family(
