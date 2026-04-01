@@ -855,6 +855,54 @@ def test_resolve_rdm_heatmap_frame_falls_back_when_sample_id_is_incomplete():
     assert resolved.loc["Stimulus B1", "Stimulus B3"] == pytest.approx(0.4)
 
 
+def test_resolve_rdm_heatmap_frame_ignores_duplicate_map_rows_outside_displayed_subset():
+    matrix = _matrix(
+        [
+            {"stimulus_row": "b2_1", "b2_1": 0.0, "b1_1": 0.2, "b3_1": 0.5},
+            {"stimulus_row": "b1_1", "b2_1": 0.2, "b1_1": 0.0, "b3_1": 0.4},
+            {"stimulus_row": "b3_1", "b2_1": 0.5, "b1_1": 0.4, "b3_1": 0.0},
+        ]
+    )
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+            {"stimulus": "x1", "stim_name": "Extra Stimulus", "sample_id": "dup"},
+            {"stimulus": "x2", "stim_name": "Extra Stimulus", "sample_id": "dup"},
+        ]
+    )
+
+    resolved = rsa_outputs._resolve_rdm_heatmap_frame(matrix, stimulus_sample_map)
+
+    assert resolved.index.tolist() == ["S002", "S001", "S003"]
+    assert resolved.columns.tolist() == ["S002", "S001", "S003"]
+    assert resolved.loc["S002", "S001"] == pytest.approx(0.2)
+
+
+def test_resolve_rdm_heatmap_frame_falls_back_to_raw_stimulus_when_other_layers_fail():
+    matrix = _matrix(
+        [
+            {"stimulus_row": "b2_1", "b2_1": 0.0, "b1_1": 0.2, "b3_1": 0.5},
+            {"stimulus_row": "b1_1", "b2_1": 0.2, "b1_1": 0.0, "b3_1": 0.4},
+            {"stimulus_row": "b3_1", "b2_1": 0.5, "b1_1": 0.4, "b3_1": 0.0},
+        ]
+    )
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b2_1", "stim_name": "Shared Label", "sample_id": "dup"},
+            {"stimulus": "b1_1", "stim_name": "Shared Label", "sample_id": "dup"},
+            {"stimulus": "b3_1", "stim_name": "Shared Label", "sample_id": "dup"},
+        ]
+    )
+
+    resolved = rsa_outputs._resolve_rdm_heatmap_frame(matrix, stimulus_sample_map)
+
+    assert resolved.index.tolist() == ["b2_1", "b1_1", "b3_1"]
+    assert resolved.columns.tolist() == ["b2_1", "b1_1", "b3_1"]
+    assert resolved.loc["b2_1", "b1_1"] == pytest.approx(0.2)
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):

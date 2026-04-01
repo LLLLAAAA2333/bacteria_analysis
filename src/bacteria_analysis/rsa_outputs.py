@@ -491,10 +491,15 @@ def _resolve_display_labels(
     map_frame = stimulus_sample_map.copy()
     map_frame["stimulus"] = map_frame["stimulus"].fillna("").astype(str).str.strip()
     map_frame = map_frame.loc[map_frame["stimulus"] != ""]
-    if map_frame.empty or map_frame["stimulus"].duplicated().any():
+    subset = map_frame.loc[map_frame["stimulus"].isin(stimulus_order)]
+    if subset.empty:
+        return None
+    if len(subset["stimulus"].unique()) != len(stimulus_order):
+        return None
+    if subset["stimulus"].duplicated().any():
         return None
 
-    stimulus_lookup = map_frame.set_index("stimulus", drop=False)
+    stimulus_lookup = subset.set_index("stimulus", drop=False)
 
     for candidate_column in ("sample_id", "stim_name", "stimulus"):
         if candidate_column not in stimulus_lookup.columns:
