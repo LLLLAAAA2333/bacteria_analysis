@@ -749,6 +749,25 @@ def test_write_stage3_outputs_reports_canonical_per_view_figure_name_order(tmp_p
     ]
 
 
+def test_write_stage3_outputs_writes_default_per_view_placeholders_when_views_missing(tmp_path, synthetic_stage3_outputs):
+    synthetic_stage3_outputs["rsa_results"] = pd.DataFrame()
+    synthetic_stage3_outputs["cross_view_comparison"] = pd.DataFrame()
+
+    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
+    assert summary["views"] == []
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+    ]
+
+
 def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path, synthetic_stage3_outputs):
     written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))

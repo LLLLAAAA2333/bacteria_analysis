@@ -37,6 +37,7 @@ REQUIRED_FIGURES: tuple[str, ...] = (
     "leave_one_stimulus_out_robustness",
     "view_comparison_summary",
 )
+DEFAULT_FIGURE_VIEWS: tuple[str, ...] = ("response_window", "full_trajectory")
 
 
 def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
@@ -114,6 +115,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     leave_one_out = required_tables["rsa_leave_one_stimulus_out"]
     view_comparison = required_tables["rsa_view_comparison"]
     view_names = _ordered_views(rsa_results, view_comparison)
+    figure_view_names = _figure_view_names(rsa_results, view_comparison)
     family_summary = _collect_model_families(registry)
     top_primary_models = _build_top_primary_models_by_view(rsa_results, family_summary["primary_models"])
     primary_view = _choose_primary_view(rsa_results, view_candidates=view_names)
@@ -124,7 +126,9 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         path=dirs["figures_dir"] / "ranked_primary_model_rsa.png",
         primary_view=primary_view,
     )
-    for figure_name, view_name in zip(_build_neural_vs_model_figure_names(view_names), view_names, strict=False):
+    for figure_name, view_name in zip(
+        _build_neural_vs_model_figure_names(figure_view_names), figure_view_names, strict=False
+    ):
         written[figure_name] = _plot_neural_vs_top_model_rdm_view(
             core_outputs,
             top_primary_models,
@@ -481,7 +485,8 @@ def _build_run_summary(
         and key not in {"output_root", "tables_dir", "figures_dir", "qc_dir"}
     )
     view_names = _ordered_views(required_tables["rsa_results"], required_tables["rsa_view_comparison"])
-    figure_names = [*REQUIRED_FIGURES, *_build_neural_vs_model_figure_names(view_names)]
+    figure_view_names = _figure_view_names(required_tables["rsa_results"], required_tables["rsa_view_comparison"])
+    figure_names = [*REQUIRED_FIGURES, *_build_neural_vs_model_figure_names(figure_view_names)]
 
     return {
         "views": view_names,
@@ -521,6 +526,13 @@ def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> 
     if not view_comparison.empty and "view_name" in view_comparison.columns:
         views.extend(view_comparison["view_name"].astype(str).tolist())
     return _canonicalize_view_order(views)
+
+
+def _figure_view_names(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> list[str]:
+    view_names = _ordered_views(rsa_results, view_comparison)
+    if view_names:
+        return view_names
+    return _canonicalize_view_order(list(DEFAULT_FIGURE_VIEWS))
 
 
 def _choose_primary_view(rsa_results: pd.DataFrame, *, view_candidates: list[str] | None = None) -> str | None:

@@ -248,7 +248,8 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
         stage3_root / "qc" / "model_input_coverage.parquet",
         stage3_root / "qc" / "model_feature_filtering.parquet",
         stage3_root / "figures" / "ranked_primary_model_rsa.png",
-        stage3_root / "figures" / "neural_vs_top_model_rdm_panel.png",
+        stage3_root / "figures" / "neural_vs_top_model_rdm__response_window.png",
+        stage3_root / "figures" / "neural_vs_top_model_rdm__full_trajectory.png",
         stage3_root / "run_summary.json",
         stage3_root / "run_summary.md",
     ]
@@ -259,6 +260,14 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
     assert summary["primary_view"] == "response_window"
     assert summary["primary_models"] == ["global_profile", "bile_acid"]
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+    ]
+    assert not (stage3_root / "figures" / "neural_vs_top_model_rdm_panel.png").exists()
     assert "Included primary models: global_profile, bile_acid" in result.stdout
 
 
