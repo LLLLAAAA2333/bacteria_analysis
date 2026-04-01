@@ -14,6 +14,8 @@ from bacteria_analysis.rsa import (
     summarize_leave_one_stimulus_out,
 )
 from bacteria_analysis import rsa_outputs
+from bacteria_analysis.reliability import TrialView
+from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs
 from bacteria_analysis.rsa_outputs import write_stage3_outputs
 
 
@@ -90,6 +92,105 @@ def _resolved_stage3_inputs(
         "model_registry_resolved": registry.copy(),
         "model_membership_resolved": membership.copy(),
     }
+
+
+def _stage3_prototype_resolved_inputs() -> dict[str, pd.DataFrame]:
+    return _resolved_stage3_inputs(
+        matrix_rows=[
+            {"sample_id": "A001", "f1": 0.0, "f2": 1.0, "f3": 2.0, "f4": 3.0, "f5": 0.0, "f6": 1.0},
+            {"sample_id": "A002", "f1": 0.0, "f2": 1.0, "f3": 3.0, "f4": 2.0, "f5": 1.0, "f6": 2.0},
+            {"sample_id": "A003", "f1": 3.0, "f2": 2.0, "f3": 1.0, "f4": 0.0, "f5": 2.0, "f6": 3.0},
+            {"sample_id": "A004", "f1": 1.0, "f2": 0.0, "f3": 2.0, "f4": 1.0, "f5": 3.0, "f6": 0.0},
+        ],
+        mapping_rows=[
+            {"stimulus": "A001", "stim_name": "Stimulus A001", "sample_id": "A001"},
+            {"stimulus": "A002", "stim_name": "Stimulus A002", "sample_id": "A002"},
+            {"stimulus": "A003", "stim_name": "Stimulus A003", "sample_id": "A003"},
+            {"stimulus": "A004", "stim_name": "Stimulus A004", "sample_id": "A004"},
+        ],
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+            },
+            {
+                "model_id": "focused_panel",
+                "model_label": "Focused Panel",
+                "model_tier": "supplementary",
+                "model_status": "supplementary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "euclidean",
+            },
+            {
+                "model_id": "excluded_panel",
+                "model_label": "Excluded Panel",
+                "model_tier": "supplementary",
+                "model_status": "supplementary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "euclidean",
+                "excluded_from_primary_ranking": True,
+            },
+        ],
+        membership_rows=[
+            {"model_id": "focused_panel", "metabolite_name": "f5"},
+            {"model_id": "focused_panel", "metabolite_name": "f6"},
+            {"model_id": "excluded_panel", "metabolite_name": "f1"},
+            {"model_id": "excluded_panel", "metabolite_name": "f2"},
+        ],
+    )
+
+
+def _stage3_prototype_inputs() -> PrototypeSupplementInputs:
+    metadata = pd.DataFrame.from_records(
+        [
+            {"date": "2026-03-11", "stimulus": "A001", "stim_name": "Stimulus A001"},
+            {"date": "2026-03-11", "stimulus": "A002", "stim_name": "Stimulus A002"},
+            {"date": "2026-03-11", "stimulus": "A003", "stim_name": "Stimulus A003"},
+            {"date": "2026-03-13", "stimulus": "A001", "stim_name": "Stimulus A001"},
+            {"date": "2026-03-13", "stimulus": "A004", "stim_name": "Stimulus A004"},
+        ]
+    )
+    response_window = np.array(
+        [
+            [[0.0, 1.0, 2.0, 3.0]],
+            [[0.0, 1.0, 3.0, 2.0]],
+            [[3.0, 2.0, 1.0, 0.0]],
+            [[0.0, 1.0, np.nan, 0.0]],
+            [[1.0, 0.0, np.nan, 1.0]],
+        ],
+        dtype=float,
+    )
+    full_trajectory = np.array(
+        [
+            [[0.0, 2.0, 1.0, 3.0]],
+            [[1.0, 3.0, 0.0, 2.0]],
+            [[3.0, 1.0, 2.0, 0.0]],
+            [[0.0, 2.0, np.nan, 1.0]],
+            [[1.0, 0.0, np.nan, 2.0]],
+        ],
+        dtype=float,
+    )
+    return PrototypeSupplementInputs(
+        metadata=metadata,
+        views={
+            "response_window": TrialView(
+                name="response_window",
+                timepoints=(0,),
+                metadata=metadata,
+                values=response_window,
+            ),
+            "full_trajectory": TrialView(
+                name="full_trajectory",
+                timepoints=(0,),
+                metadata=metadata,
+                values=full_trajectory,
+            ),
+        },
+    )
 
 
 @pytest.fixture
@@ -1199,4 +1300,107 @@ def test_run_stage3_rsa_keeps_global_profile_when_curated_subset_membership_is_e
 
     assert "global_profile" in set(results["rsa_results"]["model_id"])
     assert "bile_acid" not in set(results["rsa_results"]["model_id"])
+
+
+def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present():
+    results = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+    assert "prototype_rsa_results__per_date" in results
+    assert "prototype_support__per_date" in results
+    assert "prototype_support__pooled" in results
+    assert "prototype_rdm__pooled__response_window" in results
+    assert "prototype_rdm__pooled__full_trajectory" in results
+    assert "n_dates_contributed" in results["prototype_support__pooled"].columns
+    assert {
+        "date",
+        "view_name",
+        "reference_view_name",
+        "comparison_scope",
+        "model_id",
+        "model_label",
+        "model_tier",
+        "model_status",
+        "feature_kind",
+        "distance_kind",
+        "excluded_from_primary_ranking",
+        "score_method",
+        "score_status",
+        "n_stimuli",
+        "n_shared_entries",
+        "rsa_similarity",
+        "p_value_raw",
+        "p_value_fdr",
+        "is_top_model",
+    }.issubset(results["prototype_rsa_results__per_date"].columns)
+
+
+def test_run_stage3_rsa_keeps_primary_rsa_results_unchanged_when_prototype_inputs_are_present():
+    baseline = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        permutations=10,
+        seed=0,
+    )
+    supplemented = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+    pd.testing.assert_frame_equal(baseline["rsa_results"], supplemented["rsa_results"])
+    pd.testing.assert_frame_equal(baseline["rsa_view_comparison"], supplemented["rsa_view_comparison"])
+    pd.testing.assert_frame_equal(baseline["rsa_leave_one_stimulus_out"], supplemented["rsa_leave_one_stimulus_out"])
+
+
+def test_run_stage3_rsa_corrects_prototype_fdr_across_full_table_and_ignores_excluded_rows_for_top_model():
+    results = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+    prototype = results["prototype_rsa_results__per_date"]
+    finite = prototype.loc[prototype["p_value_raw"].notna()].reset_index(drop=True)
+    expected_fdr = benjamini_hochberg(finite["p_value_raw"].to_numpy(dtype=float))
+
+    np.testing.assert_allclose(finite["p_value_fdr"].to_numpy(dtype=float), expected_fdr)
+    assert not prototype.loc[prototype["excluded_from_primary_ranking"].astype(bool), "is_top_model"].any()
+
+    for _, group in prototype.groupby(["date", "view_name"], sort=False):
+        eligible = group.loc[
+            group["score_status"].astype(str).eq("ok")
+            & ~group["excluded_from_primary_ranking"].astype(bool)
+            & np.isfinite(pd.to_numeric(group["rsa_similarity"], errors="coerce"))
+        ]
+        if eligible.empty:
+            continue
+        assert int(eligible["is_top_model"].sum()) == 1
+
+
+def test_run_stage3_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks_sparse_rows_invalid():
+    results = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+    prototype = results["prototype_rsa_results__per_date"]
+    sparse_rows = prototype.loc[prototype["date"].eq("2026-03-13")].reset_index(drop=True)
+
+    assert not sparse_rows.empty
+    assert sparse_rows["n_stimuli"].eq(2).all()
+    assert sparse_rows["score_status"].eq("invalid").all()
+    assert sparse_rows["n_shared_entries"].fillna(0).astype(int).max() < 2
 
