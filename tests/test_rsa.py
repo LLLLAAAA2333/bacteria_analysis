@@ -632,6 +632,47 @@ def test_write_stage3_outputs_writes_per_view_neural_model_figures(tmp_path, syn
     assert not (written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
 
 
+def test_write_stage3_outputs_removes_legacy_panel_figure(tmp_path, synthetic_stage3_outputs):
+    output_root = tmp_path / "stage3_rsa"
+    legacy_panel = output_root / "figures" / "neural_vs_top_model_rdm_panel.png"
+    legacy_panel.parent.mkdir(parents=True, exist_ok=True)
+    legacy_panel.write_bytes(b"legacy panel")
+
+    written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+
+    assert not legacy_panel.exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
+
+
+def test_write_stage3_outputs_removes_stale_per_view_figures_when_view_set_narrows(
+    tmp_path, synthetic_stage3_outputs
+):
+    output_root = tmp_path / "stage3_rsa"
+
+    first_written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+    stale_full_trajectory = first_written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png"
+    assert stale_full_trajectory.exists()
+
+    narrowed_outputs = {
+        key: value.copy() if isinstance(value, pd.DataFrame) else value
+        for key, value in synthetic_stage3_outputs.items()
+    }
+    narrowed_outputs["rsa_results"] = narrowed_outputs["rsa_results"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    narrowed_outputs["cross_view_comparison"] = narrowed_outputs["cross_view_comparison"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+
+    second_written = write_stage3_outputs(narrowed_outputs, output_root)
+
+    assert (second_written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
+    assert not stale_full_trajectory.exists()
+    assert not (second_written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
+    assert not (second_written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
+
+
 def test_write_stage3_outputs_reports_per_view_figure_names(tmp_path, synthetic_stage3_outputs):
     written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))

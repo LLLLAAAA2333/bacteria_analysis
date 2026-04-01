@@ -92,6 +92,8 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     }
     consumed_keys: set[str] = set()
 
+    _remove_legacy_stage3_figures(dirs["figures_dir"])
+
     required_tables = _resolve_artifact_family(core_outputs, TABLE_ARTIFACT_SPECS, consumed_keys)
     required_qc = _resolve_artifact_family(core_outputs, QC_ARTIFACT_SPECS, consumed_keys)
 
@@ -158,6 +160,15 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     written["run_summary_json"] = write_json(summary, dirs["output_root"] / "run_summary.json")
     written["run_summary_md"] = _write_markdown_summary(summary, dirs["output_root"] / "run_summary.md")
     return written
+
+
+def _remove_legacy_stage3_figures(figures_dir: Path) -> None:
+    legacy_figure = figures_dir / "neural_vs_top_model_rdm_panel.png"
+    if legacy_figure.exists():
+        legacy_figure.unlink()
+
+    for stale_figure in figures_dir.glob("neural_vs_top_model_rdm__*.png"):
+        stale_figure.unlink()
 
 
 def _resolve_artifact_family(
