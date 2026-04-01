@@ -216,6 +216,16 @@ def _empty_stage3_prototype_inputs() -> PrototypeSupplementInputs:
     )
 
 
+def _stage3_outputs_with_prototype_supplement() -> dict[str, pd.DataFrame]:
+    return run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+
 @pytest.fixture
 def synthetic_stage3_outputs() -> dict[str, pd.DataFrame]:
     stimulus_sample_map = pd.DataFrame.from_records(
@@ -1242,6 +1252,109 @@ def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementar
 
     assert summary["supplementary_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
+
+
+def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path):
+    core_outputs = _stage3_outputs_with_prototype_supplement()
+
+    written = write_stage3_outputs(core_outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert (written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
+    assert (written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet").exists()
+    assert (written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet").exists()
+    assert (written["qc_dir"] / "prototype_support__per_date.parquet").exists()
+    assert (written["qc_dir"] / "prototype_support__pooled.parquet").exists()
+    assert (written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
+    assert summary["rsa_table_names"] == [
+        "model_rdm_summary",
+        "rsa_results",
+        "rsa_leave_one_stimulus_out",
+        "rsa_view_comparison",
+    ]
+    assert summary["additional_table_names"] == [
+        "model_rdm__excluded_panel",
+        "model_rdm__focused_panel",
+        "model_rdm__global_profile",
+        "neural_rdm__full_trajectory",
+        "neural_rdm__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rsa_results__per_date",
+    ]
+    assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_views"] == ["response_window", "full_trajectory"]
+    assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
+    assert summary["prototype_table_names"] == [
+        "prototype_rsa_results__per_date",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+    ]
+    assert summary["prototype_figure_names"] == [
+        "prototype_rsa__per_date__response_window",
+        "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+    ]
+    assert summary["prototype_descriptive_outputs"] == [
+        "prototype_support__per_date",
+        "prototype_support__pooled",
+    ]
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+        "prototype_rsa__per_date__response_window",
+        "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+    ]
+
+
+def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narrows(tmp_path):
+    output_root = tmp_path / "stage3_rsa"
+
+    first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
+    stale_prototype_rsa = first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png"
+    stale_prototype_rdm = first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png"
+
+    assert stale_prototype_rsa.exists()
+    assert stale_prototype_rdm.exists()
+
+    narrowed_outputs = {
+        key: value.copy() if isinstance(value, pd.DataFrame) else value
+        for key, value in _stage3_outputs_with_prototype_supplement().items()
+    }
+    narrowed_outputs["prototype_rsa_results__per_date"] = narrowed_outputs["prototype_rsa_results__per_date"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    narrowed_outputs["prototype_support__per_date"] = narrowed_outputs["prototype_support__per_date"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    narrowed_outputs["prototype_support__pooled"] = narrowed_outputs["prototype_support__pooled"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    narrowed_outputs.pop("prototype_rdm__pooled__full_trajectory")
+
+    second_written = write_stage3_outputs(narrowed_outputs, output_root)
+    summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert (second_written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
+    assert (second_written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
+    assert not stale_prototype_rsa.exists()
+    assert not stale_prototype_rdm.exists()
+    assert not (second_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
+    assert not (second_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
+    assert summary["prototype_views"] == ["response_window"]
+    assert summary["prototype_figure_names"] == [
+        "prototype_rsa__per_date__response_window",
+        "prototype_rdm__pooled__response_window",
+    ]
 
 
 def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():

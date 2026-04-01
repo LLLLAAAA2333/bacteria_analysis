@@ -40,10 +40,22 @@ REQUIRED_FIGURES: tuple[str, ...] = (
     "view_comparison_summary",
 )
 DEFAULT_FIGURE_VIEWS: tuple[str, ...] = ("response_window", "full_trajectory")
+PROTOTYPE_QC_ARTIFACT_NAMES: tuple[str, ...] = (
+    "prototype_support__per_date",
+    "prototype_support__pooled",
+)
 
 
 def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
     return [f"neural_vs_top_model_rdm__{view_name}" for view_name in view_names]
+
+
+def _build_prototype_rsa_figure_names(view_names: list[str]) -> list[str]:
+    return [f"prototype_rsa__per_date__{view_name}" for view_name in view_names]
+
+
+def _build_prototype_rdm_figure_names(view_names: list[str]) -> list[str]:
+    return [f"prototype_rdm__pooled__{view_name}" for view_name in view_names]
 
 
 def _canonicalize_view_order(view_names: list[str]) -> list[str]:
@@ -148,6 +160,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         view_comparison,
         dirs["figures_dir"] / "view_comparison_summary.png",
     )
+    prototype_summary = _write_prototype_supplementary_figures(core_outputs, dirs, written)
 
     summary = _build_run_summary(
         required_tables=required_tables,
@@ -156,6 +169,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         family_summary=family_summary,
         top_primary_models=top_primary_models,
         primary_view=primary_view,
+        prototype_summary=prototype_summary,
     )
     written["run_summary_json"] = write_json(summary, dirs["output_root"] / "run_summary.json")
     written["run_summary_md"] = _write_markdown_summary(summary, dirs["output_root"] / "run_summary.md")
@@ -168,6 +182,8 @@ def _remove_legacy_stage3_figures(figures_dir: Path) -> None:
         legacy_figure.unlink()
 
     for stale_figure in figures_dir.glob("neural_vs_top_model_rdm__*.png"):
+        stale_figure.unlink()
+    for stale_figure in figures_dir.glob("prototype_*.png"):
         stale_figure.unlink()
 
 
@@ -208,7 +224,11 @@ def _prepare_for_parquet(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _is_qc_artifact(artifact_name: str) -> bool:
-    return artifact_name in {"model_input_coverage", "model_feature_filtering"} or artifact_name.endswith("_qc")
+    return artifact_name in {
+        "model_input_coverage",
+        "model_feature_filtering",
+        *PROTOTYPE_QC_ARTIFACT_NAMES,
+    } or artifact_name.endswith("_qc")
 
 
 def _collect_model_families(registry: pd.DataFrame) -> dict[str, list[str]]:
@@ -427,6 +447,128 @@ def _plot_view_comparison_summary(view_comparison: pd.DataFrame, path: Path) -> 
     return _save_figure(path)
 
 
+def _write_prototype_supplementary_figures(
+    core_outputs: dict[str, pd.DataFrame],
+    dirs: dict[str, Path],
+    written: dict[str, Path],
+) -> dict[str, Any]:
+    prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
+    prototype_rsa_views = _prototype_rsa_views(prototype_rsa_results)
+    prototype_rdm_views = _prototype_rdm_views(core_outputs)
+    prototype_figure_names = [
+        *_build_prototype_rsa_figure_names(prototype_rsa_views),
+        *_build_prototype_rdm_figure_names(prototype_rdm_views),
+    ]
+
+    for figure_name, view_name in zip(
+        _build_prototype_rsa_figure_names(prototype_rsa_views),
+        prototype_rsa_views,
+        strict=False,
+    ):
+        written[figure_name] = _plot_prototype_rsa_per_date(
+            prototype_rsa_results,
+            view_name=view_name,
+            path=dirs["figures_dir"] / f"{figure_name}.png",
+        )
+
+    for figure_name, view_name in zip(
+        _build_prototype_rdm_figure_names(prototype_rdm_views),
+        prototype_rdm_views,
+        strict=False,
+    ):
+        written[f"figure__{figure_name}"] = _plot_prototype_pooled_rdm(
+            _dataframe_or_none(core_outputs, figure_name),
+            stimulus_sample_map=_dataframe_or_none(core_outputs, "stimulus_sample_map"),
+            view_name=view_name,
+            path=dirs["figures_dir"] / f"{figure_name}.png",
+        )
+
+    return {
+        "prototype_supplement_enabled": _prototype_supplement_enabled(core_outputs),
+        "prototype_views": _prototype_views(core_outputs),
+        "prototype_dates": _prototype_dates(core_outputs),
+        "prototype_table_names": _prototype_table_names(core_outputs),
+        "prototype_figure_names": prototype_figure_names,
+        "prototype_descriptive_outputs": _prototype_descriptive_outputs(core_outputs),
+    }
+
+
+def _plot_prototype_rsa_per_date(
+    prototype_rsa_results: pd.DataFrame | None,
+    *,
+    view_name: str,
+    path: Path,
+) -> Path:
+    if prototype_rsa_results is None or prototype_rsa_results.empty:
+        return _plot_empty_figure(path, title=f"Prototype RSA By Date ({view_name})", message="No prototype RSA table")
+
+    required_columns = {"date", "view_name", "model_id", "rsa_similarity"}
+    if not required_columns.issubset(prototype_rsa_results.columns):
+        return _plot_empty_figure(
+            path,
+            title=f"Prototype RSA By Date ({view_name})",
+            message="Missing prototype RSA columns",
+        )
+
+    summary = prototype_rsa_results.copy()
+    summary["date"] = summary["date"].astype(str)
+    summary["view_name"] = summary["view_name"].astype(str)
+    summary["model_id"] = summary["model_id"].astype(str)
+    summary["rsa_similarity"] = pd.to_numeric(summary["rsa_similarity"], errors="coerce")
+    summary = summary.loc[summary["view_name"] == view_name]
+    if "score_status" in summary.columns:
+        summary = summary.loc[_string_column(summary, "score_status").eq("ok")]
+    summary = summary.loc[np.isfinite(summary["rsa_similarity"])]
+    if summary.empty:
+        return _plot_empty_figure(
+            path,
+            title=f"Prototype RSA By Date ({view_name})",
+            message="No finite prototype RSA values",
+        )
+
+    ordered_dates = sorted(summary["date"].unique().tolist())
+    plt.figure(figsize=(max(6.0, 1.4 * len(ordered_dates) + 2.0), 4.5))
+    for model_id, group in summary.groupby("model_id", sort=False):
+        ordered = group.sort_values("date")
+        plt.plot(
+            ordered["date"],
+            ordered["rsa_similarity"],
+            marker="o",
+            label=model_id,
+        )
+    plt.xlabel("Date")
+    plt.ylabel("RSA similarity")
+    plt.title(f"Prototype RSA By Date ({view_name})")
+    plt.xticks(rotation=45, ha="right")
+    plt.legend(title="Model")
+    return _save_figure(path)
+
+
+def _plot_prototype_pooled_rdm(
+    prototype_rdm: pd.DataFrame | None,
+    *,
+    stimulus_sample_map: pd.DataFrame | None,
+    view_name: str,
+    path: Path,
+) -> Path:
+    figure, axis = plt.subplots(figsize=(5.5, 4.5))
+    figure.suptitle(f"Prototype Pooled RDM ({view_name})", fontsize=12)
+
+    order_labels: list[str] | None = []
+    if prototype_rdm is not None:
+        order_labels = _coerce_rdm_heatmap_frame(prototype_rdm).index.tolist()
+
+    _render_rdm_axis(
+        axis,
+        prototype_rdm,
+        stimulus_sample_map=stimulus_sample_map,
+        title=f"{view_name}: pooled prototype",
+        fallback_message="No pooled prototype RDM provided",
+        order_labels=order_labels,
+    )
+    return _save_figure(path)
+
+
 def _find_matrix_frame(core_outputs: dict[str, pd.DataFrame], aliases: tuple[str, ...]) -> pd.DataFrame | None:
     for alias in aliases:
         frame = core_outputs.get(alias)
@@ -597,6 +739,13 @@ def _plot_empty_figure(path: Path, *, title: str, message: str) -> Path:
     return _save_figure(path)
 
 
+def _dataframe_or_none(core_outputs: dict[str, pd.DataFrame], key: str) -> pd.DataFrame | None:
+    frame = core_outputs.get(key)
+    if isinstance(frame, pd.DataFrame):
+        return frame
+    return None
+
+
 def _build_run_summary(
     *,
     required_tables: dict[str, pd.DataFrame],
@@ -605,6 +754,7 @@ def _build_run_summary(
     family_summary: dict[str, list[str]],
     top_primary_models: dict[str, str],
     primary_view: str | None,
+    prototype_summary: dict[str, Any],
 ) -> dict[str, Any]:
     table_names = [artifact_name for artifact_name, _ in TABLE_ARTIFACT_SPECS]
     qc_table_names = [artifact_name for artifact_name, _ in QC_ARTIFACT_SPECS]
@@ -618,7 +768,11 @@ def _build_run_summary(
     )
     view_names = _ordered_views(required_tables["rsa_results"], required_tables["rsa_view_comparison"])
     figure_view_names = _figure_view_names(required_tables["rsa_results"], required_tables["rsa_view_comparison"])
-    figure_names = [*REQUIRED_FIGURES, *_build_neural_vs_model_figure_names(figure_view_names)]
+    figure_names = [
+        *REQUIRED_FIGURES,
+        *_build_neural_vs_model_figure_names(figure_view_names),
+        *prototype_summary["prototype_figure_names"],
+    ]
 
     return {
         "views": view_names,
@@ -648,7 +802,73 @@ def _build_run_summary(
         "tables_dir": str(written["tables_dir"]),
         "figures_dir": str(written["figures_dir"]),
         "qc_dir": str(written["qc_dir"]),
+        "prototype_supplement_enabled": prototype_summary["prototype_supplement_enabled"],
+        "prototype_views": prototype_summary["prototype_views"],
+        "prototype_dates": prototype_summary["prototype_dates"],
+        "prototype_table_names": prototype_summary["prototype_table_names"],
+        "prototype_figure_names": prototype_summary["prototype_figure_names"],
+        "prototype_descriptive_outputs": prototype_summary["prototype_descriptive_outputs"],
     }
+
+
+def _prototype_supplement_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
+    return any(key.startswith("prototype_") and isinstance(value, pd.DataFrame) for key, value in core_outputs.items())
+
+
+def _prototype_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    view_names: list[str] = []
+    prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
+    prototype_support_per_date = _dataframe_or_none(core_outputs, "prototype_support__per_date")
+    prototype_support_pooled = _dataframe_or_none(core_outputs, "prototype_support__pooled")
+    for frame in (prototype_rsa_results, prototype_support_per_date, prototype_support_pooled):
+        if frame is None or "view_name" not in frame.columns:
+            continue
+        view_names.extend(frame["view_name"].astype(str).tolist())
+    view_names.extend(_prototype_rdm_views(core_outputs))
+    return _canonicalize_view_order(view_names)
+
+
+def _prototype_rsa_views(prototype_rsa_results: pd.DataFrame | None) -> list[str]:
+    if prototype_rsa_results is None or "view_name" not in prototype_rsa_results.columns:
+        return []
+    return _canonicalize_view_order(prototype_rsa_results["view_name"].astype(str).tolist())
+
+
+def _prototype_rdm_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    view_names = [
+        artifact_name.removeprefix("prototype_rdm__pooled__")
+        for artifact_name, frame in core_outputs.items()
+        if artifact_name.startswith("prototype_rdm__pooled__") and isinstance(frame, pd.DataFrame)
+    ]
+    return _canonicalize_view_order(view_names)
+
+
+def _prototype_dates(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    dates: set[str] = set()
+    for artifact_name in ("prototype_rsa_results__per_date", "prototype_support__per_date"):
+        frame = _dataframe_or_none(core_outputs, artifact_name)
+        if frame is None or "date" not in frame.columns:
+            continue
+        for value in frame["date"].dropna().astype(str):
+            if value:
+                dates.add(value)
+    return sorted(dates)
+
+
+def _prototype_table_names(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    table_names: list[str] = []
+    if _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date") is not None:
+        table_names.append("prototype_rsa_results__per_date")
+    table_names.extend(_build_prototype_rdm_figure_names(_prototype_rdm_views(core_outputs)))
+    return table_names
+
+
+def _prototype_descriptive_outputs(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    return [
+        artifact_name
+        for artifact_name in PROTOTYPE_QC_ARTIFACT_NAMES
+        if _dataframe_or_none(core_outputs, artifact_name) is not None
+    ]
 
 
 def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> list[str]:
@@ -707,6 +927,24 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
             f"- QC tables: {', '.join(summary['qc_table_names'])}",
             f"- Figures: {', '.join(summary['figure_names'])}",
             "",
+        ]
+    )
+
+    if summary["prototype_supplement_enabled"]:
+        lines.extend(
+            [
+                "## Prototype Supplement",
+                f"- Views: {', '.join(summary['prototype_views']) if summary['prototype_views'] else 'None'}",
+                f"- Dates: {', '.join(summary['prototype_dates']) if summary['prototype_dates'] else 'None'}",
+                f"- Prototype tables: {', '.join(summary['prototype_table_names']) if summary['prototype_table_names'] else 'None'}",
+                f"- Prototype figures: {', '.join(summary['prototype_figure_names']) if summary['prototype_figure_names'] else 'None'}",
+                f"- Prototype descriptive outputs: {', '.join(summary['prototype_descriptive_outputs']) if summary['prototype_descriptive_outputs'] else 'None'}",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
             "## Output Paths",
             f"- Tables directory: {summary['tables_dir']}",
             f"- Figures directory: {summary['figures_dir']}",
