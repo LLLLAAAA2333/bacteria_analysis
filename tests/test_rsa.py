@@ -616,11 +616,28 @@ def test_write_stage3_outputs_writes_required_tables(tmp_path, synthetic_stage3_
     assert (written["qc_dir"] / "model_input_coverage.parquet").exists()
     assert (written["qc_dir"] / "model_feature_filtering.parquet").exists()
     assert (written["figures_dir"] / "ranked_primary_model_rsa.png").exists()
-    assert (written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
     assert (written["figures_dir"] / "leave_one_stimulus_out_robustness.png").exists()
     assert (written["figures_dir"] / "view_comparison_summary.png").exists()
     assert (written["output_root"] / "run_summary.json").exists()
     assert (written["output_root"] / "run_summary.md").exists()
+
+def test_write_stage3_outputs_writes_per_view_neural_model_figures(tmp_path, synthetic_stage3_outputs):
+    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
+    assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
+    assert not (written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
+
+
+def test_write_stage3_outputs_reports_per_view_figure_names(tmp_path, synthetic_stage3_outputs):
+    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert "neural_vs_top_model_rdm__response_window" in summary["figure_names"]
+    assert "neural_vs_top_model_rdm__full_trajectory" in summary["figure_names"]
+    assert "neural_vs_top_model_rdm_panel" not in summary["figure_names"]
 
 
 def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path, synthetic_stage3_outputs):
@@ -730,3 +747,4 @@ def test_run_stage3_rsa_keeps_global_profile_when_curated_subset_membership_is_e
 
     assert "global_profile" in set(results["rsa_results"]["model_id"])
     assert "bile_acid" not in set(results["rsa_results"]["model_id"])
+

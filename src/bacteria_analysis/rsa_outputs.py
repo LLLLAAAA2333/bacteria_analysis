@@ -34,10 +34,13 @@ QC_ARTIFACT_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 REQUIRED_FIGURES: tuple[str, ...] = (
     "ranked_primary_model_rsa",
-    "neural_vs_top_model_rdm_panel",
     "leave_one_stimulus_out_robustness",
     "view_comparison_summary",
 )
+
+
+def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
+    return [f"neural_vs_top_model_rdm__{view_name}" for view_name in view_names]
 
 
 def ensure_stage3_output_dirs(output_root: str | Path) -> dict[str, Path]:
@@ -99,9 +102,10 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     rsa_results = required_tables["rsa_results"]
     leave_one_out = required_tables["rsa_leave_one_stimulus_out"]
     view_comparison = required_tables["rsa_view_comparison"]
+    view_names = _ordered_views(rsa_results, view_comparison)
     family_summary = _collect_model_families(registry)
     top_primary_models = _build_top_primary_models_by_view(rsa_results, family_summary["primary_models"])
-    primary_view = _choose_primary_view(rsa_results)
+    primary_view = _choose_primary_view(rsa_results, view_candidates=view_names)
 
     written["ranked_primary_model_rsa"] = _plot_ranked_primary_model_rsa(
         rsa_results,
@@ -109,11 +113,13 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         path=dirs["figures_dir"] / "ranked_primary_model_rsa.png",
         primary_view=primary_view,
     )
-    written["neural_vs_top_model_rdm_panel"] = _plot_neural_vs_top_model_rdm_panel(
-        core_outputs,
-        top_primary_models,
-        dirs["figures_dir"] / "neural_vs_top_model_rdm_panel.png",
-    )
+    for figure_name, view_name in zip(_build_neural_vs_model_figure_names(view_names), view_names, strict=False):
+        written[figure_name] = _plot_neural_vs_top_model_rdm_view(
+            core_outputs,
+            top_primary_models,
+            view_name=view_name,
+            path=dirs["figures_dir"] / f"{figure_name}.png",
+        )
     written["leave_one_stimulus_out_robustness"] = _plot_leave_one_stimulus_out_robustness(
         leave_one_out,
         family_summary["primary_models"],
@@ -264,56 +270,52 @@ def _plot_ranked_primary_model_rsa(
     return _save_figure(path)
 
 
-def _plot_neural_vs_top_model_rdm_panel(
+def _plot_neural_vs_top_model_rdm_view(
     core_outputs: dict[str, pd.DataFrame],
     top_primary_models: dict[str, str],
+    *,
+    view_name: str,
     path: Path,
 ) -> Path:
-    views = list(top_primary_models)
-    if not views:
-        views = ["response_window", "full_trajectory"]
-
     figure, axes = plt.subplots(
-        nrows=len(views),
         ncols=2,
-        figsize=(9.5, max(4.0, 3.6 * len(views))),
+        figsize=(9.5, 4.0),
         squeeze=False,
     )
-    figure.suptitle("Neural-Versus-Top-Model RDM Comparison", fontsize=12)
+    figure.suptitle(f"Neural-Versus-Top-Model RDM Comparison ({view_name})", fontsize=12)
 
-    for row_index, view_name in enumerate(views):
-        top_model_id = top_primary_models.get(view_name)
-        neural_matrix = _find_matrix_frame(
+    top_model_id = top_primary_models.get(view_name)
+    neural_matrix = _find_matrix_frame(
+        core_outputs,
+        (
+            f"neural_rdm__{view_name}",
+            f"neural_rdm__{view_name}__pooled",
+            f"rdm_matrix__{view_name}__pooled",
+        ),
+    )
+    model_matrix = None
+    if top_model_id:
+        model_matrix = _find_matrix_frame(
             core_outputs,
             (
-                f"neural_rdm__{view_name}",
-                f"neural_rdm__{view_name}__pooled",
-                f"rdm_matrix__{view_name}__pooled",
+                f"model_rdm__{top_model_id}__{view_name}",
+                f"model_rdm__{view_name}__{top_model_id}",
+                f"model_rdm__{top_model_id}",
             ),
         )
-        model_matrix = None
-        if top_model_id:
-            model_matrix = _find_matrix_frame(
-                core_outputs,
-                (
-                    f"model_rdm__{top_model_id}__{view_name}",
-                    f"model_rdm__{view_name}__{top_model_id}",
-                    f"model_rdm__{top_model_id}",
-                ),
-            )
 
-        _render_rdm_axis(
-            axes[row_index, 0],
-            neural_matrix,
-            title=f"{view_name}: neural",
-            fallback_message="No neural matrix provided",
-        )
-        _render_rdm_axis(
-            axes[row_index, 1],
-            model_matrix,
-            title=f"{view_name}: {top_model_id or 'no top model'}",
-            fallback_message="No top-model matrix provided",
-        )
+    _render_rdm_axis(
+        axes[0, 0],
+        neural_matrix,
+        title=f"{view_name}: neural",
+        fallback_message="No neural matrix provided",
+    )
+    _render_rdm_axis(
+        axes[0, 1],
+        model_matrix,
+        title=f"{view_name}: {top_model_id or 'no top model'}",
+        fallback_message="No top-model matrix provided",
+    )
 
     return _save_figure(path)
 
@@ -468,6 +470,7 @@ def _build_run_summary(
         and key not in {"output_root", "tables_dir", "figures_dir", "qc_dir"}
     )
     view_names = _ordered_views(required_tables["rsa_results"], required_tables["rsa_view_comparison"])
+    figure_names = [*REQUIRED_FIGURES, *_build_neural_vs_model_figure_names(view_names)]
 
     return {
         "views": view_names,
@@ -491,7 +494,7 @@ def _build_run_summary(
         ],
         "qc_table_names": qc_table_names,
         "additional_table_names": additional_table_names,
-        "figure_names": list(REQUIRED_FIGURES),
+        "figure_names": figure_names,
         "n_required_tables_written": sum(int(not frame.empty) for frame in required_tables.values()),
         "n_required_qc_tables_written": sum(int(not frame.empty) for frame in required_qc.values()),
         "tables_dir": str(written["tables_dir"]),
@@ -513,8 +516,8 @@ def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> 
     return views
 
 
-def _choose_primary_view(rsa_results: pd.DataFrame) -> str | None:
-    views = _ordered_views(rsa_results, pd.DataFrame())
+def _choose_primary_view(rsa_results: pd.DataFrame, *, view_candidates: list[str] | None = None) -> str | None:
+    views = view_candidates or _ordered_views(rsa_results, pd.DataFrame())
     if not views:
         return None
     if "response_window" in views:
@@ -593,3 +596,4 @@ __all__ = [
     "ensure_stage3_output_dirs",
     "write_stage3_outputs",
 ]
+
