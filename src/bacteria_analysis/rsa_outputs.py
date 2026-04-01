@@ -300,6 +300,7 @@ def _plot_neural_vs_top_model_rdm_view(
     figure.suptitle(f"Neural-Versus-Top-Model RDM Comparison ({view_name})", fontsize=12)
 
     top_model_id = top_primary_models.get(view_name)
+    stimulus_sample_map = core_outputs.get("stimulus_sample_map")
     neural_matrix = _find_matrix_frame(
         core_outputs,
         (
@@ -322,12 +323,14 @@ def _plot_neural_vs_top_model_rdm_view(
     _render_rdm_axis(
         axes[0, 0],
         neural_matrix,
+        stimulus_sample_map=stimulus_sample_map,
         title=f"{view_name}: neural",
         fallback_message="No neural matrix provided",
     )
     _render_rdm_axis(
         axes[0, 1],
         model_matrix,
+        stimulus_sample_map=stimulus_sample_map,
         title=f"{view_name}: {top_model_id or 'no top model'}",
         fallback_message="No top-model matrix provided",
     )
@@ -417,6 +420,7 @@ def _render_rdm_axis(
     axis: plt.Axes,
     matrix_frame: pd.DataFrame | None,
     *,
+    stimulus_sample_map: pd.DataFrame | None,
     title: str,
     fallback_message: str,
 ) -> None:
@@ -426,7 +430,7 @@ def _render_rdm_axis(
         axis.axis("off")
         return
 
-    heatmap_frame = _coerce_rdm_heatmap_frame(matrix_frame)
+    heatmap_frame = _resolve_rdm_heatmap_frame(matrix_frame, stimulus_sample_map)
     if heatmap_frame.empty:
         axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
         axis.axis("off")
@@ -438,6 +442,24 @@ def _render_rdm_axis(
     axis.set_xticklabels(heatmap_frame.columns.tolist(), rotation=45, ha="right")
     axis.set_yticklabels(heatmap_frame.index.tolist())
     plt.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
+
+
+def _resolve_rdm_heatmap_frame(
+    matrix_frame: pd.DataFrame,
+    stimulus_sample_map: pd.DataFrame | None,
+) -> pd.DataFrame:
+    heatmap_frame = _coerce_rdm_heatmap_frame(matrix_frame)
+    if heatmap_frame.empty or stimulus_sample_map is None or stimulus_sample_map.empty:
+        return heatmap_frame
+
+    resolved_labels = _resolve_display_labels(heatmap_frame.index.tolist(), stimulus_sample_map)
+    if resolved_labels is None:
+        return heatmap_frame
+
+    resolved_frame = heatmap_frame.copy()
+    resolved_frame.index = pd.Index(resolved_labels)
+    resolved_frame.columns = pd.Index(resolved_labels)
+    return resolved_frame
 
 
 def _coerce_rdm_heatmap_frame(matrix_frame: pd.DataFrame) -> pd.DataFrame:
@@ -455,6 +477,38 @@ def _coerce_rdm_heatmap_frame(matrix_frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("RDM heatmap requires matching row and column labels")
     heatmap_frame = heatmap_frame.reindex(columns=heatmap_frame.index)
     return heatmap_frame.apply(pd.to_numeric, errors="coerce")
+
+
+def _resolve_display_labels(
+    stimulus_order: list[str],
+    stimulus_sample_map: pd.DataFrame,
+) -> list[str] | None:
+    if not stimulus_order:
+        return None
+    if "stimulus" not in stimulus_sample_map.columns:
+        return None
+
+    map_frame = stimulus_sample_map.copy()
+    map_frame["stimulus"] = map_frame["stimulus"].fillna("").astype(str).str.strip()
+    map_frame = map_frame.loc[map_frame["stimulus"] != ""]
+    if map_frame.empty or map_frame["stimulus"].duplicated().any():
+        return None
+
+    stimulus_lookup = map_frame.set_index("stimulus", drop=False)
+
+    for candidate_column in ("sample_id", "stim_name", "stimulus"):
+        if candidate_column not in stimulus_lookup.columns:
+            continue
+
+        candidate_series = stimulus_lookup.loc[stimulus_order, candidate_column].fillna("").astype(str).str.strip()
+        if candidate_series.empty or (candidate_series == "").any():
+            continue
+        if candidate_series.duplicated().any():
+            continue
+
+        return candidate_series.tolist()
+
+    return None
 
 
 def _plot_empty_figure(path: Path, *, title: str, message: str) -> Path:
