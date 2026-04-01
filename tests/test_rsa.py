@@ -981,6 +981,66 @@ def test_prepare_rdm_heatmap_frame_falls_back_to_aligned_original_order_when_neu
     assert model_heatmap.loc["S002", "S001"] == pytest.approx(0.2)
 
 
+def test_plot_neural_vs_top_model_rdm_view_keeps_model_in_original_order_when_neural_matrix_is_missing(tmp_path):
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b4_1", "stim_name": "Stimulus B4", "sample_id": "S004"},
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+        ]
+    )
+    model_matrix = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": 30.0, "b4_1": 10.0, "b2_1": 40.0},
+            {"stimulus_row": "b1_1", "b3_1": 30.0, "b1_1": 0.0, "b4_1": 50.0, "b2_1": 20.0},
+            {"stimulus_row": "b4_1", "b3_1": 10.0, "b1_1": 50.0, "b4_1": 0.0, "b2_1": 60.0},
+            {"stimulus_row": "b2_1", "b3_1": 40.0, "b1_1": 20.0, "b4_1": 60.0, "b2_1": 0.0},
+        ]
+    )
+    core_outputs = {
+        "stimulus_sample_map": stimulus_sample_map,
+        "model_rdm__global_profile__response_window": model_matrix,
+    }
+    captured: dict[str, object] = {}
+    original_render = rsa_outputs._render_rdm_axis
+
+    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
+        if title.endswith("global_profile"):
+            heatmap_frame, resolved_order = rsa_outputs._prepare_rdm_heatmap_frame(
+                matrix_frame,
+                stimulus_sample_map,
+                order_labels=order_labels,
+            )
+            captured["order_labels"] = order_labels
+            captured["resolved_order"] = resolved_order
+            captured["index_labels"] = heatmap_frame.index.tolist()
+        return original_render(
+            axis,
+            matrix_frame,
+            stimulus_sample_map=stimulus_sample_map,
+            title=title,
+            fallback_message=fallback_message,
+            order_labels=order_labels,
+        )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    try:
+        rsa_outputs._plot_neural_vs_top_model_rdm_view(
+            core_outputs,
+            {"response_window": "global_profile"},
+            view_name="response_window",
+            path=tmp_path / "missing_neural.png",
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert captured["order_labels"] == []
+    assert captured["resolved_order"] == ["b3_1", "b1_1", "b4_1", "b2_1"]
+    assert captured["index_labels"] == ["S003", "S001", "S004", "S002"]
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):

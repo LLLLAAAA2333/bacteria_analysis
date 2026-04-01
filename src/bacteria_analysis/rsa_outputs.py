@@ -322,7 +322,7 @@ def _plot_neural_vs_top_model_rdm_view(
             ),
         )
 
-    neural_order_labels: list[str] | None = None
+    neural_order_labels: list[str] | None = []
     if neural_matrix is not None:
         _, neural_order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
 
