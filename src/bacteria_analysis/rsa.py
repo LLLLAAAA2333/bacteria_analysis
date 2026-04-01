@@ -460,6 +460,32 @@ def _build_prototype_supplement_outputs(
             view,
             group_columns=("stimulus", "stim_name"),
         )
+        per_date_prototypes = _ensure_frame_schema(per_date_prototypes, ["date", "stimulus", "stim_name"])
+        pooled_prototypes = _ensure_frame_schema(pooled_prototypes, ["stimulus", "stim_name"])
+        per_date_support = _ensure_frame_schema(
+            per_date_support,
+            [
+                "date",
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        )
+        pooled_support = _ensure_frame_schema(
+            pooled_support,
+            [
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_dates_contributed",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        )
 
         per_date_support_frames.append(
             per_date_support.assign(view_name=view_name)[
@@ -762,6 +788,15 @@ def _concat_summary_frames(frames: list[pd.DataFrame], *, columns: list[str]) ->
     if not non_empty_frames:
         return pd.DataFrame(columns=columns)
     return pd.concat(non_empty_frames, ignore_index=True)[columns]
+
+
+def _ensure_frame_schema(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    normalized = frame.copy()
+    for column in columns:
+        if column not in normalized.columns:
+            normalized[column] = pd.Series(dtype=object)
+    ordered_columns = columns + [column for column in normalized.columns if column not in columns]
+    return normalized[ordered_columns]
 
 
 def _should_skip_model_build_error(exc: ValueError) -> bool:

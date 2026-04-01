@@ -14,8 +14,9 @@ from bacteria_analysis.rsa import (
     summarize_leave_one_stimulus_out,
 )
 from bacteria_analysis import rsa_outputs
+from bacteria_analysis.model_space import build_model_rdm
 from bacteria_analysis.reliability import TrialView
-from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs
+from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_grouped_prototypes, build_prototype_rdm
 from bacteria_analysis.rsa_outputs import write_stage3_outputs
 
 
@@ -188,6 +189,28 @@ def _stage3_prototype_inputs() -> PrototypeSupplementInputs:
                 timepoints=(0,),
                 metadata=metadata,
                 values=full_trajectory,
+            ),
+        },
+    )
+
+
+def _empty_stage3_prototype_inputs() -> PrototypeSupplementInputs:
+    metadata = pd.DataFrame(columns=["date", "stimulus", "stim_name"])
+    empty_values = np.empty((0, 1, 4), dtype=float)
+    return PrototypeSupplementInputs(
+        metadata=metadata,
+        views={
+            "response_window": TrialView(
+                name="response_window",
+                timepoints=(0,),
+                metadata=metadata,
+                values=empty_values,
+            ),
+            "full_trajectory": TrialView(
+                name="full_trajectory",
+                timepoints=(0,),
+                metadata=metadata,
+                values=empty_values,
             ),
         },
     )
@@ -1340,6 +1363,63 @@ def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present(
     }.issubset(results["prototype_rsa_results__per_date"].columns)
 
 
+def test_run_stage3_rsa_returns_empty_prototype_outputs_with_expected_schema_for_empty_views():
+    results = run_stage3_rsa(
+        _stage3_prototype_resolved_inputs(),
+        neural_matrices=_stage3_neural_rdms(),
+        prototype_inputs=_empty_stage3_prototype_inputs(),
+        permutations=10,
+        seed=0,
+    )
+
+    assert results["prototype_rsa_results__per_date"].empty
+    assert results["prototype_rsa_results__per_date"].columns.tolist() == [
+        "date",
+        "view_name",
+        "reference_view_name",
+        "comparison_scope",
+        "model_id",
+        "model_label",
+        "model_tier",
+        "model_status",
+        "feature_kind",
+        "distance_kind",
+        "excluded_from_primary_ranking",
+        "score_method",
+        "score_status",
+        "n_stimuli",
+        "n_shared_entries",
+        "rsa_similarity",
+        "p_value_raw",
+        "p_value_fdr",
+        "is_top_model",
+    ]
+    assert results["prototype_support__per_date"].empty
+    assert results["prototype_support__per_date"].columns.tolist() == [
+        "date",
+        "view_name",
+        "stimulus",
+        "stim_name",
+        "n_trials",
+        "n_total_features",
+        "n_supported_features",
+        "n_all_nan_features",
+    ]
+    assert results["prototype_support__pooled"].empty
+    assert results["prototype_support__pooled"].columns.tolist() == [
+        "view_name",
+        "stimulus",
+        "stim_name",
+        "n_trials",
+        "n_dates_contributed",
+        "n_total_features",
+        "n_supported_features",
+        "n_all_nan_features",
+    ]
+    assert results["prototype_rdm__pooled__response_window"].columns.tolist() == ["stimulus_row"]
+    assert results["prototype_rdm__pooled__full_trajectory"].columns.tolist() == ["stimulus_row"]
+
+
 def test_run_stage3_rsa_keeps_primary_rsa_results_unchanged_when_prototype_inputs_are_present():
     baseline = run_stage3_rsa(
         _stage3_prototype_resolved_inputs(),
@@ -1388,15 +1468,58 @@ def test_run_stage3_rsa_corrects_prototype_fdr_across_full_table_and_ignores_exc
 
 
 def test_run_stage3_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks_sparse_rows_invalid():
+    resolved_inputs = _stage3_prototype_resolved_inputs()
+    prototype_inputs = _stage3_prototype_inputs()
     results = run_stage3_rsa(
-        _stage3_prototype_resolved_inputs(),
+        resolved_inputs,
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_stage3_prototype_inputs(),
+        prototype_inputs=prototype_inputs,
         permutations=10,
         seed=0,
     )
 
     prototype = results["prototype_rsa_results__per_date"]
+    restricted_row = prototype.loc[
+        prototype["date"].eq("2026-03-11")
+        & prototype["view_name"].eq("response_window")
+        & prototype["model_id"].eq("global_profile")
+    ].iloc[0]
+    view = prototype_inputs.views["response_window"]
+    per_date_prototypes, _ = build_grouped_prototypes(
+        view,
+        group_columns=("date", "stimulus", "stim_name"),
+    )
+    date_prototypes = per_date_prototypes.loc[per_date_prototypes["date"].eq("2026-03-11")].reset_index(drop=True)
+    stimulus_labels = date_prototypes["stimulus"].astype(str).tolist()
+    neural_matrix = build_prototype_rdm(date_prototypes, id_columns=("stimulus",))
+    full_model_matrix = build_model_rdm(resolved_inputs, "global_profile")
+    restricted_model_matrix = (
+        full_model_matrix.set_index("stimulus_row")
+        .loc[stimulus_labels, stimulus_labels]
+        .pipe(lambda frame: frame.assign(stimulus_row=frame.index).reset_index(drop=True))
+    )
+
+    restricted_score = compute_rsa_score(neural_matrix, restricted_model_matrix)
+    restricted_null = build_permutation_null(neural_matrix, restricted_model_matrix, n_iterations=10, seed=0)
+    restricted_null_values = restricted_null["rsa_similarity"].to_numpy(dtype=float)
+    restricted_null_values = restricted_null_values[np.isfinite(restricted_null_values)]
+    expected_restricted_p = float(
+        (1 + np.sum(restricted_null_values >= restricted_score["rsa_similarity"])) / (restricted_null_values.size + 1)
+    )
+
+    unrestricted_null = build_permutation_null(neural_matrix, full_model_matrix, n_iterations=10, seed=0)
+    unrestricted_null_values = unrestricted_null["rsa_similarity"].to_numpy(dtype=float)
+    unrestricted_null_values = unrestricted_null_values[np.isfinite(unrestricted_null_values)]
+    unrestricted_p = float(
+        (1 + np.sum(unrestricted_null_values >= restricted_score["rsa_similarity"])) / (unrestricted_null_values.size + 1)
+    )
+
+    assert restricted_row["n_stimuli"] == 3
+    assert restricted_row["score_status"] == "ok"
+    assert restricted_row["n_shared_entries"] == 3
+    assert restricted_row["p_value_raw"] == pytest.approx(expected_restricted_p)
+    assert unrestricted_p != pytest.approx(expected_restricted_p)
+
     sparse_rows = prototype.loc[prototype["date"].eq("2026-03-13")].reset_index(drop=True)
 
     assert not sparse_rows.empty
