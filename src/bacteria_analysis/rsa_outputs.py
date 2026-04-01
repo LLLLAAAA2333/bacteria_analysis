@@ -500,7 +500,10 @@ def _resolve_display_labels(
         if candidate_column not in stimulus_lookup.columns:
             continue
 
-        candidate_series = stimulus_lookup.loc[stimulus_order, candidate_column].fillna("").astype(str).str.strip()
+        candidate_series = stimulus_lookup[candidate_column].reindex(stimulus_order)
+        if candidate_series.isna().any():
+            continue
+        candidate_series = candidate_series.fillna("").astype(str).str.strip()
         if candidate_series.empty or (candidate_series == "").any():
             continue
         if candidate_series.duplicated().any():
