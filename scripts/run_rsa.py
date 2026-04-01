@@ -16,6 +16,7 @@ if str(SRC_DIR) not in sys.path:
 from bacteria_analysis.model_space import resolve_model_inputs
 from bacteria_analysis.rsa import load_stage2_pooled_neural_rdms, run_stage3_rsa
 from bacteria_analysis.rsa_outputs import write_stage3_outputs
+from bacteria_analysis.rsa_prototypes import load_prototype_supplement_inputs
 
 DEFAULT_STAGE2_ROOT = Path("results/stage2_geometry")
 DEFAULT_MATRIX_PATH = Path("data/matrix.xlsx")
@@ -34,6 +35,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--model-input-root",
         default=str(DEFAULT_MODEL_INPUT_ROOT),
         help="Directory containing Stage 3 model input CSVs.",
+    )
+    parser.add_argument(
+        "--preprocess-root",
+        default=None,
+        help="Optional preprocessing output root containing trial-level prototype inputs.",
     )
     parser.add_argument("--output-root", default="results", help="Base directory for Stage 3 outputs.")
     parser.add_argument("--permutations", type=int, default=1000, help="Number of stimulus-label permutations.")
@@ -89,12 +95,17 @@ def main(argv: list[str] | None = None) -> int:
         model_input_root = resolve_model_input_root(args.model_input_root)
         neural_matrices = load_stage2_pooled_neural_rdms(stage2_root)
         resolved_inputs = resolve_model_inputs(model_input_root, matrix_path)
-        core_outputs = run_stage3_rsa(
-            resolved_inputs,
-            neural_matrices=neural_matrices,
-            permutations=args.permutations,
-            seed=args.seed,
-        )
+        run_kwargs: dict[str, object] = {
+            "neural_matrices": neural_matrices,
+            "permutations": args.permutations,
+            "seed": args.seed,
+        }
+        if args.preprocess_root:
+            run_kwargs["prototype_inputs"] = load_prototype_supplement_inputs(
+                args.preprocess_root,
+                view_names=tuple(neural_matrices),
+            )
+        core_outputs = run_stage3_rsa(resolved_inputs, **run_kwargs)
         stage3_output_root = Path(args.output_root) / "stage3_rsa"
         written = write_stage3_outputs(core_outputs, stage3_output_root)
     except Exception as exc:  # pragma: no cover - exercised in CLI smoke tests
