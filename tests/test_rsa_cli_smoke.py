@@ -385,6 +385,7 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
     assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_aggregation"] == "mean"
     assert summary["prototype_views"] == ["response_window", "full_trajectory"]
     assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
     assert summary["prototype_table_names"] == [
@@ -413,6 +414,44 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
         "prototype_rdm__pooled__response_window",
         "prototype_rdm__pooled__full_trajectory",
     ]
+
+
+def test_cli_runs_and_writes_stage3_prototype_supplement_outputs_with_median_aggregation(tmp_path, stage3_fixture_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_rsa.py",
+            "--stage2-root",
+            str(stage3_fixture_root / "stage2_geometry"),
+            "--matrix",
+            str(stage3_fixture_root / "matrix.xlsx"),
+            "--model-input-root",
+            str(stage3_fixture_root / "model_space"),
+            "--preprocess-root",
+            str(stage3_fixture_root / "preprocess"),
+            "--prototype-aggregation",
+            "median",
+            "--output-root",
+            str(output_root),
+            "--permutations",
+            "10",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    stage3_root = output_root / "stage3_rsa"
+    assert (stage3_root / "figures" / "prototype_rdm_comparison__per_date__response_window.png").exists()
+
+    summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_aggregation"] == "median"
 
 
 def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path):

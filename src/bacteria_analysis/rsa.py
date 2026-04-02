@@ -13,6 +13,7 @@ from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_gr
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
 INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = "internal__prototype_rdm__per_date__"
+INTERNAL_PROTOTYPE_AGGREGATION_KEY = "internal__prototype_aggregation"
 
 
 def align_rdm_upper_triangles(neural_matrix: pd.DataFrame, model_matrix: pd.DataFrame) -> pd.DataFrame:
@@ -238,6 +239,7 @@ def run_stage3_rsa(
     *,
     neural_matrices: dict[str, pd.DataFrame],
     prototype_inputs: PrototypeSupplementInputs | None = None,
+    prototype_aggregation: str = "mean",
     permutations: int = 0,
     seed: int = 0,
     view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
@@ -411,11 +413,15 @@ def run_stage3_rsa(
         ],
     )
     if prototype_inputs is not None:
+        core_outputs[INTERNAL_PROTOTYPE_AGGREGATION_KEY] = pd.DataFrame(
+            {"prototype_aggregation": [prototype_aggregation]}
+        )
         core_outputs.update(
             _build_prototype_supplement_outputs(
                 resolved_inputs,
                 core_outputs=core_outputs,
                 prototype_inputs=prototype_inputs,
+                prototype_aggregation=prototype_aggregation,
                 view_names=requested_views,
                 permutations=permutations,
                 seed=seed,
@@ -429,6 +435,7 @@ def _build_prototype_supplement_outputs(
     *,
     core_outputs: dict[str, pd.DataFrame],
     prototype_inputs: PrototypeSupplementInputs,
+    prototype_aggregation: str,
     view_names: list[str],
     permutations: int,
     seed: int,
@@ -457,10 +464,12 @@ def _build_prototype_supplement_outputs(
         per_date_prototypes, per_date_support = build_grouped_prototypes(
             view,
             group_columns=("date", "stimulus", "stim_name"),
+            aggregation=prototype_aggregation,
         )
         pooled_prototypes, pooled_support = build_grouped_prototypes(
             view,
             group_columns=("stimulus", "stim_name"),
+            aggregation=prototype_aggregation,
         )
         per_date_prototypes = _ensure_frame_schema(per_date_prototypes, ["date", "stimulus", "stim_name"])
         pooled_prototypes = _ensure_frame_schema(pooled_prototypes, ["stimulus", "stim_name"])

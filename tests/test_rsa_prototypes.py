@@ -44,6 +44,38 @@ def test_build_grouped_prototypes_uses_nanmean_and_tracks_support():
     assert support_row["n_all_nan_features"] == 0
 
 
+def test_build_grouped_prototypes_supports_nanmedian():
+    from bacteria_analysis import rsa_prototypes
+
+    metadata = pd.DataFrame(
+        {
+            "date": ["2026-03-11", "2026-03-11", "2026-03-11"],
+            "stimulus": ["b1_1", "b1_1", "b1_1"],
+            "stim_name": ["A001 stationary", "A001 stationary", "A001 stationary"],
+        }
+    )
+    values = np.array(
+        [
+            [[1.0, 2.0]],
+            [[3.0, 4.0]],
+            [[100.0, 200.0]],
+        ],
+        dtype=float,
+    )
+    view = _trial_view(metadata, values)
+
+    prototypes, support = rsa_prototypes.build_grouped_prototypes(
+        view,
+        group_columns=("date", "stimulus", "stim_name"),
+        aggregation="median",
+    )
+
+    row = prototypes.iloc[0]
+    assert row["f000"] == pytest.approx(3.0)
+    assert row["f001"] == pytest.approx(4.0)
+    assert support.iloc[0]["n_trials"] == 3
+
+
 def test_build_pooled_prototype_support_tracks_contributing_dates():
     from bacteria_analysis import rsa_prototypes
 

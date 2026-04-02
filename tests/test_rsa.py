@@ -1452,6 +1452,7 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
     assert not any(name.startswith("internal__") for name in summary["additional_table_names"])
     assert not list((written["tables_dir"]).glob("internal__*.parquet"))
     assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_aggregation"] == "mean"
     assert summary["prototype_views"] == ["response_window", "full_trajectory"]
     assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
     assert summary["prototype_table_names"] == [
@@ -1720,6 +1721,8 @@ def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present(
         "internal__prototype_rdm__per_date__full_trajectory__2026-03-11",
         "internal__prototype_rdm__per_date__full_trajectory__2026-03-13",
     }.issubset(results)
+    assert "internal__prototype_aggregation" in results
+    assert results["internal__prototype_aggregation"]["prototype_aggregation"].iloc[0] == "mean"
     assert results["internal__prototype_rdm__per_date__response_window__2026-03-11"].columns.tolist() == [
         "stimulus_row",
         "A001",

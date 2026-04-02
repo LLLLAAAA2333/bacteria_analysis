@@ -46,6 +46,7 @@ PROTOTYPE_QC_ARTIFACT_NAMES: tuple[str, ...] = (
 )
 INTERNAL_ONLY_ARTIFACT_PREFIX = "internal__"
 INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}prototype_rdm__per_date__"
+INTERNAL_PROTOTYPE_AGGREGATION_KEY = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}prototype_aggregation"
 
 
 def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
@@ -548,6 +549,7 @@ def _write_prototype_supplementary_figures(
 
     return {
         "prototype_supplement_enabled": _prototype_supplement_enabled(core_outputs),
+        "prototype_aggregation": _prototype_aggregation(core_outputs),
         "prototype_views": _prototype_views(core_outputs),
         "prototype_dates": _prototype_dates(core_outputs),
         "prototype_table_names": _prototype_table_names(core_outputs),
@@ -1014,6 +1016,7 @@ def _build_run_summary(
         "figures_dir": str(written["figures_dir"]),
         "qc_dir": str(written["qc_dir"]),
         "prototype_supplement_enabled": prototype_summary["prototype_supplement_enabled"],
+        "prototype_aggregation": prototype_summary["prototype_aggregation"],
         "prototype_views": prototype_summary["prototype_views"],
         "prototype_dates": prototype_summary["prototype_dates"],
         "prototype_table_names": prototype_summary["prototype_table_names"],
@@ -1024,6 +1027,14 @@ def _build_run_summary(
 
 def _prototype_supplement_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
     return any(key.startswith("prototype_") and isinstance(value, pd.DataFrame) for key, value in core_outputs.items())
+
+
+def _prototype_aggregation(core_outputs: dict[str, pd.DataFrame]) -> str | None:
+    config = _dataframe_or_none(core_outputs, INTERNAL_PROTOTYPE_AGGREGATION_KEY)
+    if config is None or config.empty or "prototype_aggregation" not in config.columns:
+        return None
+    value = str(config["prototype_aggregation"].iloc[0]).strip().lower()
+    return value or None
 
 
 def _prototype_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
@@ -1141,6 +1152,7 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
         lines.extend(
             [
                 "## Prototype Supplement",
+                f"- Prototype aggregation: {summary['prototype_aggregation'] or 'None'}",
                 f"- Views: {', '.join(summary['prototype_views']) if summary['prototype_views'] else 'None'}",
                 f"- Dates: {', '.join(summary['prototype_dates']) if summary['prototype_dates'] else 'None'}",
                 f"- Prototype tables: {', '.join(summary['prototype_table_names']) if summary['prototype_table_names'] else 'None'}",

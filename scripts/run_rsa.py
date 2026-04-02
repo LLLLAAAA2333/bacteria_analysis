@@ -41,6 +41,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional preprocessing output root containing trial-level prototype inputs.",
     )
+    parser.add_argument(
+        "--prototype-aggregation",
+        choices=("mean", "median"),
+        default="mean",
+        help="Aggregation used for prototype supplementary vectors when --preprocess-root is provided.",
+    )
     parser.add_argument("--output-root", default="results", help="Base directory for Stage 3 outputs.")
     parser.add_argument("--permutations", type=int, default=1000, help="Number of stimulus-label permutations.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for permutation and robustness summaries.")
@@ -105,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.preprocess_root,
                 view_names=tuple(neural_matrices),
             )
+            run_kwargs["prototype_aggregation"] = args.prototype_aggregation
         core_outputs = run_stage3_rsa(resolved_inputs, **run_kwargs)
         stage3_output_root = Path(args.output_root) / "stage3_rsa"
         written = write_stage3_outputs(core_outputs, stage3_output_root)

@@ -20,6 +20,8 @@ from bacteria_analysis.reliability import (
     load_reliability_inputs,
 )
 
+PROTOTYPE_AGGREGATIONS: tuple[str, str] = ("mean", "median")
+
 
 @dataclass(frozen=True)
 class PrototypeSupplementInputs:
@@ -56,13 +58,17 @@ def load_prototype_supplement_inputs(
 def build_grouped_prototypes(
     view: TrialView,
     group_columns: tuple[str, ...],
+    *,
+    aggregation: str = "mean",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Build mean prototype vectors and support QC for a grouped trial view."""
+    """Build grouped prototype vectors and support QC for a grouped trial view."""
 
     metadata = view.metadata.reset_index(drop=True)
     values = np.asarray(view.values, dtype=float)
     if values.ndim < 2:
         raise ValueError("prototype construction requires at least 2D trial values")
+    if aggregation not in PROTOTYPE_AGGREGATIONS:
+        raise ValueError(f"unknown prototype aggregation {aggregation!r}")
 
     records: list[dict[str, object]] = []
     support_rows: list[dict[str, object]] = []
@@ -76,7 +82,7 @@ def build_grouped_prototypes(
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            prototype_vector = np.nanmean(grouped_values, axis=0)
+            prototype_vector = _aggregate_grouped_values(grouped_values, aggregation=aggregation)
 
         feature_names = [f"f{index:03d}" for index in range(prototype_vector.shape[0])]
         record = {column: value for column, value in zip(group_columns, group_key, strict=True)}
@@ -100,6 +106,14 @@ def build_grouped_prototypes(
     prototypes = pd.DataFrame.from_records(records)
     support = pd.DataFrame.from_records(support_rows)
     return prototypes, support
+
+
+def _aggregate_grouped_values(grouped_values: np.ndarray, *, aggregation: str) -> np.ndarray:
+    if aggregation == "mean":
+        return np.nanmean(grouped_values, axis=0)
+    if aggregation == "median":
+        return np.nanmedian(grouped_values, axis=0)
+    raise ValueError(f"unknown prototype aggregation {aggregation!r}")
 
 
 def build_prototype_rdm(prototypes: pd.DataFrame, *, id_columns: tuple[str, ...]) -> pd.DataFrame:
