@@ -54,6 +54,10 @@ def _build_prototype_rsa_figure_names(view_names: list[str]) -> list[str]:
     return [f"prototype_rsa__per_date__{view_name}" for view_name in view_names]
 
 
+def _build_prototype_rdm_comparison_figure_names(view_names: list[str]) -> list[str]:
+    return [f"prototype_rdm_comparison__per_date__{view_name}" for view_name in view_names]
+
+
 def _build_prototype_rdm_figure_names(view_names: list[str]) -> list[str]:
     return [f"prototype_rdm__pooled__{view_name}" for view_name in view_names]
 
@@ -464,6 +468,7 @@ def _write_prototype_supplementary_figures(
     prototype_rdm_views = _prototype_rdm_views(core_outputs)
     prototype_figure_names = [
         *_build_prototype_rsa_figure_names(prototype_rsa_views),
+        *_build_prototype_rdm_comparison_figure_names(prototype_rsa_views),
         *_build_prototype_rdm_figure_names(prototype_rdm_views),
     ]
 
@@ -476,6 +481,17 @@ def _write_prototype_supplementary_figures(
             prototype_rsa_results,
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
+        )
+
+    for figure_name, view_name in zip(
+        _build_prototype_rdm_comparison_figure_names(prototype_rsa_views),
+        prototype_rsa_views,
+        strict=False,
+    ):
+        written[figure_name] = _plot_empty_figure(
+            dirs["figures_dir"] / f"{figure_name}.png",
+            title=f"Prototype RDM Comparison By Date ({view_name})",
+            message="Prototype RDM comparison not implemented yet",
         )
 
     for figure_name, view_name in zip(

@@ -1267,6 +1267,8 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
     assert (written["qc_dir"] / "prototype_support__pooled.parquet").exists()
     assert (written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
     assert (written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
     assert (written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
     assert (written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
     assert summary["rsa_table_names"] == [
@@ -1296,6 +1298,8 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
     assert summary["prototype_figure_names"] == [
         "prototype_rsa__per_date__response_window",
         "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm_comparison__per_date__response_window",
+        "prototype_rdm_comparison__per_date__full_trajectory",
         "prototype_rdm__pooled__response_window",
         "prototype_rdm__pooled__full_trajectory",
     ]
@@ -1311,6 +1315,8 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
         "neural_vs_top_model_rdm__full_trajectory",
         "prototype_rsa__per_date__response_window",
         "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm_comparison__per_date__response_window",
+        "prototype_rdm_comparison__per_date__full_trajectory",
         "prototype_rdm__pooled__response_window",
         "prototype_rdm__pooled__full_trajectory",
     ]
@@ -1321,12 +1327,14 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
 
     first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
     stale_prototype_rsa = first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png"
+    stale_prototype_rdm_comparison = first_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png"
     stale_prototype_rdm = first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png"
     stale_prototype_rsa_table = first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet"
     stale_prototype_rdm_table = first_written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet"
     stale_prototype_support_qc = first_written["qc_dir"] / "prototype_support__per_date.parquet"
 
     assert stale_prototype_rsa.exists()
+    assert stale_prototype_rdm_comparison.exists()
     assert stale_prototype_rdm.exists()
     assert stale_prototype_rsa_table.exists()
     assert stale_prototype_rdm_table.exists()
@@ -1351,10 +1359,13 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert (second_written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
+    assert (second_written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
     assert (second_written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
     assert not stale_prototype_rsa.exists()
+    assert not stale_prototype_rdm_comparison.exists()
     assert not stale_prototype_rdm.exists()
     assert not (second_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
+    assert not (second_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
     assert not (second_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
     assert (second_written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
     assert (second_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet").exists()
@@ -1371,6 +1382,7 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     assert summary["prototype_views"] == ["response_window"]
     assert summary["prototype_figure_names"] == [
         "prototype_rsa__per_date__response_window",
+        "prototype_rdm_comparison__per_date__response_window",
         "prototype_rdm__pooled__response_window",
     ]
     assert summary["prototype_descriptive_outputs"] == [
