@@ -1320,6 +1320,71 @@ def test_plot_prototype_rdm_comparison_per_date_uses_internal_rdms_when_rsa_tabl
     ]
 
 
+def test_plot_pooled_prototype_rdm_reuses_neural_order_for_paired_model(tmp_path):
+    stimulus_sample_map = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
+            {"stimulus": "b1_1", "stim_name": "Stimulus B1", "sample_id": "S001"},
+            {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
+        ]
+    )
+    prototype_rdm = _matrix(
+        [
+            {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": 0.6},
+            {"stimulus_row": "b1_1", "b3_1": 0.6, "b1_1": 0.0},
+        ]
+    )
+    model_matrix = _matrix(
+        [
+            {"stimulus_row": "b2_1", "b2_1": 0.0, "b3_1": 0.2, "b1_1": 0.5},
+            {"stimulus_row": "b3_1", "b2_1": 0.2, "b3_1": 0.0, "b1_1": 0.3},
+            {"stimulus_row": "b1_1", "b2_1": 0.5, "b3_1": 0.3, "b1_1": 0.0},
+        ]
+    )
+    core_outputs = {
+        "stimulus_sample_map": stimulus_sample_map,
+        "model_rdm__response_window__global_profile": model_matrix,
+    }
+    captured: dict[str, object] = {}
+    original_render = rsa_outputs._render_rdm_axis
+
+    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
+        if title.endswith("pooled prototype"):
+            captured["neural_order_labels"] = order_labels
+        if title.endswith("global_profile"):
+            captured["model_order_labels"] = order_labels
+            captured["model_rows"] = matrix_frame["stimulus_row"].tolist() if matrix_frame is not None else None
+            captured["model_columns"] = [column for column in matrix_frame.columns if column != "stimulus_row"]
+        return original_render(
+            axis,
+            matrix_frame,
+            stimulus_sample_map=stimulus_sample_map,
+            title=title,
+            fallback_message=fallback_message,
+            order_labels=order_labels,
+        )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    try:
+        written_path = rsa_outputs._plot_prototype_pooled_rdm(
+            core_outputs,
+            prototype_rdm,
+            {"response_window": "global_profile"},
+            stimulus_sample_map=stimulus_sample_map,
+            view_name="response_window",
+            path=tmp_path / "prototype_rdm__pooled__response_window.png",
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert written_path.exists()
+    assert captured["neural_order_labels"] == ["b3_1", "b1_1"]
+    assert captured["model_order_labels"] == ["b3_1", "b1_1"]
+    assert captured["model_rows"] == ["b3_1", "b1_1"]
+    assert captured["model_columns"] == ["b3_1", "b1_1"]
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):
@@ -1339,6 +1404,15 @@ def test_write_stage3_outputs_writes_per_date_prototype_comparison_figures(tmp_p
 
     assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
     assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
+
+
+def test_write_stage3_outputs_keeps_pooled_prototype_filenames(tmp_path):
+    written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "stage3_rsa")
+
+    assert sorted(path.name for path in written["figures_dir"].glob("prototype_rdm__pooled__*.png")) == [
+        "prototype_rdm__pooled__full_trajectory.png",
+        "prototype_rdm__pooled__response_window.png",
+    ]
 
 
 def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path):

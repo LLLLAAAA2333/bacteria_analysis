@@ -171,7 +171,12 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         view_comparison,
         dirs["figures_dir"] / "view_comparison_summary.png",
     )
-    prototype_summary = _write_prototype_supplementary_figures(core_outputs, dirs, written)
+    prototype_summary = _write_prototype_supplementary_figures(
+        core_outputs,
+        dirs,
+        written,
+        top_primary_models=top_primary_models,
+    )
 
     summary = _build_run_summary(
         required_tables=required_tables,
@@ -389,14 +394,7 @@ def _plot_neural_vs_top_model_rdm_view(
     )
     model_matrix = None
     if top_model_id:
-        model_matrix = _find_matrix_frame(
-            core_outputs,
-            (
-                f"model_rdm__{top_model_id}__{view_name}",
-                f"model_rdm__{view_name}__{top_model_id}",
-                f"model_rdm__{top_model_id}",
-            ),
-        )
+        model_matrix = _find_matrix_frame(core_outputs, _model_rdm_aliases(top_model_id, view_name))
 
     neural_order_labels: list[str] | None = []
     if neural_matrix is not None:
@@ -496,6 +494,8 @@ def _write_prototype_supplementary_figures(
     core_outputs: dict[str, pd.DataFrame],
     dirs: dict[str, Path],
     written: dict[str, Path],
+    *,
+    top_primary_models: dict[str, str],
 ) -> dict[str, Any]:
     prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
     top_prototype_models = _build_top_prototype_models_by_date_and_view(prototype_rsa_results)
@@ -538,7 +538,9 @@ def _write_prototype_supplementary_figures(
         strict=False,
     ):
         written[f"figure__{figure_name}"] = _plot_prototype_pooled_rdm(
+            core_outputs,
             _dataframe_or_none(core_outputs, figure_name),
+            top_primary_models,
             stimulus_sample_map=_dataframe_or_none(core_outputs, "stimulus_sample_map"),
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
@@ -675,26 +677,47 @@ def _plot_prototype_rdm_comparison_per_date(
 
 
 def _plot_prototype_pooled_rdm(
+    core_outputs: dict[str, pd.DataFrame],
     prototype_rdm: pd.DataFrame | None,
+    top_primary_models: dict[str, str],
     *,
     stimulus_sample_map: pd.DataFrame | None,
     view_name: str,
     path: Path,
 ) -> Path:
-    figure, axis = plt.subplots(figsize=(5.5, 4.5))
-    figure.suptitle(f"Prototype Pooled RDM ({view_name})", fontsize=12)
+    figure, axes = plt.subplots(
+        ncols=2,
+        figsize=(9.5, 4.0),
+        squeeze=False,
+    )
+    figure.suptitle(f"Prototype Pooled RDM Comparison ({view_name})", fontsize=12)
 
-    order_labels: list[str] | None = []
+    neural_order_labels: list[str] = []
     if prototype_rdm is not None:
-        order_labels = _coerce_rdm_heatmap_frame(prototype_rdm).index.tolist()
+        _, neural_order_labels = _prepare_rdm_heatmap_frame(prototype_rdm, stimulus_sample_map)
+
+    top_model_id = top_primary_models.get(view_name)
+    model_matrix = None
+    if top_model_id:
+        model_matrix = _find_matrix_frame(core_outputs, _model_rdm_aliases(top_model_id, view_name))
+        if model_matrix is not None:
+            model_matrix = _restrict_rdm_to_labels(model_matrix, neural_order_labels)
 
     _render_rdm_axis(
-        axis,
+        axes[0, 0],
         prototype_rdm,
         stimulus_sample_map=stimulus_sample_map,
         title=f"{view_name}: pooled prototype",
         fallback_message="No pooled prototype RDM provided",
-        order_labels=order_labels,
+        order_labels=neural_order_labels,
+    )
+    _render_rdm_axis(
+        axes[0, 1],
+        model_matrix,
+        stimulus_sample_map=stimulus_sample_map,
+        title=f"{view_name}: {top_model_id or 'no top model'}",
+        fallback_message="No paired top-model RDM",
+        order_labels=neural_order_labels,
     )
     return _save_figure(path)
 
@@ -742,6 +765,14 @@ def _find_matrix_frame(core_outputs: dict[str, pd.DataFrame], aliases: tuple[str
         if isinstance(frame, pd.DataFrame):
             return frame
     return None
+
+
+def _model_rdm_aliases(model_id: str, view_name: str) -> tuple[str, str, str]:
+    return (
+        f"model_rdm__{model_id}__{view_name}",
+        f"model_rdm__{view_name}__{model_id}",
+        f"model_rdm__{model_id}",
+    )
 
 
 def _restrict_rdm_to_labels(matrix_frame: pd.DataFrame, order_labels: list[str]) -> pd.DataFrame | None:
