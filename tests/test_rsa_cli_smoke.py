@@ -374,6 +374,8 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
         stage3_root / "qc" / "prototype_support__pooled.parquet",
         stage3_root / "figures" / "prototype_rsa__per_date__response_window.png",
         stage3_root / "figures" / "prototype_rsa__per_date__full_trajectory.png",
+        stage3_root / "figures" / "prototype_rdm_comparison__per_date__response_window.png",
+        stage3_root / "figures" / "prototype_rdm_comparison__per_date__full_trajectory.png",
         stage3_root / "figures" / "prototype_rdm__pooled__response_window.png",
         stage3_root / "figures" / "prototype_rdm__pooled__full_trajectory.png",
     ]
@@ -390,9 +392,24 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
         "prototype_rdm__pooled__response_window",
         "prototype_rdm__pooled__full_trajectory",
     ]
+    assert summary["figure_names"] == [
+        "ranked_primary_model_rsa",
+        "leave_one_stimulus_out_robustness",
+        "view_comparison_summary",
+        "neural_vs_top_model_rdm__response_window",
+        "neural_vs_top_model_rdm__full_trajectory",
+        "prototype_rsa__per_date__response_window",
+        "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm_comparison__per_date__response_window",
+        "prototype_rdm_comparison__per_date__full_trajectory",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+    ]
     assert summary["prototype_figure_names"] == [
         "prototype_rsa__per_date__response_window",
         "prototype_rsa__per_date__full_trajectory",
+        "prototype_rdm_comparison__per_date__response_window",
+        "prototype_rdm_comparison__per_date__full_trajectory",
         "prototype_rdm__pooled__response_window",
         "prototype_rdm__pooled__full_trajectory",
     ]

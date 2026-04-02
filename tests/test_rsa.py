@@ -1597,6 +1597,8 @@ def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_witho
         first_written["qc_dir"] / "prototype_support__pooled.parquet",
         first_written["figures_dir"] / "prototype_rsa__per_date__response_window.png",
         first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png",
+        first_written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png",
+        first_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png",
         first_written["figures_dir"] / "prototype_rdm__pooled__response_window.png",
         first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png",
     ]
