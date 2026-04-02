@@ -1442,6 +1442,35 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     ]
 
 
+def test_write_stage3_outputs_writes_empty_per_date_prototype_comparison_for_view_without_per_date_data(tmp_path):
+    outputs = {
+        key: value.copy() if isinstance(value, pd.DataFrame) else value
+        for key, value in _stage3_outputs_with_prototype_supplement().items()
+    }
+    outputs["prototype_rsa_results__per_date"] = outputs["prototype_rsa_results__per_date"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    outputs["prototype_support__per_date"] = outputs["prototype_support__per_date"].loc[
+        lambda frame: frame["view_name"] == "response_window"
+    ].copy()
+    for key in list(outputs):
+        if key.startswith("internal__prototype_rdm__per_date__full_trajectory__"):
+            outputs.pop(key)
+
+    written = write_stage3_outputs(outputs, tmp_path / "stage3_rsa")
+    summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
+    assert summary["prototype_figure_names"] == [
+        "prototype_rsa__per_date__response_window",
+        "prototype_rdm_comparison__per_date__response_window",
+        "prototype_rdm_comparison__per_date__full_trajectory",
+        "prototype_rdm__pooled__response_window",
+        "prototype_rdm__pooled__full_trajectory",
+    ]
+
+
 def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_without_supplement(
     tmp_path, synthetic_stage3_outputs
 ):

@@ -500,10 +500,11 @@ def _write_prototype_supplementary_figures(
     prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
     top_prototype_models = _build_top_prototype_models_by_date_and_view(prototype_rsa_results)
     prototype_rsa_views = _prototype_rsa_views(prototype_rsa_results)
+    prototype_comparison_views = _prototype_views(core_outputs)
     prototype_rdm_views = _prototype_rdm_views(core_outputs)
     prototype_figure_names = [
         *_build_prototype_rsa_figure_names(prototype_rsa_views),
-        *_build_prototype_rdm_comparison_figure_names(prototype_rsa_views),
+        *_build_prototype_rdm_comparison_figure_names(prototype_comparison_views),
         *_build_prototype_rdm_figure_names(prototype_rdm_views),
     ]
 
@@ -519,8 +520,8 @@ def _write_prototype_supplementary_figures(
         )
 
     for figure_name, view_name in zip(
-        _build_prototype_rdm_comparison_figure_names(prototype_rsa_views),
-        prototype_rsa_views,
+        _build_prototype_rdm_comparison_figure_names(prototype_comparison_views),
+        prototype_comparison_views,
         strict=False,
     ):
         written[figure_name] = _plot_prototype_rdm_comparison_per_date(
