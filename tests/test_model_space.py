@@ -199,6 +199,31 @@ def test_read_metabolite_matrix_strips_metabolite_header_whitespace(tmp_path):
     assert matrix.columns.tolist() == ["feature_1", "feature_2"]
 
 
+def test_read_metabolite_matrix_canonicalizes_known_metabolite_headers(tmp_path):
+    matrix_path = tmp_path / "canonical_metabolite_headers.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "sample_id",
+            "Beta-Muricholic acid (\u03b2-MCA)",
+            "Adenosine-5\u2032-triphosphate(ATP)",
+            "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)",
+        ]
+    )
+    sheet.append(["A001", 0.1, 1.0, 2.0])
+    sheet.append(["A002", 0.2, 0.8, 1.5])
+    workbook.save(matrix_path)
+
+    matrix = read_metabolite_matrix(matrix_path)
+
+    assert matrix.columns.tolist() == [
+        "Beta-Muricholic acid (beta-MCA)",
+        "Adenosine-5'-triphosphate(ATP)",
+        "Tauro-omega-muricholic acid (omega-TMCA)",
+    ]
+
+
 def test_read_metabolite_matrix_rejects_blank_sample_id_cells(tmp_path):
     matrix_path = tmp_path / "blank_matrix.xlsx"
     pd.DataFrame.from_records(
@@ -820,6 +845,188 @@ def test_resolve_model_inputs_rejects_unknown_membership_metabolite(tmp_path):
 
     with pytest.raises(ValueError, match="model_membership metabolites must exist in the matrix: feature_typo"):
         resolve_model_inputs(root, matrix_path)
+
+
+def test_resolve_model_inputs_accepts_canonical_annotation_names_for_known_matrix_aliases(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {
+                "sample_id": "A001",
+                "Beta-Muricholic acid (\u03b2-MCA)": 0.1,
+                "Adenosine-5\u2032-triphosphate(ATP)": 1.0,
+            },
+            {
+                "sample_id": "A002",
+                "Beta-Muricholic acid (\u03b2-MCA)": 0.2,
+                "Adenosine-5\u2032-triphosphate(ATP)": 0.8,
+            },
+            {
+                "sample_id": "A003",
+                "Beta-Muricholic acid (\u03b2-MCA)": 0.3,
+                "Adenosine-5\u2032-triphosphate(ATP)": 0.6,
+            },
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "global_profile",
+                "model_label": "Global Metabolite Profile",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[],
+        annotation_rows=[
+            {
+                "metabolite_name": "Beta-Muricholic acid (beta-MCA)",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "Adenosine-5'-triphosphate(ATP)",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+
+    assert resolved["matrix"].columns.tolist() == [
+        "Beta-Muricholic acid (beta-MCA)",
+        "Adenosine-5'-triphosphate(ATP)",
+    ]
+    assert set(resolved["metabolite_annotation"]["metabolite_name"]) == {
+        "Beta-Muricholic acid (beta-MCA)",
+        "Adenosine-5'-triphosphate(ATP)",
+    }
+
+
+def test_resolve_model_inputs_accepts_canonical_membership_names_for_known_matrix_aliases(tmp_path):
+    root = tmp_path / "model_space"
+    root.mkdir()
+    matrix_path = root / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {
+                "sample_id": "A001",
+                "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)": 0.1,
+                "Adenosine-5\u2032-triphosphate(ATP)": 1.0,
+            },
+            {
+                "sample_id": "A002",
+                "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)": 0.2,
+                "Adenosine-5\u2032-triphosphate(ATP)": 0.8,
+            },
+            {
+                "sample_id": "A003",
+                "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)": 0.3,
+                "Adenosine-5\u2032-triphosphate(ATP)": 0.6,
+            },
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "stimulus": "stimulus_a", "stim_name": "Stimulus A"},
+            {"sample_id": "A002", "stimulus": "stimulus_b", "stim_name": "Stimulus B"},
+            {"sample_id": "A003", "stimulus": "stimulus_c", "stim_name": "Stimulus C"},
+        ]
+    ).to_csv(root / "stimulus_sample_map.csv", index=False)
+
+    _write_stage3_model_space_files(
+        root,
+        registry_rows=[
+            {
+                "model_id": "bile_acid",
+                "model_label": "Bile Acid",
+                "model_tier": "primary",
+                "model_status": "primary",
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "Narrow bile acid family",
+                "authority": "user",
+                "notes": "",
+            }
+        ],
+        membership_rows=[
+            {
+                "model_id": "bile_acid",
+                "metabolite_name": "Tauro-omega-muricholic acid (omega-TMCA)",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "model_id": "bile_acid",
+                "metabolite_name": "Adenosine-5'-triphosphate(ATP)",
+                "membership_source": "manual",
+                "review_status": "reviewed",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+        annotation_rows=[
+            {
+                "metabolite_name": "Tauro-omega-muricholic acid (omega-TMCA)",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+            {
+                "metabolite_name": "Adenosine-5'-triphosphate(ATP)",
+                "superclass": "",
+                "subclass": "",
+                "pathway_tag": "",
+                "annotation_source": "",
+                "review_status": "",
+                "ambiguous_flag": False,
+                "notes": "",
+            },
+        ],
+    )
+
+    resolved = resolve_model_inputs(root, matrix_path)
+    feature_matrix, _ = build_model_feature_matrix(resolved, model_id="bile_acid")
+
+    assert feature_matrix.columns.tolist() == [
+        "Tauro-omega-muricholic acid (omega-TMCA)",
+        "Adenosine-5'-triphosphate(ATP)",
+    ]
 
 
 def test_resolve_model_inputs_allows_primary_supplementary_status_when_not_broad_union(tmp_path):

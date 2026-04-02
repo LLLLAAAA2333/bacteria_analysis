@@ -9,8 +9,11 @@ import pandas as pd
 
 from bacteria_analysis.io import read_parquet
 from bacteria_analysis.model_space import build_model_rdm, summarize_model_input_coverage
+from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_grouped_prototypes, build_prototype_rdm
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
+INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = "internal__prototype_rdm__per_date__"
+INTERNAL_PROTOTYPE_AGGREGATION_KEY = "internal__prototype_aggregation"
 
 
 def align_rdm_upper_triangles(neural_matrix: pd.DataFrame, model_matrix: pd.DataFrame) -> pd.DataFrame:
@@ -235,6 +238,8 @@ def run_stage3_rsa(
     resolved_inputs: dict[str, pd.DataFrame],
     *,
     neural_matrices: dict[str, pd.DataFrame],
+    prototype_inputs: PrototypeSupplementInputs | None = None,
+    prototype_aggregation: str = "mean",
     permutations: int = 0,
     seed: int = 0,
     view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
@@ -407,7 +412,255 @@ def run_stage3_rsa(
             "p_value_fdr",
         ],
     )
+    if prototype_inputs is not None:
+        core_outputs[INTERNAL_PROTOTYPE_AGGREGATION_KEY] = pd.DataFrame(
+            {"prototype_aggregation": [prototype_aggregation]}
+        )
+        core_outputs.update(
+            _build_prototype_supplement_outputs(
+                resolved_inputs,
+                core_outputs=core_outputs,
+                prototype_inputs=prototype_inputs,
+                prototype_aggregation=prototype_aggregation,
+                view_names=requested_views,
+                permutations=permutations,
+                seed=seed,
+            )
+        )
     return core_outputs
+
+
+def _build_prototype_supplement_outputs(
+    resolved_inputs: dict[str, pd.DataFrame],
+    *,
+    core_outputs: dict[str, pd.DataFrame],
+    prototype_inputs: PrototypeSupplementInputs,
+    prototype_aggregation: str,
+    view_names: list[str],
+    permutations: int,
+    seed: int,
+) -> dict[str, pd.DataFrame]:
+    registry = resolved_inputs["model_registry_resolved"].copy()
+    if "excluded_from_primary_ranking" not in registry.columns:
+        registry["excluded_from_primary_ranking"] = False
+
+    built_model_ids = core_outputs.get("model_rdm_summary", pd.DataFrame()).get("model_id", pd.Series(dtype=object))
+    built_model_ids = built_model_ids.astype(str).str.strip().str.lower().tolist()
+    registry = registry.loc[
+        registry["model_id"].astype(str).str.strip().str.lower().isin(built_model_ids)
+    ].reset_index(drop=True)
+
+    per_date_rows: list[dict[str, object]] = []
+    per_date_support_frames: list[pd.DataFrame] = []
+    pooled_support_frames: list[pd.DataFrame] = []
+    pooled_rdms: dict[str, pd.DataFrame] = {}
+    internal_per_date_rdms: dict[str, pd.DataFrame] = {}
+
+    for view_index, view_name in enumerate(view_names):
+        if view_name not in prototype_inputs.views:
+            raise ValueError(f"missing prototype view for view_name {view_name!r}")
+
+        view = prototype_inputs.views[view_name]
+        per_date_prototypes, per_date_support = build_grouped_prototypes(
+            view,
+            group_columns=("date", "stimulus", "stim_name"),
+            aggregation=prototype_aggregation,
+        )
+        pooled_prototypes, pooled_support = build_grouped_prototypes(
+            view,
+            group_columns=("stimulus", "stim_name"),
+            aggregation=prototype_aggregation,
+        )
+        per_date_prototypes = _ensure_frame_schema(per_date_prototypes, ["date", "stimulus", "stim_name"])
+        pooled_prototypes = _ensure_frame_schema(pooled_prototypes, ["stimulus", "stim_name"])
+        per_date_support = _ensure_frame_schema(
+            per_date_support,
+            [
+                "date",
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        )
+        pooled_support = _ensure_frame_schema(
+            pooled_support,
+            [
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_dates_contributed",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        )
+
+        per_date_support_frames.append(
+            per_date_support.assign(view_name=view_name)[
+                [
+                    "date",
+                    "view_name",
+                    "stimulus",
+                    "stim_name",
+                    "n_trials",
+                    "n_total_features",
+                    "n_supported_features",
+                    "n_all_nan_features",
+                ]
+            ]
+        )
+        pooled_support_frames.append(
+            pooled_support.assign(view_name=view_name)[
+                [
+                    "view_name",
+                    "stimulus",
+                    "stim_name",
+                    "n_trials",
+                    "n_dates_contributed",
+                    "n_total_features",
+                    "n_supported_features",
+                    "n_all_nan_features",
+                ]
+            ]
+        )
+        pooled_rdms[f"prototype_rdm__pooled__{view_name}"] = (
+            build_prototype_rdm(pooled_prototypes, id_columns=("stimulus",))
+            if not pooled_prototypes.empty
+            else pd.DataFrame(columns=["stimulus_row"])
+        )
+
+        for date_index, (date_value, date_prototypes) in enumerate(per_date_prototypes.groupby("date", sort=False)):
+            date_prototypes = date_prototypes.reset_index(drop=True)
+            stimulus_labels = date_prototypes["stimulus"].astype(str).tolist()
+            neural_matrix = (
+                build_prototype_rdm(date_prototypes, id_columns=("stimulus",))
+                if not date_prototypes.empty
+                else pd.DataFrame(columns=["stimulus_row"])
+            )
+            internal_per_date_rdms[
+                f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{str(date_value)}"
+            ] = neural_matrix.copy()
+
+            for model_index, registry_row in registry.iterrows():
+                model_id = str(registry_row["model_id"]).strip().lower()
+                model_matrix = _restrict_matrix_to_labels(
+                    core_outputs[f"model_rdm__{model_id}"],
+                    stimulus_labels,
+                )
+                score = compute_rsa_score(neural_matrix, model_matrix)
+                p_value_raw = np.nan
+                if permutations > 0 and score["score_status"] == "ok":
+                    null = build_permutation_null(
+                        neural_matrix,
+                        model_matrix,
+                        n_iterations=permutations,
+                        seed=seed + (10000 * view_index) + (1000 * date_index) + model_index,
+                    )
+                    p_value_raw = _empirical_p_value(
+                        score["rsa_similarity"],
+                        null["rsa_similarity"].to_numpy(dtype=float),
+                    )
+
+                per_date_rows.append(
+                    {
+                        "date": str(date_value),
+                        "view_name": view_name,
+                        "reference_view_name": "model_rdm",
+                        "comparison_scope": "prototype_neural_vs_model",
+                        "model_id": model_id,
+                        "model_label": str(registry_row["model_label"]).strip(),
+                        "model_tier": str(registry_row["model_tier"]).strip().lower(),
+                        "model_status": str(registry_row["model_status"]).strip().lower(),
+                        "feature_kind": str(registry_row["feature_kind"]).strip().lower(),
+                        "distance_kind": str(registry_row["distance_kind"]).strip().lower(),
+                        "excluded_from_primary_ranking": bool(
+                            registry_row.get("excluded_from_primary_ranking", False)
+                        ),
+                        "score_method": score["score_method"],
+                        "score_status": score["score_status"],
+                        "n_stimuli": int(len(stimulus_labels)),
+                        "n_shared_entries": score["n_shared_entries"],
+                        "rsa_similarity": score["rsa_similarity"],
+                        "p_value_raw": p_value_raw,
+                        "p_value_fdr": np.nan,
+                        "is_top_model": False,
+                    }
+                )
+
+    prototype_rsa_results = pd.DataFrame.from_records(
+        per_date_rows,
+        columns=[
+            "date",
+            "view_name",
+            "reference_view_name",
+            "comparison_scope",
+            "model_id",
+            "model_label",
+            "model_tier",
+            "model_status",
+            "feature_kind",
+            "distance_kind",
+            "excluded_from_primary_ranking",
+            "score_method",
+            "score_status",
+            "n_stimuli",
+            "n_shared_entries",
+            "rsa_similarity",
+            "p_value_raw",
+            "p_value_fdr",
+            "is_top_model",
+        ],
+    )
+    if not prototype_rsa_results.empty:
+        prototype_rsa_results["p_value_fdr"] = benjamini_hochberg(
+            prototype_rsa_results["p_value_raw"].to_numpy(dtype=float)
+        )
+        for _, group in prototype_rsa_results.groupby(["date", "view_name"], sort=False):
+            eligible = group.loc[
+                group["score_status"].astype(str).str.strip().str.lower().eq("ok")
+                & ~group["excluded_from_primary_ranking"].astype(bool)
+                & np.isfinite(pd.to_numeric(group["rsa_similarity"], errors="coerce"))
+            ]
+            if eligible.empty:
+                continue
+            top_index = eligible["rsa_similarity"].astype(float).idxmax()
+            prototype_rsa_results.loc[top_index, "is_top_model"] = True
+
+    outputs: dict[str, pd.DataFrame] = {
+        "prototype_rsa_results__per_date": prototype_rsa_results,
+        "prototype_support__per_date": _concat_summary_frames(
+            per_date_support_frames,
+            columns=[
+                "date",
+                "view_name",
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        ),
+        "prototype_support__pooled": _concat_summary_frames(
+            pooled_support_frames,
+            columns=[
+                "view_name",
+                "stimulus",
+                "stim_name",
+                "n_trials",
+                "n_dates_contributed",
+                "n_total_features",
+                "n_supported_features",
+                "n_all_nan_features",
+            ],
+        ),
+    }
+    outputs.update(pooled_rdms)
+    outputs.update(internal_per_date_rdms)
+    return outputs
 
 
 def _prepare_square_matrix(matrix_frame: pd.DataFrame) -> pd.DataFrame:
@@ -480,6 +733,14 @@ def _drop_stimulus(matrix: pd.DataFrame, stimulus_label: str) -> pd.DataFrame:
     return matrix.drop(index=stimulus_label, columns=stimulus_label)
 
 
+def _restrict_matrix_to_labels(matrix_frame: pd.DataFrame, stimulus_labels: list[str]) -> pd.DataFrame:
+    matrix = _prepare_square_matrix(matrix_frame)
+    shared_labels = [label for label in stimulus_labels if label in matrix.index]
+    if not shared_labels:
+        return pd.DataFrame(columns=["stimulus_row"])
+    return _matrix_to_frame(matrix.loc[shared_labels, shared_labels].copy())
+
+
 def _matrix_to_frame(matrix: pd.DataFrame) -> pd.DataFrame:
     frame = matrix.copy()
     frame.insert(0, "stimulus_row", frame.index.astype(str))
@@ -542,6 +803,15 @@ def _concat_summary_frames(frames: list[pd.DataFrame], *, columns: list[str]) ->
     if not non_empty_frames:
         return pd.DataFrame(columns=columns)
     return pd.concat(non_empty_frames, ignore_index=True)[columns]
+
+
+def _ensure_frame_schema(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    normalized = frame.copy()
+    for column in columns:
+        if column not in normalized.columns:
+            normalized[column] = pd.Series(dtype=object)
+    ordered_columns = columns + [column for column in normalized.columns if column not in columns]
+    return normalized[ordered_columns]
 
 
 def _should_skip_model_build_error(exc: ValueError) -> bool:
