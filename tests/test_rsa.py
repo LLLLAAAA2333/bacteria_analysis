@@ -1240,6 +1240,48 @@ def test_plot_neural_vs_top_model_rdm_view_keeps_model_in_original_order_when_ne
     assert captured["index_labels"] == ["S003", "S001", "S004", "S002"]
 
 
+def test_build_top_prototype_models_by_date_and_view():
+    prototype_rsa_results = pd.DataFrame.from_records(
+        [
+            {
+                "date": "2026-03-11",
+                "view_name": "response_window",
+                "model_id": "global_profile",
+                "is_top_model": True,
+                "excluded_from_primary_ranking": False,
+            },
+            {
+                "date": "2026-03-11",
+                "view_name": "response_window",
+                "model_id": "excluded_panel",
+                "is_top_model": True,
+                "excluded_from_primary_ranking": True,
+            },
+            {
+                "date": "2026-03-13",
+                "view_name": "response_window",
+                "model_id": "focused_panel",
+                "is_top_model": False,
+                "excluded_from_primary_ranking": False,
+            },
+            {
+                "date": "2026-03-13",
+                "view_name": "full_trajectory",
+                "model_id": "global_profile",
+                "is_top_model": True,
+                "excluded_from_primary_ranking": False,
+            },
+        ]
+    )
+
+    top_models = rsa_outputs._build_top_prototype_models_by_date_and_view(prototype_rsa_results)
+
+    assert top_models == {
+        ("2026-03-11", "response_window"): "global_profile",
+        ("2026-03-13", "full_trajectory"): "global_profile",
+    }
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):
@@ -1252,6 +1294,13 @@ def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementar
 
     assert summary["supplementary_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
+
+
+def test_write_stage3_outputs_writes_per_date_prototype_comparison_figures(tmp_path):
+    written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "stage3_rsa")
+
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
 
 
 def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path):
@@ -1287,6 +1336,9 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
         "prototype_rdm__pooled__response_window",
         "prototype_rsa_results__per_date",
     ]
+    assert not any(key.startswith("internal__") for key in written)
+    assert not any(name.startswith("internal__") for name in summary["additional_table_names"])
+    assert not list((written["tables_dir"]).glob("internal__*.parquet"))
     assert summary["prototype_supplement_enabled"] is True
     assert summary["prototype_views"] == ["response_window", "full_trajectory"]
     assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
@@ -1519,6 +1571,18 @@ def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present(
     assert "prototype_support__pooled" in results
     assert "prototype_rdm__pooled__response_window" in results
     assert "prototype_rdm__pooled__full_trajectory" in results
+    assert {
+        "internal__prototype_rdm__per_date__response_window__2026-03-11",
+        "internal__prototype_rdm__per_date__response_window__2026-03-13",
+        "internal__prototype_rdm__per_date__full_trajectory__2026-03-11",
+        "internal__prototype_rdm__per_date__full_trajectory__2026-03-13",
+    }.issubset(results)
+    assert results["internal__prototype_rdm__per_date__response_window__2026-03-11"].columns.tolist() == [
+        "stimulus_row",
+        "A001",
+        "A002",
+        "A003",
+    ]
     assert "n_dates_contributed" in results["prototype_support__pooled"].columns
     assert {
         "date",

@@ -12,6 +12,7 @@ from bacteria_analysis.model_space import build_model_rdm, summarize_model_input
 from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_grouped_prototypes, build_prototype_rdm
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
+INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = "internal__prototype_rdm__per_date__"
 
 
 def align_rdm_upper_triangles(neural_matrix: pd.DataFrame, model_matrix: pd.DataFrame) -> pd.DataFrame:
@@ -446,6 +447,7 @@ def _build_prototype_supplement_outputs(
     per_date_support_frames: list[pd.DataFrame] = []
     pooled_support_frames: list[pd.DataFrame] = []
     pooled_rdms: dict[str, pd.DataFrame] = {}
+    internal_per_date_rdms: dict[str, pd.DataFrame] = {}
 
     for view_index, view_name in enumerate(view_names):
         if view_name not in prototype_inputs.views:
@@ -529,6 +531,9 @@ def _build_prototype_supplement_outputs(
                 if not date_prototypes.empty
                 else pd.DataFrame(columns=["stimulus_row"])
             )
+            internal_per_date_rdms[
+                f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{str(date_value)}"
+            ] = neural_matrix.copy()
 
             for model_index, registry_row in registry.iterrows():
                 model_id = str(registry_row["model_id"]).strip().lower()
@@ -645,6 +650,7 @@ def _build_prototype_supplement_outputs(
         ),
     }
     outputs.update(pooled_rdms)
+    outputs.update(internal_per_date_rdms)
     return outputs
 
 

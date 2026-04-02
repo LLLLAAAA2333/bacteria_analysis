@@ -44,6 +44,8 @@ PROTOTYPE_QC_ARTIFACT_NAMES: tuple[str, ...] = (
     "prototype_support__per_date",
     "prototype_support__pooled",
 )
+INTERNAL_ONLY_ARTIFACT_PREFIX = "internal__"
+INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}prototype_rdm__per_date__"
 
 
 def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
@@ -71,6 +73,10 @@ def _canonicalize_view_order(view_names: list[str]) -> list[str]:
             unique_views.remove(preferred_view)
     ordered_views.extend(unique_views)
     return ordered_views
+
+
+def _internal_prototype_per_date_rdm_key(view_name: str, date_value: str) -> str:
+    return f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{date_value}"
 
 
 def ensure_stage3_output_dirs(output_root: str | Path) -> dict[str, Path]:
@@ -126,7 +132,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
         )
 
     for artifact_name, frame in core_outputs.items():
-        if artifact_name in consumed_keys or not isinstance(frame, pd.DataFrame):
+        if artifact_name in consumed_keys or _is_internal_only_artifact(artifact_name) or not isinstance(frame, pd.DataFrame):
             continue
         output_dir = dirs["qc_dir"] if _is_qc_artifact(artifact_name) else dirs["tables_dir"]
         written[artifact_name] = write_parquet(_prepare_for_parquet(frame), output_dir / f"{artifact_name}.parquet")
@@ -242,6 +248,10 @@ def _is_qc_artifact(artifact_name: str) -> bool:
     } or artifact_name.endswith("_qc")
 
 
+def _is_internal_only_artifact(artifact_name: str) -> bool:
+    return artifact_name.startswith(INTERNAL_ONLY_ARTIFACT_PREFIX)
+
+
 def _collect_model_families(registry: pd.DataFrame) -> dict[str, list[str]]:
     if registry.empty or "model_id" not in registry.columns:
         return {
@@ -287,6 +297,30 @@ def _build_top_primary_models_by_view(rsa_results: pd.DataFrame, primary_models:
     for view_name, group in filtered.groupby("view_name", sort=False):
         ranked = group.sort_values(["rsa_similarity", "model_id"], ascending=[False, True])
         top_models[str(view_name)] = str(ranked.iloc[0]["model_id"])
+    return top_models
+
+
+def _build_top_prototype_models_by_date_and_view(prototype_rsa_results: pd.DataFrame | None) -> dict[tuple[str, str], str]:
+    if prototype_rsa_results is None or prototype_rsa_results.empty:
+        return {}
+
+    required_columns = {"date", "view_name", "model_id", "is_top_model"}
+    if not required_columns.issubset(prototype_rsa_results.columns):
+        return {}
+
+    selected = prototype_rsa_results.copy()
+    selected["date"] = selected["date"].astype(str)
+    selected["view_name"] = selected["view_name"].astype(str)
+    selected["model_id"] = selected["model_id"].astype(str)
+    selected = selected.loc[_bool_column(selected, "is_top_model")]
+    if "excluded_from_primary_ranking" in selected.columns:
+        selected = selected.loc[~_bool_column(selected, "excluded_from_primary_ranking")]
+    if selected.empty:
+        return {}
+
+    top_models: dict[tuple[str, str], str] = {}
+    for _, row in selected.iterrows():
+        top_models[(str(row["date"]), str(row["view_name"]))] = str(row["model_id"])
     return top_models
 
 
@@ -464,6 +498,7 @@ def _write_prototype_supplementary_figures(
     written: dict[str, Path],
 ) -> dict[str, Any]:
     prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
+    top_prototype_models = _build_top_prototype_models_by_date_and_view(prototype_rsa_results)
     prototype_rsa_views = _prototype_rsa_views(prototype_rsa_results)
     prototype_rdm_views = _prototype_rdm_views(core_outputs)
     prototype_figure_names = [
@@ -488,10 +523,12 @@ def _write_prototype_supplementary_figures(
         prototype_rsa_views,
         strict=False,
     ):
-        written[figure_name] = _plot_empty_figure(
-            dirs["figures_dir"] / f"{figure_name}.png",
-            title=f"Prototype RDM Comparison By Date ({view_name})",
-            message="Prototype RDM comparison not implemented yet",
+        written[figure_name] = _plot_prototype_rdm_comparison_per_date(
+            core_outputs,
+            prototype_rsa_results,
+            top_prototype_models,
+            view_name=view_name,
+            path=dirs["figures_dir"] / f"{figure_name}.png",
         )
 
     for figure_name, view_name in zip(
@@ -567,6 +604,90 @@ def _plot_prototype_rsa_per_date(
     return _save_figure(path)
 
 
+def _plot_prototype_rdm_comparison_per_date(
+    core_outputs: dict[str, pd.DataFrame],
+    prototype_rsa_results: pd.DataFrame | None,
+    top_prototype_models: dict[tuple[str, str], str],
+    *,
+    view_name: str,
+    path: Path,
+) -> Path:
+    if prototype_rsa_results is None or prototype_rsa_results.empty:
+        return _plot_empty_figure(
+            path,
+            title=f"Prototype RDM Comparison By Date ({view_name})",
+            message="No prototype RSA table",
+        )
+
+    required_columns = {"date", "view_name"}
+    if not required_columns.issubset(prototype_rsa_results.columns):
+        return _plot_empty_figure(
+            path,
+            title=f"Prototype RDM Comparison By Date ({view_name})",
+            message="Missing prototype RSA columns",
+        )
+
+    view_rows = prototype_rsa_results.copy()
+    view_rows["date"] = view_rows["date"].astype(str)
+    view_rows["view_name"] = view_rows["view_name"].astype(str)
+    view_rows = view_rows.loc[view_rows["view_name"] == view_name]
+    ordered_dates = sorted(view_rows["date"].unique().tolist())
+    if not ordered_dates:
+        return _plot_empty_figure(
+            path,
+            title=f"Prototype RDM Comparison By Date ({view_name})",
+            message="No prototype data for this view",
+        )
+
+    stimulus_sample_map = _dataframe_or_none(core_outputs, "stimulus_sample_map")
+    figure, axes = plt.subplots(
+        nrows=len(ordered_dates),
+        ncols=2,
+        figsize=(9.5, max(4.0, 3.8 * len(ordered_dates))),
+        squeeze=False,
+    )
+    figure.suptitle(f"Prototype RDM Comparison By Date ({view_name})", fontsize=12)
+
+    for row_index, date_value in enumerate(ordered_dates):
+        neural_matrix = _find_internal_prototype_per_date_rdm(core_outputs, view_name=view_name, date_value=date_value)
+        neural_order_labels: list[str] = []
+        if neural_matrix is not None:
+            _, neural_order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+
+        top_model_id = top_prototype_models.get((date_value, view_name))
+        model_matrix = None
+        if top_model_id and neural_order_labels:
+            model_matrix = _find_matrix_frame(
+                core_outputs,
+                (
+                    f"model_rdm__{top_model_id}__{view_name}",
+                    f"model_rdm__{view_name}__{top_model_id}",
+                    f"model_rdm__{top_model_id}",
+                ),
+            )
+            if model_matrix is not None:
+                model_matrix = _restrict_rdm_to_labels(model_matrix, neural_order_labels)
+
+        _render_rdm_axis(
+            axes[row_index, 0],
+            neural_matrix,
+            stimulus_sample_map=stimulus_sample_map,
+            title=f"{date_value}: neural prototype",
+            fallback_message="No per-date neural prototype RDM",
+            order_labels=neural_order_labels,
+        )
+        _render_rdm_axis(
+            axes[row_index, 1],
+            model_matrix,
+            stimulus_sample_map=stimulus_sample_map,
+            title=f"{date_value}: {top_model_id or 'no top model'}",
+            fallback_message="No paired top-model RDM",
+            order_labels=neural_order_labels,
+        )
+
+    return _save_figure(path)
+
+
 def _plot_prototype_pooled_rdm(
     prototype_rdm: pd.DataFrame | None,
     *,
@@ -592,12 +713,34 @@ def _plot_prototype_pooled_rdm(
     return _save_figure(path)
 
 
+def _find_internal_prototype_per_date_rdm(
+    core_outputs: dict[str, pd.DataFrame],
+    *,
+    view_name: str,
+    date_value: str,
+) -> pd.DataFrame | None:
+    return _dataframe_or_none(core_outputs, _internal_prototype_per_date_rdm_key(view_name, date_value))
+
+
 def _find_matrix_frame(core_outputs: dict[str, pd.DataFrame], aliases: tuple[str, ...]) -> pd.DataFrame | None:
     for alias in aliases:
         frame = core_outputs.get(alias)
         if isinstance(frame, pd.DataFrame):
             return frame
     return None
+
+
+def _restrict_rdm_to_labels(matrix_frame: pd.DataFrame, order_labels: list[str]) -> pd.DataFrame | None:
+    if not order_labels:
+        return None
+
+    heatmap_frame = _coerce_rdm_heatmap_frame(matrix_frame)
+    if heatmap_frame.empty or not set(order_labels).issubset(heatmap_frame.index):
+        return None
+
+    restricted = heatmap_frame.loc[order_labels, order_labels].copy()
+    restricted.insert(0, "stimulus_row", restricted.index.astype(str))
+    return restricted.reset_index(drop=True)
 
 
 def _render_rdm_axis(
