@@ -1282,6 +1282,44 @@ def test_build_top_prototype_models_by_date_and_view():
     }
 
 
+def test_plot_prototype_rdm_comparison_per_date_uses_internal_rdms_when_rsa_table_is_empty(tmp_path):
+    core_outputs = _stage3_outputs_with_prototype_supplement()
+    captured: list[tuple[str, bool]] = []
+    original_render = rsa_outputs._render_rdm_axis
+
+    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
+        captured.append((title, matrix_frame is not None))
+        return original_render(
+            axis,
+            matrix_frame,
+            stimulus_sample_map=stimulus_sample_map,
+            title=title,
+            fallback_message=fallback_message,
+            order_labels=order_labels,
+        )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    try:
+        written_path = rsa_outputs._plot_prototype_rdm_comparison_per_date(
+            core_outputs,
+            pd.DataFrame(),
+            {},
+            view_name="response_window",
+            path=tmp_path / "prototype_rdm_comparison__per_date__response_window.png",
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert written_path.exists()
+    assert captured == [
+        ("2026-03-11: neural prototype", True),
+        ("2026-03-11: no top model", False),
+        ("2026-03-13: neural prototype", True),
+        ("2026-03-13: no top model", False),
+    ]
+
+
 def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
     tmp_path, synthetic_stage3_outputs
 ):

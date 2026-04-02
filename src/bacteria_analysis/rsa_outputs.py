@@ -613,26 +613,11 @@ def _plot_prototype_rdm_comparison_per_date(
     view_name: str,
     path: Path,
 ) -> Path:
-    if prototype_rsa_results is None or prototype_rsa_results.empty:
-        return _plot_empty_figure(
-            path,
-            title=f"Prototype RDM Comparison By Date ({view_name})",
-            message="No prototype RSA table",
-        )
-
-    required_columns = {"date", "view_name"}
-    if not required_columns.issubset(prototype_rsa_results.columns):
-        return _plot_empty_figure(
-            path,
-            title=f"Prototype RDM Comparison By Date ({view_name})",
-            message="Missing prototype RSA columns",
-        )
-
-    view_rows = prototype_rsa_results.copy()
-    view_rows["date"] = view_rows["date"].astype(str)
-    view_rows["view_name"] = view_rows["view_name"].astype(str)
-    view_rows = view_rows.loc[view_rows["view_name"] == view_name]
-    ordered_dates = sorted(view_rows["date"].unique().tolist())
+    ordered_dates = _prototype_per_date_comparison_dates(
+        core_outputs,
+        prototype_rsa_results,
+        view_name=view_name,
+    )
     if not ordered_dates:
         return _plot_empty_figure(
             path,
@@ -721,6 +706,34 @@ def _find_internal_prototype_per_date_rdm(
     date_value: str,
 ) -> pd.DataFrame | None:
     return _dataframe_or_none(core_outputs, _internal_prototype_per_date_rdm_key(view_name, date_value))
+
+
+def _prototype_per_date_comparison_dates(
+    core_outputs: dict[str, pd.DataFrame],
+    prototype_rsa_results: pd.DataFrame | None,
+    *,
+    view_name: str,
+) -> list[str]:
+    dates = set(_prototype_internal_per_date_dates(core_outputs, view_name=view_name))
+    if prototype_rsa_results is None or prototype_rsa_results.empty:
+        return sorted(dates)
+    if not {"date", "view_name"}.issubset(prototype_rsa_results.columns):
+        return sorted(dates)
+
+    view_rows = prototype_rsa_results.copy()
+    view_rows["date"] = view_rows["date"].astype(str)
+    view_rows["view_name"] = view_rows["view_name"].astype(str)
+    dates.update(view_rows.loc[view_rows["view_name"] == view_name, "date"].tolist())
+    return sorted(date_value for date_value in dates if date_value)
+
+
+def _prototype_internal_per_date_dates(core_outputs: dict[str, pd.DataFrame], *, view_name: str) -> list[str]:
+    prefix = f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__"
+    return sorted(
+        artifact_name.removeprefix(prefix)
+        for artifact_name, frame in core_outputs.items()
+        if artifact_name.startswith(prefix) and isinstance(frame, pd.DataFrame)
+    )
 
 
 def _find_matrix_frame(core_outputs: dict[str, pd.DataFrame], aliases: tuple[str, ...]) -> pd.DataFrame | None:
