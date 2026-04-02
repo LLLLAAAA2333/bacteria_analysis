@@ -61,6 +61,18 @@ MODEL_INPUT_COVERAGE_COLUMNS = (
     "n_resolved_metabolites",
     "coverage_status",
 )
+METABOLITE_NAME_CANONICAL_OVERRIDES = {
+    "Beta-Muricholic acid (\u03b2-MCA)": "Beta-Muricholic acid (beta-MCA)",
+    "Tauro-\u03b1-muricholic acid (\u03b1-TMCA)": "Tauro-alpha-muricholic acid (alpha-TMCA)",
+    "Tauro-\u03b2-muricholic acid (\u03b2-TMCA)": "Tauro-beta-muricholic acid (beta-TMCA)",
+    "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)": "Tauro-omega-muricholic acid (omega-TMCA)",
+    "Omega-muricholic acid (\u03c9-MCA)": "Omega-muricholic acid (omega-MCA)",
+    "\u03b1-Ketoglutaric acid": "Alpha-Ketoglutaric acid",
+    "Riboflavin-5\u2032-monophosphate": "Riboflavin-5'-monophosphate",
+    "Adenosine-5\u2032-triphosphate(ATP)": "Adenosine-5'-triphosphate(ATP)",
+    "Adenosine-5\u2032-diphosphate(ADP)": "Adenosine-5'-diphosphate(ADP)",
+    "Adenosine-3\u2032,5\u2032-cyclic monophosphate(cAMP)": "Adenosine-3',5'-cyclic monophosphate(cAMP)",
+}
 
 
 def load_stimulus_sample_map(path: str | Path) -> pd.DataFrame:
@@ -92,7 +104,7 @@ def read_metabolite_matrix(path: str | Path) -> pd.DataFrame:
     finally:
         workbook.close()
 
-    header_values = ["" if value is None else str(value).strip() for value in header_row]
+    header_values = [_canonicalize_metabolite_name(value) for value in header_row]
     if header_values and pd.Index(header_values).duplicated().any():
         raise ValueError("metabolite column names must be unique")
 
@@ -224,7 +236,10 @@ def _validate_metabolite_annotation(frame: pd.DataFrame) -> pd.DataFrame:
     for column in METABOLITE_ANNOTATION_REQUIRED_COLUMNS:
         if column == "ambiguous_flag":
             continue
-        normalized[column] = normalized[column].astype(str).str.strip()
+        if column == "metabolite_name":
+            normalized[column] = _canonicalize_metabolite_name_series(normalized[column])
+        else:
+            normalized[column] = normalized[column].astype(str).str.strip()
 
     normalized["ambiguous_flag"] = _coerce_boolean_column(normalized["ambiguous_flag"], "ambiguous_flag")
     _require_non_empty(normalized, "metabolite_name")
@@ -254,7 +269,10 @@ def _validate_model_membership(frame: pd.DataFrame) -> pd.DataFrame:
     normalized = _require_columns(frame, MODEL_MEMBERSHIP_REQUIRED_COLUMNS, "model_membership")
 
     for column in MODEL_MEMBERSHIP_REQUIRED_COLUMNS:
-        normalized[column] = normalized[column].astype(str).str.strip()
+        if column == "metabolite_name":
+            normalized[column] = _canonicalize_metabolite_name_series(normalized[column])
+        else:
+            normalized[column] = normalized[column].astype(str).str.strip()
     for column in MODEL_MEMBERSHIP_OPTIONAL_COLUMNS:
         if column not in normalized.columns:
             normalized[column] = ""
@@ -323,7 +341,7 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("sample_id values must be unique")
 
     metabolite_columns = [column for column in normalized.columns if column != sample_column]
-    metabolite_column_names = ["" if column is None else str(column).strip() for column in metabolite_columns]
+    metabolite_column_names = [_canonicalize_metabolite_name(column) for column in metabolite_columns]
     if any(not name or name.lower().startswith("unnamed:") for name in metabolite_column_names):
         raise ValueError("metabolite column names must be non-empty")
     if pd.Index(metabolite_column_names).duplicated().any():
@@ -335,6 +353,17 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     normalized = normalized.set_index(sample_column)
     normalized.index.name = "sample_id"
     return normalized
+
+
+def _canonicalize_metabolite_name(value: object) -> str:
+    if value is None:
+        return ""
+    normalized = str(value).strip()
+    return METABOLITE_NAME_CANONICAL_OVERRIDES.get(normalized, normalized)
+
+
+def _canonicalize_metabolite_name_series(series: pd.Series) -> pd.Series:
+    return series.map(_canonicalize_metabolite_name)
 
 
 def _require_columns(frame: pd.DataFrame, required_columns: Iterable[str], label: str) -> pd.DataFrame:

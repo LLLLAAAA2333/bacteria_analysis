@@ -1,6 +1,6 @@
 metabolite_name,superclass,subclass,pathway_tag,annotation_source,review_status,ambiguous_flag,notes
 7-Dehydrocholic acid (7-DHCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Beta-Muricholic acid (β-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Beta-Muricholic acid (beta-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Cholic acid (CA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Deoxycholic acid (DCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Glycochenodeoxycholic acid (GCDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
@@ -9,14 +9,14 @@ Glycodeoxycholic acid (GDCA),,,,matrix_header_seed,unreviewed,False,Seeded from 
 Glycohyodeoxycholic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Glycoursodeoxycholic acid (GUDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Hyodeoxycholic acid (HDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Tauro-α-muricholic acid (α-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Tauro-β-muricholic acid (β-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Tauro-α-muricholic acid (ω-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-alpha-muricholic acid (alpha-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-beta-muricholic acid (beta-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Tauro-omega-muricholic acid (omega-TMCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Taurochenodeoxycholic acid (TCDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Taurodeoxycholic acid (TDCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Taurohyodeoxycholic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Taurolithocholic acid (TLCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Omega-muricholic acid (ω-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Omega-muricholic acid (omega-MCA),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Ribonolactone,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 4-Hydroxycinnamic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 12-hydroxystearic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
@@ -172,17 +172,17 @@ Carnosine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header 
 Arginine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Nicotinamide,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Picolinic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-α-Ketoglutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Alpha-Ketoglutaric acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Guanosine diphosphate(GDP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Riboflavin-5′-monophosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Riboflavin-5'-monophosphate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Glycylleucine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Asparagine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 3-Phosphoglycerate,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Adenosine-5′-triphosphate(ATP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-Adenosine-5′-diphosphate(ADP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine-5'-triphosphate(ATP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+Adenosine-5'-diphosphate(ADP),,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 "1,4-Dihydronicotinamide adenine dinucleotide (NADH)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Aspartic acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
-"Adenosine-3′,5′-cyclic monophosphate(cAMP)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
+"Adenosine-3',5'-cyclic monophosphate(cAMP)",,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Histidine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 Quinolinic Acid,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
 3-Hydroxyl-kynurenine,,,,matrix_header_seed,unreviewed,False,Seeded from matrix.xlsx header on 2026-03-31
