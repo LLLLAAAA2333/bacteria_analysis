@@ -65,6 +65,12 @@ def resolve_model_input_root(model_input_root: str | None, *, root_dir: Path = R
     return _resolve_repo_path(model_input_root, default_relative=DEFAULT_MODEL_INPUT_ROOT, root_dir=root_dir)
 
 
+def resolve_preprocess_root(preprocess_root: str | None, *, root_dir: Path = ROOT_DIR) -> Path | None:
+    if preprocess_root is None:
+        return None
+    return _resolve_repo_path(preprocess_root, default_relative=Path(preprocess_root), root_dir=root_dir)
+
+
 def _resolve_repo_path(explicit_path: str | None, *, default_relative: Path, root_dir: Path) -> Path:
     if explicit_path:
         explicit = Path(explicit_path)
@@ -99,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         stage2_root = resolve_stage2_root(args.stage2_root)
         matrix_path = resolve_matrix_path(args.matrix)
         model_input_root = resolve_model_input_root(args.model_input_root)
+        preprocess_root = resolve_preprocess_root(args.preprocess_root)
         neural_matrices = load_stage2_pooled_neural_rdms(stage2_root)
         resolved_inputs = resolve_model_inputs(model_input_root, matrix_path)
         run_kwargs: dict[str, object] = {
@@ -106,9 +113,9 @@ def main(argv: list[str] | None = None) -> int:
             "permutations": args.permutations,
             "seed": args.seed,
         }
-        if args.preprocess_root:
+        if preprocess_root is not None:
             run_kwargs["prototype_inputs"] = load_prototype_supplement_inputs(
-                args.preprocess_root,
+                preprocess_root,
                 view_names=tuple(neural_matrices),
             )
             run_kwargs["prototype_aggregation"] = args.prototype_aggregation

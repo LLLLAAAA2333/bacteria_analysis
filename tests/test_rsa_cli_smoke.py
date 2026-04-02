@@ -460,12 +460,15 @@ def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path)
     shared_stage2_root = repo_root / "results" / "stage2_geometry"
     shared_model_input_root = repo_root / "data" / "model_space"
     shared_matrix_path = repo_root / "data" / "matrix.xlsx"
+    shared_preprocess_root = repo_root / "data" / "preprocess"
 
     shared_stage2_root.mkdir(parents=True)
     shared_model_input_root.mkdir(parents=True)
+    shared_preprocess_root.mkdir(parents=True)
     shared_matrix_path.parent.mkdir(parents=True, exist_ok=True)
     shared_matrix_path.write_bytes(b"matrix")
 
     assert RUN_RSA.resolve_stage2_root(str(RUN_RSA.DEFAULT_STAGE2_ROOT), root_dir=worktree_root) == shared_stage2_root
     assert RUN_RSA.resolve_model_input_root(str(RUN_RSA.DEFAULT_MODEL_INPUT_ROOT), root_dir=worktree_root) == shared_model_input_root
     assert RUN_RSA.resolve_matrix_path(str(RUN_RSA.DEFAULT_MATRIX_PATH), root_dir=worktree_root) == shared_matrix_path
+    assert RUN_RSA.resolve_preprocess_root("data/preprocess", root_dir=worktree_root) == shared_preprocess_root
