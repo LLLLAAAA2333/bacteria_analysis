@@ -1,8 +1,0 @@
-model_id,model_label,model_tier,model_status,feature_kind,distance_kind,description,authority,notes
-global_profile,Global Metabolite Profile,primary,primary,continuous_abundance,correlation,All metabolite columns after preprocessing,user,Always included
-bile_acid,Bile Acid Model,primary,draft,continuous_abundance,correlation,Curated bile acid family,user,Seeded from obvious bile acid names and needs review
-indole_tryptophan,Indole Tryptophan Model,primary,draft,continuous_abundance,correlation,Curated indole and tryptophan family,user,Membership not seeded yet
-phenyl_phenol,Phenyl Phenol Model,primary,draft,continuous_abundance,correlation,Curated phenyl and phenol family,user,Membership not seeded yet
-tca_organic_acid,TCA Organic Acid Model,primary,draft,continuous_abundance,correlation,Curated TCA and organic acid family,user,Membership not seeded yet
-nucleotide_energy,Nucleotide Energy Model,primary,draft,continuous_abundance,correlation,Curated nucleotide and energy family,user,Membership not seeded yet
-broad_aromatic_union,Broad Aromatic Union,supplementary,supplementary,continuous_abundance,correlation,Exploratory broad aromatic grouping,exploratory,Supplement only and not for primary ranking
