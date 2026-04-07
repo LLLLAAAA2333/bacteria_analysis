@@ -1,4 +1,4 @@
-"""Core Stage 1 reliability analysis helpers."""
+"""Core reliability analysis helpers."""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ MIN_OVERLAP_NEURONS = 1
 MIN_VALID_VALUES = 2
 VALID_COMPARISON_STATUS = "ok"
 SCORED_TRIAL_STATUS = "scored"
-SUPPLEMENTARY_ANALYSIS_LABEL = "supplementary"
+ADDITIONAL_ANALYSIS_LABEL = "additional"
 
 
 @dataclass(frozen=True)
 class ReliabilityInputs:
-    """Stage 1 inputs loaded from Stage 0 artifacts."""
+    """Reliability inputs loaded from trial-level artifacts."""
 
     metadata: pd.DataFrame
     tensor: np.ndarray
@@ -41,7 +41,7 @@ class ReliabilityInputs:
 
 @dataclass(frozen=True)
 class TrialView:
-    """One view-specific slice of the Stage 0 trial tensor."""
+    """One view-specific slice of the trial tensor."""
 
     name: str
     timepoints: tuple[int, ...]
@@ -50,13 +50,13 @@ class TrialView:
 
 
 def build_individual_id(date: object, worm_key: object) -> str:
-    """Build the canonical Stage 1 individual identifier."""
+    """Build the canonical individual identifier."""
 
     return f"{str(date)}__{str(worm_key)}"
 
 
 def add_individual_id(metadata: pd.DataFrame) -> pd.DataFrame:
-    """Return metadata with a deterministic Stage 1 individual_id column."""
+    """Return metadata with a deterministic individual_id column."""
 
     out = metadata.copy()
     out["date"] = out["date"].astype(str)
@@ -83,7 +83,7 @@ def _validate_tensor_contract(
     archive: dict[str, np.ndarray],
 ) -> None:
     if tensor.ndim != 3:
-        raise ValueError("Stage 1 requires a 3D trial tensor")
+        raise ValueError("reliability analysis requires a 3D trial tensor")
     if tensor.shape[0] != len(metadata):
         raise ValueError("trial tensor and metadata must describe the same number of trials")
     if tensor.shape[1] != len(NEURON_ORDER):
@@ -124,7 +124,7 @@ def load_reliability_inputs(
     tensor_path: str | Path,
     wide_path: str | Path | None = None,
 ) -> ReliabilityInputs:
-    """Load and validate the canonical Stage 0 inputs used by Stage 1."""
+    """Load and validate the canonical trial-level inputs used by reliability analysis."""
 
     metadata = add_individual_id(read_parquet(metadata_path))
     archive = _load_tensor_archive(tensor_path)
@@ -315,7 +315,7 @@ def select_within_date_cross_individual_comparisons(comparisons: pd.DataFrame) -
     filtered = comparisons.loc[
         comparisons["same_date"].astype(bool) & ~comparisons["same_individual"].astype(bool)
     ].copy()
-    filtered["analysis_role"] = SUPPLEMENTARY_ANALYSIS_LABEL
+    filtered["analysis_role"] = ADDITIONAL_ANALYSIS_LABEL
     return filtered
 
 
@@ -327,7 +327,7 @@ def summarize_within_date_cross_individual_same_vs_different(
     filtered = select_within_date_cross_individual_comparisons(comparisons)
     summary = summarize_same_vs_different(filtered)
     if not summary.empty:
-        summary["analysis_role"] = SUPPLEMENTARY_ANALYSIS_LABEL
+        summary["analysis_role"] = ADDITIONAL_ANALYSIS_LABEL
     return filtered, summary
 
 
@@ -584,8 +584,8 @@ def run_per_date_loio(
         )
         trial_frame["source_date"] = str(source_date)
         group_frame["source_date"] = str(source_date)
-        trial_frame["analysis_role"] = SUPPLEMENTARY_ANALYSIS_LABEL
-        group_frame["analysis_role"] = SUPPLEMENTARY_ANALYSIS_LABEL
+        trial_frame["analysis_role"] = ADDITIONAL_ANALYSIS_LABEL
+        group_frame["analysis_role"] = ADDITIONAL_ANALYSIS_LABEL
         trial_frames.append(trial_frame)
         group_frames.append(group_frame)
 
@@ -593,7 +593,7 @@ def run_per_date_loio(
     group_frame = _concat_frames(group_frames)
     summary_frame = summarize_holdout_results(group_frame)
     if not summary_frame.empty:
-        summary_frame["analysis_role"] = SUPPLEMENTARY_ANALYSIS_LABEL
+        summary_frame["analysis_role"] = ADDITIONAL_ANALYSIS_LABEL
     return trial_frame, group_frame, summary_frame
 
 
@@ -612,7 +612,7 @@ def run_split_half_reliability(
     metric: str = DEFAULT_DISTANCE_METRIC,
     min_overlap_neurons: int = MIN_OVERLAP_NEURONS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run seedable split-half reliability as a supplementary analysis."""
+    """Run seedable split-half reliability as an additional analysis."""
 
     rng = np.random.default_rng(seed)
     metadata = view.metadata.reset_index(drop=True)
@@ -640,7 +640,7 @@ def run_split_half_reliability(
                     "same_mean_distance": float("nan"),
                     "different_mean_distance": float("nan"),
                     "distance_gap": float("nan"),
-                    "analysis_role": SUPPLEMENTARY_ANALYSIS_LABEL,
+                    "analysis_role": ADDITIONAL_ANALYSIS_LABEL,
                 }
             )
             continue
@@ -705,7 +705,7 @@ def run_split_half_reliability(
                     if same_distances and different_distances
                     else float("nan")
                 ),
-                "analysis_role": SUPPLEMENTARY_ANALYSIS_LABEL,
+                "analysis_role": ADDITIONAL_ANALYSIS_LABEL,
             }
         )
 
@@ -723,7 +723,7 @@ def run_split_half_reliability(
                 "same_mean_distance": float(scored_repeats["same_mean_distance"].mean()) if not scored_repeats.empty else float("nan"),
                 "different_mean_distance": float(scored_repeats["different_mean_distance"].mean()) if not scored_repeats.empty else float("nan"),
                 "distance_gap": float(scored_repeats["distance_gap"].mean()) if not scored_repeats.empty else float("nan"),
-                "analysis_role": SUPPLEMENTARY_ANALYSIS_LABEL,
+                "analysis_role": ADDITIONAL_ANALYSIS_LABEL,
             }
         )
     return repeat_frame, pd.DataFrame(summary_rows)
@@ -788,7 +788,7 @@ def summarize_stimulus_distance_pairs(comparisons: pd.DataFrame) -> pd.DataFrame
                 "n_pairs": int(len(group)),
                 "mean_distance": float(group["distance"].mean()),
                 "median_distance": float(group["distance"].median()),
-                "analysis_role": SUPPLEMENTARY_ANALYSIS_LABEL,
+                "analysis_role": ADDITIONAL_ANALYSIS_LABEL,
             }
         )
     return pd.DataFrame(rows)
@@ -801,7 +801,7 @@ def run_reliability_pipeline(
     split_half_repeats: int = 100,
     seed: int = 0,
 ) -> dict[str, pd.DataFrame]:
-    """Run the full Stage 1 core analysis over every view."""
+    """Run the full reliability analysis over every view."""
 
     views = build_trial_views(inputs.metadata, inputs.tensor)
     comparisons = pd.concat(

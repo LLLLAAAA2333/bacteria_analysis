@@ -1,5 +1,7 @@
 import json
 
+import bacteria_analysis.geometry as geometry_module
+import bacteria_analysis.geometry_outputs as geometry_outputs_module
 import pandas as pd
 import pytest
 
@@ -18,9 +20,15 @@ from bacteria_analysis.geometry_outputs import (
     _build_rdm_heatmap_frame,
     _build_similarity_plot_panels,
     _cluster_reorder_heatmap_frame,
-    ensure_stage2_output_dirs,
-    write_stage2_outputs,
+    ensure_geometry_output_dirs,
+    write_geometry_outputs,
 )
+
+
+def test_geometry_aliases_remain_available():
+    assert geometry_module.parse_stage2_views is geometry_module.parse_geometry_views
+    assert geometry_outputs_module.ensure_stage2_output_dirs is geometry_outputs_module.ensure_geometry_output_dirs
+    assert geometry_outputs_module.write_stage2_outputs is geometry_outputs_module.write_geometry_outputs
 
 
 def test_individual_grouped_stimulus_pair_summary_excludes_cross_individual_pairs(synthetic_geometry_comparisons):
@@ -1254,8 +1262,8 @@ def synthetic_geometry_outputs() -> dict[str, pd.DataFrame]:
     return outputs
 
 
-def test_ensure_stage2_output_dirs_creates_expected_tree(tmp_path):
-    dirs = ensure_stage2_output_dirs(tmp_path / "stage2_geometry")
+def test_ensure_geometry_output_dirs_creates_expected_tree(tmp_path):
+    dirs = ensure_geometry_output_dirs(tmp_path / "geometry")
 
     assert dirs["output_root"].exists()
     assert dirs["tables_dir"].exists()
@@ -1263,8 +1271,8 @@ def test_ensure_stage2_output_dirs_creates_expected_tree(tmp_path):
     assert dirs["qc_dir"].exists()
 
 
-def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometry_outputs):
-    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+def test_write_geometry_outputs_writes_required_tables(tmp_path, synthetic_geometry_outputs):
+    written = write_geometry_outputs(synthetic_geometry_outputs, tmp_path / "geometry")
 
     required_pair_tables = [
         "rdm_pairs__response_window__pooled.parquet",
@@ -1296,19 +1304,19 @@ def test_write_stage2_outputs_writes_required_tables(tmp_path, synthetic_geometr
     assert (written["figures_dir"] / "stimulus_overlap__individual.png").exists()
 
 
-def test_write_stage2_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path, synthetic_geometry_outputs):
-    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+def test_write_geometry_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path, synthetic_geometry_outputs):
+    written = write_geometry_outputs(synthetic_geometry_outputs, tmp_path / "geometry")
 
     assert "rdm_matrix__response_window__individual" not in written
     assert not (written["tables_dir"] / "rdm_matrix__response_window__individual.parquet").exists()
     assert (written["tables_dir"] / "rdm_matrix__response_window__pooled.parquet").exists()
 
 
-def test_write_stage2_outputs_handles_empty_pooled_matrix_frames(tmp_path, synthetic_geometry_outputs):
+def test_write_geometry_outputs_handles_empty_pooled_matrix_frames(tmp_path, synthetic_geometry_outputs):
     outputs = dict(synthetic_geometry_outputs)
     outputs["rdm_matrix__response_window__pooled"] = pd.DataFrame(columns=["stimulus_row"])
 
-    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+    written = write_geometry_outputs(outputs, tmp_path / "geometry")
 
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
@@ -1318,7 +1326,7 @@ def test_write_stage2_outputs_handles_empty_pooled_matrix_frames(tmp_path, synth
     assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
 
 
-def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summary(tmp_path, synthetic_geometry_outputs):
+def test_write_geometry_outputs_excludes_non_pooled_views_from_pooled_matrix_summary(tmp_path, synthetic_geometry_outputs):
     outputs = dict(synthetic_geometry_outputs)
     outputs["rdm_matrix__novel_view__individual"] = pd.DataFrame(
         {
@@ -1328,14 +1336,14 @@ def test_write_stage2_outputs_excludes_non_pooled_views_from_pooled_matrix_summa
         }
     )
 
-    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+    written = write_geometry_outputs(outputs, tmp_path / "geometry")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
     assert "novel_view" not in summary["pooled_matrix_views"]
 
 
-def test_write_stage2_outputs_records_only_actual_included_views(tmp_path, synthetic_geometry_outputs):
+def test_write_geometry_outputs_records_only_actual_included_views(tmp_path, synthetic_geometry_outputs):
     outputs = {
         "rdm_pairs__full_trajectory__pooled": synthetic_geometry_outputs["rdm_pairs__full_trajectory__pooled"],
         "rdm_pairs__full_trajectory__individual": synthetic_geometry_outputs["rdm_pairs__full_trajectory__individual"],
@@ -1353,7 +1361,7 @@ def test_write_stage2_outputs_records_only_actual_included_views(tmp_path, synth
         "stimulus_overlap__individual": synthetic_geometry_outputs["stimulus_overlap__individual"],
     }
 
-    written = write_stage2_outputs(outputs, tmp_path / "stage2_geometry")
+    written = write_geometry_outputs(outputs, tmp_path / "geometry")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["views"] == ["full_trajectory"]
@@ -1365,8 +1373,8 @@ def test_write_stage2_outputs_records_only_actual_included_views(tmp_path, synth
     ]
 
 
-def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
-    written = write_stage2_outputs(synthetic_geometry_outputs, tmp_path / "stage2_geometry")
+def test_write_geometry_outputs_writes_run_summary(tmp_path, synthetic_geometry_outputs):
+    written = write_geometry_outputs(synthetic_geometry_outputs, tmp_path / "geometry")
 
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
@@ -1387,9 +1395,10 @@ def test_write_stage2_outputs_writes_run_summary(tmp_path, synthetic_geometry_ou
         "stimulus_overlap__date",
         "stimulus_overlap__individual",
     ]
-    assert summary["tables_dir"].endswith("stage2_geometry\\tables")
-    assert summary["figures_dir"].endswith("stage2_geometry\\figures")
+    assert summary["tables_dir"].endswith("geometry\\tables")
+    assert summary["figures_dir"].endswith("geometry\\figures")
 
     markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
-    assert "# Stage 2 Geometry Run Summary" in markdown
+    assert "# Geometry Analysis Run Summary" in markdown
     assert "- Views: response_window, full_trajectory" in markdown
+

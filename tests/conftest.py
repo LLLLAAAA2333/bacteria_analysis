@@ -33,7 +33,7 @@ STAGE1_NEURON_SCALES = {
 }
 
 
-def _build_stage1_waveform(stimulus: str) -> np.ndarray:
+def _build_synthetic_waveform(stimulus: str) -> np.ndarray:
     values = np.zeros(len(EXPECTED_TIMEPOINTS), dtype=float)
 
     if stimulus == "b1_1":
@@ -55,7 +55,7 @@ def _build_stage1_waveform(stimulus: str) -> np.ndarray:
     return values
 
 
-def _build_stage1_raw_frame() -> pd.DataFrame:
+def _build_synthetic_raw_frame() -> pd.DataFrame:
     rows = []
     trial_specs = (
         ("2026-03-27", "worm_001", 0, "b1_1"),
@@ -73,7 +73,7 @@ def _build_stage1_raw_frame() -> pd.DataFrame:
     )
 
     for date, worm_key, segment_index, stimulus in trial_specs:
-        waveform = _build_stage1_waveform(stimulus)
+        waveform = _build_synthetic_waveform(stimulus)
         metadata = STAGE1_STIMULUS_META[stimulus]
         for neuron in STAGE1_STIMULUS_NEURONS[stimulus]:
             scaled_values = waveform * STAGE1_NEURON_SCALES[neuron]
@@ -155,54 +155,54 @@ def synthetic_neuron_segments_df():
 
 
 @pytest.fixture
-def stage1_raw_df():
-    return _build_stage1_raw_frame()
+def synthetic_raw_df():
+    return _build_synthetic_raw_frame()
 
 
 @pytest.fixture
-def stage1_preprocessing_outputs(stage1_raw_df):
-    return run_preprocessing_pipeline(stage1_raw_df)
+def synthetic_preprocessing_outputs(synthetic_raw_df):
+    return run_preprocessing_pipeline(synthetic_raw_df)
 
 
 @pytest.fixture
-def stage1_clean_df(stage1_preprocessing_outputs):
-    return stage1_preprocessing_outputs["clean_df"].copy()
+def synthetic_clean_df(synthetic_preprocessing_outputs):
+    return synthetic_preprocessing_outputs["clean_df"].copy()
 
 
 @pytest.fixture
-def stage1_trial_metadata(stage1_preprocessing_outputs):
-    return stage1_preprocessing_outputs["metadata"].copy()
+def synthetic_trial_metadata(synthetic_preprocessing_outputs):
+    return synthetic_preprocessing_outputs["metadata"].copy()
 
 
 @pytest.fixture
-def stage1_trial_wide(stage1_preprocessing_outputs):
-    return stage1_preprocessing_outputs["wide"].copy()
+def synthetic_trial_wide(synthetic_preprocessing_outputs):
+    return synthetic_preprocessing_outputs["wide"].copy()
 
 
 @pytest.fixture
-def stage1_trial_tensor(stage1_preprocessing_outputs):
-    return stage1_preprocessing_outputs["tensor"].copy()
+def synthetic_trial_tensor(synthetic_preprocessing_outputs):
+    return synthetic_preprocessing_outputs["tensor"].copy()
 
 
 @pytest.fixture
-def stage1_stage0_root(tmp_path, stage1_preprocessing_outputs):
-    root = tmp_path / "stage0"
+def synthetic_preprocess_root(tmp_path, synthetic_preprocessing_outputs):
+    root = tmp_path / "preprocess"
     clean_dir = root / "clean"
     trial_level_dir = root / "trial_level"
     qc_dir = root / "qc"
 
-    write_parquet(stage1_preprocessing_outputs["clean_df"], clean_dir / "neuron_segments_clean.parquet")
-    write_parquet(stage1_preprocessing_outputs["metadata"], trial_level_dir / "trial_metadata.parquet")
-    write_parquet(stage1_preprocessing_outputs["wide"], trial_level_dir / "trial_wide_baseline_centered.parquet")
+    write_parquet(synthetic_preprocessing_outputs["clean_df"], clean_dir / "neuron_segments_clean.parquet")
+    write_parquet(synthetic_preprocessing_outputs["metadata"], trial_level_dir / "trial_metadata.parquet")
+    write_parquet(synthetic_preprocessing_outputs["wide"], trial_level_dir / "trial_wide_baseline_centered.parquet")
     write_tensor_npz(
         trial_level_dir / "trial_tensor_baseline_centered.npz",
-        stage1_preprocessing_outputs["tensor"],
-        stage1_preprocessing_outputs["metadata"]["trial_id"].tolist(),
-        stage1_preprocessing_outputs["metadata"]["stimulus"].tolist(),
-        stage1_preprocessing_outputs["metadata"]["stim_name"].tolist(),
+        synthetic_preprocessing_outputs["tensor"],
+        synthetic_preprocessing_outputs["metadata"]["trial_id"].tolist(),
+        synthetic_preprocessing_outputs["metadata"]["stimulus"].tolist(),
+        synthetic_preprocessing_outputs["metadata"]["stim_name"].tolist(),
     )
-    write_json(stage1_preprocessing_outputs["report"], qc_dir / "preprocessing_report.json")
-    write_markdown_report(stage1_preprocessing_outputs["report"], qc_dir / "preprocessing_report.md")
+    write_json(synthetic_preprocessing_outputs["report"], qc_dir / "preprocessing_report.json")
+    write_markdown_report(synthetic_preprocessing_outputs["report"], qc_dir / "preprocessing_report.md")
 
     return root
 
@@ -312,7 +312,7 @@ def synthetic_geometry_comparisons() -> pd.DataFrame:
 
 
 @pytest.fixture
-def stage3_model_input_root(tmp_path):
+def synthetic_model_input_root(tmp_path):
     root = tmp_path / "model_space"
     stage2_root = root / "stage2_pooled"
     tables_dir = stage2_root / "tables"
@@ -368,12 +368,12 @@ def stage3_model_input_root(tmp_path):
 
 
 @pytest.fixture
-def stage3_matrix_path(stage3_model_input_root):
-    return stage3_model_input_root / "matrix.xlsx"
+def synthetic_matrix_path(synthetic_model_input_root):
+    return synthetic_model_input_root / "matrix.xlsx"
 
 
 @pytest.fixture
-def stage3_blank_matrix_path(tmp_path):
+def synthetic_blank_matrix_path(tmp_path):
     matrix_path = tmp_path / "blank_matrix.xlsx"
     pd.DataFrame.from_records(
         [

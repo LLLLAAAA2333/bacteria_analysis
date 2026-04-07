@@ -1,4 +1,4 @@
-"""CLI entry point for Stage 1 reliability analysis."""
+"""CLI entry point for reliability analysis."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from bacteria_analysis.reliability import build_trial_views, load_reliability_inputs, run_reliability_pipeline
-from bacteria_analysis.reliability_outputs import write_stage1_outputs
+from bacteria_analysis.reliability_outputs import write_reliability_outputs
 from bacteria_analysis.reliability_stats import (
     build_final_summary_table,
     build_permutation_null,
@@ -30,40 +30,46 @@ PRIMARY_VIEW_CHOICES = (
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Stage 1 reliability analysis from Stage 0 outputs.")
+    parser = argparse.ArgumentParser(description="Run reliability analysis from preprocessing outputs.")
     parser.add_argument(
         "--input-root",
-        help="Root directory containing Stage 0 clean/, trial_level/, and qc/ outputs.",
+        help="Root directory containing clean/, trial_level/, and qc/ outputs.",
     )
     parser.add_argument(
         "--metadata",
         default="data/processed/trial_level/trial_metadata.parquet",
-        help="Path to Stage 0 trial metadata parquet.",
+        help="Path to trial metadata parquet.",
     )
     parser.add_argument(
         "--wide",
         default="data/processed/trial_level/trial_wide_baseline_centered.parquet",
-        help="Path to Stage 0 trial wide parquet.",
+        help="Path to trial wide parquet.",
     )
     parser.add_argument(
         "--tensor",
         default="data/processed/trial_level/trial_tensor_baseline_centered.npz",
-        help="Path to Stage 0 trial tensor npz.",
+        help="Path to trial tensor npz.",
     )
     parser.add_argument(
         "--output-root",
         default="results",
-        help="Base directory for Stage 1 outputs.",
+        help="Base directory for reliability outputs.",
     )
     parser.add_argument("--permutations", type=int, default=100, help="Number of permutation iterations.")
     parser.add_argument("--bootstrap-iterations", type=int, default=500, help="Number of grouped bootstrap iterations.")
     parser.add_argument("--split-half-repeats", type=int, default=100, help="Number of split-half repeats.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for split-half and inference.")
     parser.add_argument(
-        "--primary-view",
+        "--focus-view",
         choices=PRIMARY_VIEW_CHOICES,
         default="response_window",
-        help="Primary reporting view to record in Stage 1 summaries.",
+        help="Focus view to record in reliability summaries.",
+    )
+    parser.add_argument(
+        "--primary-view",
+        dest="focus_view",
+        choices=PRIMARY_VIEW_CHOICES,
+        help=argparse.SUPPRESS,
     )
     return parser.parse_args(argv)
 
@@ -71,7 +77,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _validate_input_paths(paths: dict[str, Path]) -> None:
     missing = [f"{name}={path}" for name, path in paths.items() if not path.exists()]
     if missing:
-        raise FileNotFoundError("missing required Stage 0 inputs: " + ", ".join(missing))
+        raise FileNotFoundError("missing required trial-level inputs: " + ", ".join(missing))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -133,19 +139,19 @@ def main(argv: list[str] | None = None) -> int:
             "bootstrap_summary": bootstrap_summary,
             "final_summary": final_summary,
         }
-        stage1_output_root = Path(args.output_root) / "stage1_reliability"
-        written = write_stage1_outputs(
+        reliability_output_root = Path(args.output_root) / "reliability"
+        written = write_reliability_outputs(
             core_outputs,
             stats_outputs,
-            stage1_output_root,
-            primary_view=args.primary_view,
+            reliability_output_root,
+            focus_view=args.focus_view,
         )
     except Exception as exc:  # pragma: no cover - exercised in CLI smoke tests
-        print(f"Stage 1 reliability failed: {exc}", file=sys.stderr)
+        print(f"Reliability analysis failed: {exc}", file=sys.stderr)
         return 1
 
     print(f"Loaded {core_outputs['metadata_summary'].iloc[0]['n_trials']} trials")
-    print(f"Primary reporting view: {args.primary_view}")
+    print(f"Focus view: {args.focus_view}")
     print(f"Wrote final summary table to {written['final_summary']}")
     print(f"Wrote figures to {written['figures_dir']}")
     print(f"Wrote QC tables to {written['qc_dir']}")

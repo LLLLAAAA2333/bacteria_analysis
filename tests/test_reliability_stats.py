@@ -16,10 +16,13 @@ def _pick_column(frame: pd.DataFrame, candidates: tuple[str, ...]) -> str:
     raise AssertionError(f"missing expected column; tried {candidates}, got {list(frame.columns)}")
 
 
-def test_permutation_null_preserves_label_counts_and_iteration_count(stage1_trial_metadata, stage1_trial_tensor):
+def test_permutation_null_preserves_label_counts_and_iteration_count(
+    synthetic_trial_metadata,
+    synthetic_trial_tensor,
+):
     assert reliability_stats_module is not None, "bacteria_analysis.reliability_stats is not implemented yet"
 
-    views = reliability_module.build_trial_views(stage1_trial_metadata, stage1_trial_tensor)
+    views = reliability_module.build_trial_views(synthetic_trial_metadata, synthetic_trial_tensor)
     trial_view = views["full_trajectory"]
     trial_metadata = reliability_module.add_individual_id(trial_view.metadata)
 
@@ -38,10 +41,13 @@ def test_permutation_null_preserves_label_counts_and_iteration_count(stage1_tria
         pd.testing.assert_series_equal(permuted_counts, observed_counts, check_names=False)
 
 
-def test_grouped_bootstrap_resamples_individuals_without_splitting(stage1_trial_metadata, stage1_trial_tensor):
+def test_grouped_bootstrap_resamples_individuals_without_splitting(
+    synthetic_trial_metadata,
+    synthetic_trial_tensor,
+):
     assert reliability_stats_module is not None, "bacteria_analysis.reliability_stats is not implemented yet"
 
-    views = reliability_module.build_trial_views(stage1_trial_metadata, stage1_trial_tensor)
+    views = reliability_module.build_trial_views(synthetic_trial_metadata, synthetic_trial_tensor)
     trial_view = views["full_trajectory"]
     trial_metadata = reliability_module.add_individual_id(trial_view.metadata)
 

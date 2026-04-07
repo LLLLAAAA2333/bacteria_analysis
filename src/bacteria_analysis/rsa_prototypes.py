@@ -1,4 +1,4 @@
-"""Prototype helpers for the Stage 3 supplementary RSA branch."""
+"""Prototype helpers for biochemical RSA context outputs."""
 
 from __future__ import annotations
 
@@ -24,18 +24,18 @@ PROTOTYPE_AGGREGATIONS: tuple[str, str] = ("mean", "median")
 
 
 @dataclass(frozen=True)
-class PrototypeSupplementInputs:
-    """Preprocessed inputs used to build prototype-level supplementary outputs."""
+class PrototypeContextInputs:
+    """Preprocessed inputs used to build prototype-level context outputs."""
 
     metadata: pd.DataFrame
     views: dict[str, TrialView]
 
 
-def load_prototype_supplement_inputs(
+def load_prototype_context_inputs(
     preprocess_root: str | Path,
     view_names: tuple[str, ...] | list[str],
-) -> PrototypeSupplementInputs:
-    """Load preprocessing outputs required for prototype-level Stage 3 supplements."""
+) -> PrototypeContextInputs:
+    """Load preprocessing outputs required for prototype-level context outputs."""
 
     root = Path(preprocess_root)
     wide_path = root / "trial_level" / "trial_wide_baseline_centered.parquet"
@@ -52,7 +52,7 @@ def load_prototype_supplement_inputs(
 
     view_windows = {view_name: VIEW_WINDOWS[view_name] for view_name in selected_views}
     views = build_trial_views(inputs.metadata, inputs.tensor, view_windows=view_windows)
-    return PrototypeSupplementInputs(metadata=inputs.metadata, views=views)
+    return PrototypeContextInputs(metadata=inputs.metadata, views=views)
 
 
 def build_grouped_prototypes(
@@ -179,3 +179,7 @@ def _is_prototype_feature_column(column: object) -> bool:
 
 def _prototype_feature_column_key(column: str) -> int:
     return int(str(column)[1:])
+
+
+PrototypeSupplementInputs = PrototypeContextInputs
+load_prototype_supplement_inputs = load_prototype_context_inputs

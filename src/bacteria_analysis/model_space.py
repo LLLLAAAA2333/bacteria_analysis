@@ -1,4 +1,4 @@
-"""Loaders for Stage 3 model-space inputs."""
+"""Loaders for biochemical RSA model-space inputs."""
 
 from __future__ import annotations
 

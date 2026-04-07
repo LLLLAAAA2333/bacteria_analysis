@@ -1,4 +1,4 @@
-"""Stage 3 RSA statistics and robustness helpers."""
+"""Biochemical RSA statistics and robustness helpers."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pandas as pd
 
 from bacteria_analysis.io import read_parquet
 from bacteria_analysis.model_space import build_model_rdm, summarize_model_input_coverage
-from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_grouped_prototypes, build_prototype_rdm
+from bacteria_analysis.rsa_prototypes import PrototypeContextInputs, build_grouped_prototypes, build_prototype_rdm
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
 INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = "internal__prototype_rdm__per_date__"
@@ -215,12 +215,12 @@ def summarize_cross_view_comparison(
     return summary
 
 
-def load_stage2_pooled_neural_rdms(
-    stage2_root: str | Path,
+def load_geometry_pooled_neural_rdms(
+    geometry_root: str | Path,
     *,
     view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
 ) -> dict[str, pd.DataFrame]:
-    root = Path(stage2_root)
+    root = Path(geometry_root)
     tables_dir = root / "tables"
     neural_rdms: dict[str, pd.DataFrame] = {}
 
@@ -228,17 +228,17 @@ def load_stage2_pooled_neural_rdms(
         normalized_view = str(view_name)
         matrix_path = tables_dir / f"rdm_matrix__{normalized_view}__pooled.parquet"
         if not matrix_path.exists():
-            raise FileNotFoundError(f"missing Stage 2 pooled RDM for view {normalized_view!r}: {matrix_path}")
+            raise FileNotFoundError(f"missing geometry pooled RDM for view {normalized_view!r}: {matrix_path}")
         neural_rdms[normalized_view] = read_parquet(matrix_path)
 
     return neural_rdms
 
 
-def run_stage3_rsa(
+def run_biochemical_rsa(
     resolved_inputs: dict[str, pd.DataFrame],
     *,
     neural_matrices: dict[str, pd.DataFrame],
-    prototype_inputs: PrototypeSupplementInputs | None = None,
+    prototype_inputs: PrototypeContextInputs | None = None,
     prototype_aggregation: str = "mean",
     permutations: int = 0,
     seed: int = 0,
@@ -417,7 +417,7 @@ def run_stage3_rsa(
             {"prototype_aggregation": [prototype_aggregation]}
         )
         core_outputs.update(
-            _build_prototype_supplement_outputs(
+            _build_prototype_context_outputs(
                 resolved_inputs,
                 core_outputs=core_outputs,
                 prototype_inputs=prototype_inputs,
@@ -430,11 +430,11 @@ def run_stage3_rsa(
     return core_outputs
 
 
-def _build_prototype_supplement_outputs(
+def _build_prototype_context_outputs(
     resolved_inputs: dict[str, pd.DataFrame],
     *,
     core_outputs: dict[str, pd.DataFrame],
-    prototype_inputs: PrototypeSupplementInputs,
+    prototype_inputs: PrototypeContextInputs,
     prototype_aggregation: str,
     view_names: list[str],
     permutations: int,
@@ -841,8 +841,13 @@ __all__ = [
     "benjamini_hochberg",
     "build_permutation_null",
     "compute_rsa_score",
-    "load_stage2_pooled_neural_rdms",
-    "run_stage3_rsa",
+    "load_geometry_pooled_neural_rdms",
+    "run_biochemical_rsa",
     "summarize_cross_view_comparison",
     "summarize_leave_one_stimulus_out",
+    "load_stage2_pooled_neural_rdms",
+    "run_stage3_rsa",
 ]
+
+load_stage2_pooled_neural_rdms = load_geometry_pooled_neural_rdms
+run_stage3_rsa = run_biochemical_rsa

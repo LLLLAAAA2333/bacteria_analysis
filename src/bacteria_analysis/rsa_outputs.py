@@ -1,4 +1,4 @@
-"""Output writers and figures for Stage 3 biochemical RSA."""
+"""Output writers and figures for biochemical RSA."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ QC_ARTIFACT_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 REQUIRED_FIGURES: tuple[str, ...] = (
-    "ranked_primary_model_rsa",
+    "ranked_model_rsa",
     "leave_one_stimulus_out_robustness",
     "view_comparison_summary",
 )
@@ -80,17 +80,17 @@ def _internal_prototype_per_date_rdm_key(view_name: str, date_value: str) -> str
     return f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{date_value}"
 
 
-def ensure_stage3_output_dirs(output_root: str | Path) -> dict[str, Path]:
+def ensure_rsa_output_dirs(output_root: str | Path) -> dict[str, Path]:
     root = Path(output_root)
-    return _mkdir_stage3_dirs(root)
+    return _mkdir_rsa_dirs(root)
 
 
-def write_stage3_outputs(core_outputs: dict[str, pd.DataFrame], output_root: str | Path) -> dict[str, Path]:
-    dirs = ensure_stage3_output_dirs(output_root)
-    return _write_stage3_artifacts(core_outputs, dirs)
+def write_rsa_outputs(core_outputs: dict[str, pd.DataFrame], output_root: str | Path) -> dict[str, Path]:
+    dirs = ensure_rsa_output_dirs(output_root)
+    return _write_rsa_artifacts(core_outputs, dirs)
 
 
-def _mkdir_stage3_dirs(root: Path) -> dict[str, Path]:
+def _mkdir_rsa_dirs(root: Path) -> dict[str, Path]:
     tables_dir = root / "tables"
     figures_dir = root / "figures"
     qc_dir = root / "qc"
@@ -106,7 +106,7 @@ def _mkdir_stage3_dirs(root: Path) -> dict[str, Path]:
     }
 
 
-def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, Path]) -> dict[str, Path]:
+def _write_rsa_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, Path]) -> dict[str, Path]:
     written: dict[str, Path] = {
         "output_root": dirs["output_root"],
         "tables_dir": dirs["tables_dir"],
@@ -115,7 +115,7 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     }
     consumed_keys: set[str] = set()
 
-    _remove_legacy_stage3_figures(dirs["figures_dir"])
+    _remove_legacy_rsa_figures(dirs["figures_dir"])
     _remove_stale_prototype_parquets(dirs["tables_dir"], dirs["qc_dir"])
 
     required_tables = _resolve_artifact_family(core_outputs, TABLE_ARTIFACT_SPECS, consumed_keys)
@@ -144,48 +144,48 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     view_comparison = required_tables["rsa_view_comparison"]
     view_names = _ordered_views(rsa_results, view_comparison)
     figure_view_names = _figure_view_names(rsa_results, view_comparison)
-    family_summary = _collect_model_families(registry)
-    top_primary_models = _build_top_primary_models_by_view(rsa_results, family_summary["primary_models"])
-    primary_view = _choose_primary_view(rsa_results, view_candidates=view_names)
+    group_summary = _collect_model_groups(registry)
+    top_models = _build_top_models_by_view(rsa_results, group_summary["ranked_models"])
+    focus_view = _choose_focus_view(rsa_results, view_candidates=view_names)
 
-    written["ranked_primary_model_rsa"] = _plot_ranked_primary_model_rsa(
+    written["ranked_model_rsa"] = _plot_ranked_model_rsa(
         rsa_results,
-        family_summary["primary_models"],
-        path=dirs["figures_dir"] / "ranked_primary_model_rsa.png",
-        primary_view=primary_view,
+        group_summary["ranked_models"],
+        path=dirs["figures_dir"] / "ranked_model_rsa.png",
+        focus_view=focus_view,
     )
     for figure_name, view_name in zip(
         _build_neural_vs_model_figure_names(figure_view_names), figure_view_names, strict=False
     ):
         written[figure_name] = _plot_neural_vs_top_model_rdm_view(
             core_outputs,
-            top_primary_models,
+            top_models,
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
         )
     written["leave_one_stimulus_out_robustness"] = _plot_leave_one_stimulus_out_robustness(
         leave_one_out,
-        family_summary["primary_models"],
+        group_summary["ranked_models"],
         dirs["figures_dir"] / "leave_one_stimulus_out_robustness.png",
     )
     written["view_comparison_summary"] = _plot_view_comparison_summary(
         view_comparison,
         dirs["figures_dir"] / "view_comparison_summary.png",
     )
-    prototype_summary = _write_prototype_supplementary_figures(
+    prototype_summary = _write_prototype_context_figures(
         core_outputs,
         dirs,
         written,
-        top_primary_models=top_primary_models,
+        top_models=top_models,
     )
 
     summary = _build_run_summary(
         required_tables=required_tables,
         required_qc=required_qc,
         written=written,
-        family_summary=family_summary,
-        top_primary_models=top_primary_models,
-        primary_view=primary_view,
+        group_summary=group_summary,
+        top_models=top_models,
+        focus_view=focus_view,
         prototype_summary=prototype_summary,
     )
     written["run_summary_json"] = write_json(summary, dirs["output_root"] / "run_summary.json")
@@ -193,10 +193,11 @@ def _write_stage3_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[st
     return written
 
 
-def _remove_legacy_stage3_figures(figures_dir: Path) -> None:
-    legacy_figure = figures_dir / "neural_vs_top_model_rdm_panel.png"
-    if legacy_figure.exists():
-        legacy_figure.unlink()
+def _remove_legacy_rsa_figures(figures_dir: Path) -> None:
+    for legacy_name in ("neural_vs_top_model_rdm_panel.png", "ranked_primary_model_rsa.png"):
+        legacy_figure = figures_dir / legacy_name
+        if legacy_figure.exists():
+            legacy_figure.unlink()
 
     for stale_figure in figures_dir.glob("neural_vs_top_model_rdm__*.png"):
         stale_figure.unlink()
@@ -258,11 +259,11 @@ def _is_internal_only_artifact(artifact_name: str) -> bool:
     return artifact_name.startswith(INTERNAL_ONLY_ARTIFACT_PREFIX)
 
 
-def _collect_model_families(registry: pd.DataFrame) -> dict[str, list[str]]:
+def _collect_model_groups(registry: pd.DataFrame) -> dict[str, list[str]]:
     if registry.empty or "model_id" not in registry.columns:
         return {
-            "primary_models": [],
-            "supplementary_models": [],
+            "ranked_models": [],
+            "additional_models": [],
             "excluded_models": [],
         }
 
@@ -274,14 +275,14 @@ def _collect_model_families(registry: pd.DataFrame) -> dict[str, list[str]]:
     primary_excluded_mask = model_tier.eq("primary") & excluded_from_primary_ranking
 
     return {
-        "primary_models": model_ids.loc[model_tier.eq("primary") & ~primary_excluded_mask & ~hard_excluded_mask].tolist(),
-        "supplementary_models": model_ids.loc[model_tier.eq("supplementary") & ~hard_excluded_mask].tolist(),
+        "ranked_models": model_ids.loc[model_tier.eq("primary") & ~primary_excluded_mask & ~hard_excluded_mask].tolist(),
+        "additional_models": model_ids.loc[model_tier.eq("supplementary") & ~hard_excluded_mask].tolist(),
         "excluded_models": model_ids.loc[hard_excluded_mask | primary_excluded_mask].tolist(),
     }
 
 
-def _build_top_primary_models_by_view(rsa_results: pd.DataFrame, primary_models: list[str]) -> dict[str, str]:
-    if rsa_results.empty or not primary_models:
+def _build_top_models_by_view(rsa_results: pd.DataFrame, ranked_models: list[str]) -> dict[str, str]:
+    if rsa_results.empty or not ranked_models:
         return {}
 
     required_columns = {"view_name", "model_id", "rsa_similarity"}
@@ -292,7 +293,7 @@ def _build_top_primary_models_by_view(rsa_results: pd.DataFrame, primary_models:
     filtered["view_name"] = filtered["view_name"].astype(str)
     filtered["model_id"] = filtered["model_id"].astype(str)
     filtered["rsa_similarity"] = pd.to_numeric(filtered["rsa_similarity"], errors="coerce")
-    filtered = filtered.loc[filtered["model_id"].isin(primary_models)]
+    filtered = filtered.loc[filtered["model_id"].isin(ranked_models)]
     if "score_status" in filtered.columns:
         filtered = filtered.loc[_string_column(filtered, "score_status").eq("ok")]
     filtered = filtered.loc[np.isfinite(filtered["rsa_similarity"])]
@@ -330,30 +331,30 @@ def _build_top_prototype_models_by_date_and_view(prototype_rsa_results: pd.DataF
     return top_models
 
 
-def _plot_ranked_primary_model_rsa(
+def _plot_ranked_model_rsa(
     rsa_results: pd.DataFrame,
-    primary_models: list[str],
+    ranked_models: list[str],
     *,
-    primary_view: str | None,
+    focus_view: str | None,
     path: Path,
 ) -> Path:
-    if rsa_results.empty or not primary_models:
-        return _plot_empty_figure(path, title="Ranked Primary-Model RSA", message="No primary RSA results")
+    if rsa_results.empty or not ranked_models:
+        return _plot_empty_figure(path, title="Ranked Model RSA", message="No ranked RSA results")
 
     required_columns = {"model_id", "view_name", "rsa_similarity"}
     if not required_columns.issubset(rsa_results.columns):
-        return _plot_empty_figure(path, title="Ranked Primary-Model RSA", message="Missing rsa_results columns")
+        return _plot_empty_figure(path, title="Ranked Model RSA", message="Missing rsa_results columns")
 
     ranked = rsa_results.copy()
     ranked["model_id"] = ranked["model_id"].astype(str)
     ranked["view_name"] = ranked["view_name"].astype(str)
     ranked["rsa_similarity"] = pd.to_numeric(ranked["rsa_similarity"], errors="coerce")
-    ranked = ranked.loc[ranked["model_id"].isin(primary_models)]
-    if primary_view is not None:
-        ranked = ranked.loc[ranked["view_name"] == primary_view]
+    ranked = ranked.loc[ranked["model_id"].isin(ranked_models)]
+    if focus_view is not None:
+        ranked = ranked.loc[ranked["view_name"] == focus_view]
     ranked = ranked.loc[np.isfinite(ranked["rsa_similarity"])]
     if ranked.empty:
-        return _plot_empty_figure(path, title="Ranked Primary-Model RSA", message="No finite primary RSA values")
+        return _plot_empty_figure(path, title="Ranked Model RSA", message="No finite ranked RSA values")
 
     ranked = ranked.sort_values(["rsa_similarity", "model_id"], ascending=[True, True])
     y_positions = np.arange(len(ranked), dtype=float)
@@ -362,16 +363,16 @@ def _plot_ranked_primary_model_rsa(
     plt.yticks(y_positions, ranked["model_id"].tolist())
     plt.xlabel("RSA similarity")
     plt.ylabel("Model")
-    if primary_view is None:
-        plt.title("Ranked Primary-Model RSA")
+    if focus_view is None:
+        plt.title("Ranked Model RSA")
     else:
-        plt.title(f"Ranked Primary-Model RSA ({primary_view})")
+        plt.title(f"Ranked Model RSA ({focus_view})")
     return _save_figure(path)
 
 
 def _plot_neural_vs_top_model_rdm_view(
     core_outputs: dict[str, pd.DataFrame],
-    top_primary_models: dict[str, str],
+    top_models: dict[str, str],
     *,
     view_name: str,
     path: Path,
@@ -383,7 +384,7 @@ def _plot_neural_vs_top_model_rdm_view(
     )
     figure.suptitle(f"Neural-Versus-Top-Model RDM Comparison ({view_name})", fontsize=12)
 
-    top_model_id = top_primary_models.get(view_name)
+    top_model_id = top_models.get(view_name)
     stimulus_sample_map = core_outputs.get("stimulus_sample_map")
     neural_matrix = _find_matrix_frame(
         core_outputs,
@@ -423,7 +424,7 @@ def _plot_neural_vs_top_model_rdm_view(
 
 def _plot_leave_one_stimulus_out_robustness(
     leave_one_out: pd.DataFrame,
-    primary_models: list[str],
+    ranked_models: list[str],
     path: Path,
 ) -> Path:
     if leave_one_out.empty:
@@ -438,8 +439,8 @@ def _plot_leave_one_stimulus_out_robustness(
     summary["model_id"] = summary["model_id"].astype(str)
     summary["rsa_similarity"] = pd.to_numeric(summary["rsa_similarity"], errors="coerce")
     summary = summary.loc[np.isfinite(summary["rsa_similarity"])]
-    if primary_models:
-        summary = summary.loc[summary["model_id"].isin(primary_models)]
+    if ranked_models:
+        summary = summary.loc[summary["model_id"].isin(ranked_models)]
     if summary.empty:
         return _plot_empty_figure(path, title="Leave-One-Stimulus-Out Robustness", message="No finite robustness data")
 
@@ -491,12 +492,12 @@ def _plot_view_comparison_summary(view_comparison: pd.DataFrame, path: Path) -> 
     return _save_figure(path)
 
 
-def _write_prototype_supplementary_figures(
+def _write_prototype_context_figures(
     core_outputs: dict[str, pd.DataFrame],
     dirs: dict[str, Path],
     written: dict[str, Path],
     *,
-    top_primary_models: dict[str, str],
+    top_models: dict[str, str],
 ) -> dict[str, Any]:
     prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
     top_prototype_models = _build_top_prototype_models_by_date_and_view(prototype_rsa_results)
@@ -541,14 +542,14 @@ def _write_prototype_supplementary_figures(
         written[f"figure__{figure_name}"] = _plot_prototype_pooled_rdm(
             core_outputs,
             _dataframe_or_none(core_outputs, figure_name),
-            top_primary_models,
+            top_models,
             stimulus_sample_map=_dataframe_or_none(core_outputs, "stimulus_sample_map"),
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
         )
 
     return {
-        "prototype_supplement_enabled": _prototype_supplement_enabled(core_outputs),
+        "prototype_context_enabled": _prototype_context_enabled(core_outputs),
         "prototype_aggregation": _prototype_aggregation(core_outputs),
         "prototype_views": _prototype_views(core_outputs),
         "prototype_dates": _prototype_dates(core_outputs),
@@ -681,7 +682,7 @@ def _plot_prototype_rdm_comparison_per_date(
 def _plot_prototype_pooled_rdm(
     core_outputs: dict[str, pd.DataFrame],
     prototype_rdm: pd.DataFrame | None,
-    top_primary_models: dict[str, str],
+    top_models: dict[str, str],
     *,
     stimulus_sample_map: pd.DataFrame | None,
     view_name: str,
@@ -698,7 +699,7 @@ def _plot_prototype_pooled_rdm(
     if prototype_rdm is not None:
         _, neural_order_labels = _prepare_rdm_heatmap_frame(prototype_rdm, stimulus_sample_map)
 
-    top_model_id = top_primary_models.get(view_name)
+    top_model_id = top_models.get(view_name)
     model_matrix = None
     if top_model_id:
         model_matrix = _find_matrix_frame(core_outputs, _model_rdm_aliases(top_model_id, view_name))
@@ -964,9 +965,9 @@ def _build_run_summary(
     required_tables: dict[str, pd.DataFrame],
     required_qc: dict[str, pd.DataFrame],
     written: dict[str, Path],
-    family_summary: dict[str, list[str]],
-    top_primary_models: dict[str, str],
-    primary_view: str | None,
+    group_summary: dict[str, list[str]],
+    top_models: dict[str, str],
+    focus_view: str | None,
     prototype_summary: dict[str, Any],
 ) -> dict[str, Any]:
     table_names = [artifact_name for artifact_name, _ in TABLE_ARTIFACT_SPECS]
@@ -989,12 +990,12 @@ def _build_run_summary(
 
     return {
         "views": view_names,
-        "primary_view": primary_view,
-        "sensitivity_views": [view_name for view_name in view_names if view_name != primary_view],
-        "primary_models": family_summary["primary_models"],
-        "supplementary_models": family_summary["supplementary_models"],
-        "excluded_models": family_summary["excluded_models"],
-        "top_primary_models_by_view": top_primary_models,
+        "focus_view": focus_view,
+        "sensitivity_views": [view_name for view_name in view_names if view_name != focus_view],
+        "ranked_models": group_summary["ranked_models"],
+        "additional_models": group_summary["additional_models"],
+        "excluded_models": group_summary["excluded_models"],
+        "top_models_by_view": top_models,
         "resolved_input_tables": [
             "stimulus_sample_map",
             "metabolite_annotation_resolved",
@@ -1015,7 +1016,7 @@ def _build_run_summary(
         "tables_dir": str(written["tables_dir"]),
         "figures_dir": str(written["figures_dir"]),
         "qc_dir": str(written["qc_dir"]),
-        "prototype_supplement_enabled": prototype_summary["prototype_supplement_enabled"],
+        "prototype_context_enabled": prototype_summary["prototype_context_enabled"],
         "prototype_aggregation": prototype_summary["prototype_aggregation"],
         "prototype_views": prototype_summary["prototype_views"],
         "prototype_dates": prototype_summary["prototype_dates"],
@@ -1025,7 +1026,7 @@ def _build_run_summary(
     }
 
 
-def _prototype_supplement_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
+def _prototype_context_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
     return any(key.startswith("prototype_") and isinstance(value, pd.DataFrame) for key, value in core_outputs.items())
 
 
@@ -1105,7 +1106,7 @@ def _figure_view_names(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame)
     return _canonicalize_view_order(list(DEFAULT_FIGURE_VIEWS))
 
 
-def _choose_primary_view(rsa_results: pd.DataFrame, *, view_candidates: list[str] | None = None) -> str | None:
+def _choose_focus_view(rsa_results: pd.DataFrame, *, view_candidates: list[str] | None = None) -> str | None:
     views = view_candidates or _ordered_views(rsa_results, pd.DataFrame())
     if not views:
         return None
@@ -1116,21 +1117,21 @@ def _choose_primary_view(rsa_results: pd.DataFrame, *, view_candidates: list[str
 
 def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     lines = [
-        "# Stage 3 Biochemical RSA Run Summary",
+        "# Biochemical RSA Run Summary",
         "",
         "## Views",
-        f"- Primary view: {summary['primary_view'] or 'None'}",
+        f"- Focus view: {summary['focus_view'] or 'None'}",
         f"- Sensitivity views: {', '.join(summary['sensitivity_views']) if summary['sensitivity_views'] else 'None'}",
         "",
-        "## Model Families",
-        f"- Primary models: {', '.join(summary['primary_models']) if summary['primary_models'] else 'None'}",
-        f"- Supplementary models: {', '.join(summary['supplementary_models']) if summary['supplementary_models'] else 'None'}",
+        "## Model Groups",
+        f"- Ranked models: {', '.join(summary['ranked_models']) if summary['ranked_models'] else 'None'}",
+        f"- Additional models: {', '.join(summary['additional_models']) if summary['additional_models'] else 'None'}",
         f"- Excluded models: {', '.join(summary['excluded_models']) if summary['excluded_models'] else 'None'}",
         "",
-        "## Top Primary Models By View",
+        "## Top Models By View",
     ]
 
-    top_models = summary["top_primary_models_by_view"]
+    top_models = summary["top_models_by_view"]
     if top_models:
         lines.extend(f"- {view_name}: {model_id}" for view_name, model_id in top_models.items())
     else:
@@ -1148,10 +1149,10 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
         ]
     )
 
-    if summary["prototype_supplement_enabled"]:
+    if summary["prototype_context_enabled"]:
         lines.extend(
             [
-                "## Prototype Supplement",
+                "## Prototype Context",
                 f"- Prototype aggregation: {summary['prototype_aggregation'] or 'None'}",
                 f"- Views: {', '.join(summary['prototype_views']) if summary['prototype_views'] else 'None'}",
                 f"- Dates: {', '.join(summary['prototype_dates']) if summary['prototype_dates'] else 'None'}",
@@ -1201,7 +1202,12 @@ def _save_figure(path: Path) -> Path:
 
 
 __all__ = [
+    "ensure_rsa_output_dirs",
+    "write_rsa_outputs",
     "ensure_stage3_output_dirs",
     "write_stage3_outputs",
 ]
+
+ensure_stage3_output_dirs = ensure_rsa_output_dirs
+write_stage3_outputs = write_rsa_outputs
 

@@ -1,4 +1,4 @@
-"""Stage 2 geometry aggregation helpers."""
+"""Geometry aggregation helpers."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ from bacteria_analysis.reliability import (
 )
 
 GROUP_TYPES = ("pooled", "individual", "date")
-DEFAULT_STAGE2_VIEWS = ("response_window", "full_trajectory")
-STAGE2_MVP_VIEW_WINDOWS = {view_name: VIEW_WINDOWS[view_name] for view_name in DEFAULT_STAGE2_VIEWS}
+DEFAULT_GEOMETRY_VIEWS = ("response_window", "full_trajectory")
+GEOMETRY_VIEW_WINDOWS = {view_name: VIEW_WINDOWS[view_name] for view_name in DEFAULT_GEOMETRY_VIEWS}
 
 
-def parse_stage2_views(view_names: str | list[str] | tuple[str, ...] | None = None) -> list[str]:
-    available_views = set(STAGE2_MVP_VIEW_WINDOWS)
+def parse_geometry_views(view_names: str | list[str] | tuple[str, ...] | None = None) -> list[str]:
+    available_views = set(GEOMETRY_VIEW_WINDOWS)
     if view_names is None:
-        requested = list(DEFAULT_STAGE2_VIEWS)
+        requested = list(DEFAULT_GEOMETRY_VIEWS)
     elif isinstance(view_names, str):
         requested = [part.strip() for part in view_names.split(",")]
     else:
@@ -36,12 +36,12 @@ def parse_stage2_views(view_names: str | list[str] | tuple[str, ...] | None = No
             continue
         if view_name not in available_views:
             supported = ", ".join(sorted(available_views))
-            raise ValueError(f"unsupported Stage 2 view: {view_name!r}. Supported views: {supported}")
+            raise ValueError(f"unsupported geometry view: {view_name!r}. Supported views: {supported}")
         if view_name not in normalized:
             normalized.append(view_name)
 
     if not normalized:
-        raise ValueError("at least one Stage 2 view is required")
+        raise ValueError("at least one geometry view is required")
     return normalized
 
 
@@ -57,15 +57,15 @@ def run_geometry_pipeline(
     }
     missing = [f"{name}={path}" for name, path in input_paths.items() if not path.exists()]
     if missing:
-        raise FileNotFoundError("missing required Stage 0 inputs: " + ", ".join(missing))
+        raise FileNotFoundError("missing required trial-level inputs: " + ", ".join(missing))
 
     inputs = load_reliability_inputs(
         metadata_path=input_paths["metadata"],
         tensor_path=input_paths["tensor"],
     )
-    selected_view_names = parse_stage2_views(view_names)
+    selected_view_names = parse_geometry_views(view_names)
     stimulus_name_map = build_stimulus_name_map(inputs.metadata)
-    view_windows = {view_name: STAGE2_MVP_VIEW_WINDOWS[view_name] for view_name in selected_view_names}
+    view_windows = {view_name: GEOMETRY_VIEW_WINDOWS[view_name] for view_name in selected_view_names}
     views = build_trial_views(inputs.metadata, inputs.tensor, view_windows=view_windows)
     comparisons = pd.concat(
         [
@@ -110,6 +110,9 @@ def run_geometry_pipeline(
         stimulus_name_map=stimulus_name_map,
     )
     return core_outputs
+
+
+parse_stage2_views = parse_geometry_views
 
 
 def build_stimulus_name_map(metadata: pd.DataFrame) -> dict[str, str]:
