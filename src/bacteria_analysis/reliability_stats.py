@@ -1,4 +1,4 @@
-"""Stage 1 permutation and bootstrap helpers."""
+"""Reliability permutation and bootstrap helpers."""
 
 from __future__ import annotations
 
@@ -238,7 +238,7 @@ def build_final_summary_table(
     permutation_summary: pd.DataFrame,
     bootstrap_summary: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Combine the main Stage 1 summaries into one per-view table."""
+    """Combine the main reliability summaries into one per-view table."""
 
     loio_view = loio_summary[loio_summary["holdout_type"] == "individual"].copy()
     lodo_view = lodo_summary[lodo_summary["holdout_type"] == "date"].copy()

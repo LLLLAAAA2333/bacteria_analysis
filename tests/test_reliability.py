@@ -32,7 +32,7 @@ def _correlation_distance(left: np.ndarray, right: np.ndarray) -> float:
     return float(1.0 - corr)
 
 
-def test_view_windows_and_individual_id_construction(stage1_trial_metadata):
+def test_view_windows_and_individual_id_construction(synthetic_trial_metadata):
     assert reliability_module.VIEW_WINDOWS == {
         "full_trajectory": tuple(range(45)),
         "on_window": (6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
@@ -43,16 +43,16 @@ def test_view_windows_and_individual_id_construction(stage1_trial_metadata):
 
     assert reliability_module.build_individual_id("2026-03-27", "worm_001") == "2026-03-27__worm_001"
 
-    annotated = reliability_module.add_individual_id(stage1_trial_metadata)
+    annotated = reliability_module.add_individual_id(synthetic_trial_metadata)
     assert "individual_id" in annotated.columns
     assert annotated["individual_id"].nunique() == 4
     assert annotated.loc[annotated["trial_id"] == "20260327__worm_001__0", "individual_id"].iloc[0] == "2026-03-27__worm_001"
     assert annotated.loc[annotated["trial_id"] == "20260328__worm_002__2", "individual_id"].iloc[0] == "2026-03-28__worm_002"
 
 
-def test_build_trial_views_slices_expected_time_windows(stage1_trial_metadata, stage1_trial_tensor):
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+def test_build_trial_views_slices_expected_time_windows(synthetic_trial_metadata, synthetic_trial_tensor):
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
 
     assert set(views) == {"full_trajectory", "on_window", "response_window", "post_window"}
     assert all(hasattr(view, "values") for view in views.values())
@@ -61,7 +61,7 @@ def test_build_trial_views_slices_expected_time_windows(stage1_trial_metadata, s
         view = views[view_name]
 
         assert tuple(view.timepoints) == expected_timepoints
-        assert view.values.shape == (len(stage1_trial_metadata), len(NEURON_ORDER), len(expected_timepoints))
+        assert view.values.shape == (len(synthetic_trial_metadata), len(NEURON_ORDER), len(expected_timepoints))
 
     full_view = views["full_trajectory"]
     trial_index = full_view.metadata.index[full_view.metadata["trial_id"] == "20260327__worm_001__0"][0]
@@ -78,12 +78,12 @@ def test_build_trial_views_slices_expected_time_windows(stage1_trial_metadata, s
     assert post_view.timepoints == tuple(range(16, 45))
 
 
-def test_overlap_aware_distance_uses_shared_neurons_only(stage1_trial_metadata, stage1_trial_tensor):
+def test_overlap_aware_distance_uses_shared_neurons_only(synthetic_trial_metadata, synthetic_trial_tensor):
     compute_pairwise_distances = getattr(reliability_module, "compute_pairwise_distances", None)
     assert compute_pairwise_distances is not None, "compute_pairwise_distances is not implemented yet"
 
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     full_view = views["full_trajectory"]
     pairwise = compute_pairwise_distances(full_view)
 
@@ -110,13 +110,13 @@ def test_overlap_aware_distance_uses_shared_neurons_only(stage1_trial_metadata, 
     assert match[distance_col] == pytest.approx(expected)
 
 
-def test_same_vs_different_summary_is_separated_and_positive(stage1_trial_metadata, stage1_trial_tensor):
+def test_same_vs_different_summary_is_separated_and_positive(synthetic_trial_metadata, synthetic_trial_tensor):
     build_trial_views = getattr(reliability_module, "build_trial_views")
     summarize_same_vs_different = getattr(reliability_module, "summarize_same_vs_different", None)
     assert summarize_same_vs_different is not None, "summarize_same_vs_different is not implemented yet"
 
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     pairwise_frames = []
     for view_name, view in views.items():
         pairwise_frames.append(_pairwise_with_view_name(view_name, view))
@@ -146,12 +146,15 @@ def test_overlap_neuron_count_requires_shared_valid_timepoints():
     assert comparison["comparison_status"] == "insufficient_overlap_neurons"
 
 
-def test_leave_one_individual_out_isolated_by_individual_and_scores_above_chance(stage1_trial_metadata, stage1_trial_tensor):
+def test_leave_one_individual_out_isolated_by_individual_and_scores_above_chance(
+    synthetic_trial_metadata,
+    synthetic_trial_tensor,
+):
     run_leave_one_group_out = getattr(reliability_module, "run_leave_one_group_out", None)
     assert run_leave_one_group_out is not None, "run_leave_one_group_out is not implemented yet"
 
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     trial_frame, group_frame, summary_frame = run_leave_one_group_out(
         views["full_trajectory"],
         "individual_id",
@@ -172,12 +175,12 @@ def test_leave_one_individual_out_isolated_by_individual_and_scores_above_chance
     assert not summary_frame.empty
 
 
-def test_leave_one_date_out_isolated_by_date_and_scores_above_chance(stage1_trial_metadata, stage1_trial_tensor):
+def test_leave_one_date_out_isolated_by_date_and_scores_above_chance(synthetic_trial_metadata, synthetic_trial_tensor):
     run_leave_one_group_out = getattr(reliability_module, "run_leave_one_group_out", None)
     assert run_leave_one_group_out is not None, "run_leave_one_group_out is not implemented yet"
 
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     trial_frame, group_frame, summary_frame = run_leave_one_group_out(
         views["full_trajectory"],
         "date",
@@ -197,9 +200,12 @@ def test_leave_one_date_out_isolated_by_date_and_scores_above_chance(stage1_tria
     assert not summary_frame.empty
 
 
-def test_within_date_cross_individual_same_vs_different_is_positive(stage1_trial_metadata, stage1_trial_tensor):
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+def test_within_date_cross_individual_same_vs_different_is_positive(
+    synthetic_trial_metadata,
+    synthetic_trial_tensor,
+):
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     pairwise = pd.concat(
         [reliability_module.compute_pairwise_distances(view) for view in views.values()],
         ignore_index=True,
@@ -216,9 +222,9 @@ def test_within_date_cross_individual_same_vs_different_is_positive(stage1_trial
         assert summary.loc[view_name, "distance_gap"] > 0
 
 
-def test_per_date_loio_runs_within_each_date(stage1_trial_metadata, stage1_trial_tensor):
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+def test_per_date_loio_runs_within_each_date(synthetic_trial_metadata, synthetic_trial_tensor):
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
 
     trial_frame, group_frame, summary_frame = reliability_module.run_per_date_loio(views["full_trajectory"])
 
@@ -230,9 +236,9 @@ def test_per_date_loio_runs_within_each_date(stage1_trial_metadata, stage1_trial
     assert not trial_frame.empty
 
 
-def test_stimulus_distance_pairs_build_symmetric_matrix(stage1_trial_metadata, stage1_trial_tensor):
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+def test_stimulus_distance_pairs_build_symmetric_matrix(synthetic_trial_metadata, synthetic_trial_tensor):
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     pairwise = pd.concat(
         [reliability_module.compute_pairwise_distances(view) for view in views.values()],
         ignore_index=True,
@@ -259,12 +265,12 @@ def test_stimulus_distance_pairs_build_symmetric_matrix(stage1_trial_metadata, s
     pd.testing.assert_frame_equal(matrix, matrix.T, check_dtype=False, check_names=False)
 
 
-def test_split_half_reliability_is_reproducible(stage1_trial_metadata, stage1_trial_tensor):
+def test_split_half_reliability_is_reproducible(synthetic_trial_metadata, synthetic_trial_tensor):
     run_split_half_reliability = getattr(reliability_module, "run_split_half_reliability", None)
     assert run_split_half_reliability is not None, "run_split_half_reliability is not implemented yet"
 
-    metadata = reliability_module.add_individual_id(stage1_trial_metadata)
-    views = reliability_module.build_trial_views(metadata, stage1_trial_tensor)
+    metadata = reliability_module.add_individual_id(synthetic_trial_metadata)
+    views = reliability_module.build_trial_views(metadata, synthetic_trial_tensor)
     first_repeat, first_summary = run_split_half_reliability(views["response_window"], n_repeats=5, seed=13)
     second_repeat, second_summary = run_split_half_reliability(views["response_window"], n_repeats=5, seed=13)
 

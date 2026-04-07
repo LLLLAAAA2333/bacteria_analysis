@@ -1,5 +1,6 @@
 import json
 
+import bacteria_analysis.rsa as rsa_module
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,15 +10,22 @@ from bacteria_analysis.rsa import (
     benjamini_hochberg,
     build_permutation_null,
     compute_rsa_score,
-    run_stage3_rsa,
+    run_biochemical_rsa,
     summarize_cross_view_comparison,
     summarize_leave_one_stimulus_out,
 )
 from bacteria_analysis import rsa_outputs
 from bacteria_analysis.model_space import build_model_rdm
 from bacteria_analysis.reliability import TrialView
-from bacteria_analysis.rsa_prototypes import PrototypeSupplementInputs, build_grouped_prototypes, build_prototype_rdm
-from bacteria_analysis.rsa_outputs import write_stage3_outputs
+from bacteria_analysis.rsa_prototypes import PrototypeContextInputs, build_grouped_prototypes, build_prototype_rdm
+from bacteria_analysis.rsa_outputs import write_rsa_outputs
+
+
+def test_rsa_aliases_remain_available():
+    assert rsa_module.run_stage3_rsa is rsa_module.run_biochemical_rsa
+    assert rsa_module.load_stage2_pooled_neural_rdms is rsa_module.load_geometry_pooled_neural_rdms
+    assert rsa_outputs.write_stage3_outputs is write_rsa_outputs
+    assert rsa_outputs.ensure_stage3_output_dirs is rsa_outputs.ensure_rsa_output_dirs
 
 
 def _matrix(rows: list[dict[str, object]]) -> pd.DataFrame:
@@ -145,7 +153,7 @@ def _stage3_prototype_resolved_inputs() -> dict[str, pd.DataFrame]:
     )
 
 
-def _stage3_prototype_inputs() -> PrototypeSupplementInputs:
+def _stage3_prototype_inputs() -> PrototypeContextInputs:
     metadata = pd.DataFrame.from_records(
         [
             {"date": "2026-03-11", "stimulus": "A001", "stim_name": "Stimulus A001"},
@@ -175,7 +183,7 @@ def _stage3_prototype_inputs() -> PrototypeSupplementInputs:
         ],
         dtype=float,
     )
-    return PrototypeSupplementInputs(
+    return PrototypeContextInputs(
         metadata=metadata,
         views={
             "response_window": TrialView(
@@ -194,10 +202,10 @@ def _stage3_prototype_inputs() -> PrototypeSupplementInputs:
     )
 
 
-def _empty_stage3_prototype_inputs() -> PrototypeSupplementInputs:
+def _empty_stage3_prototype_inputs() -> PrototypeContextInputs:
     metadata = pd.DataFrame(columns=["date", "stimulus", "stim_name"])
     empty_values = np.empty((0, 1, 4), dtype=float)
-    return PrototypeSupplementInputs(
+    return PrototypeContextInputs(
         metadata=metadata,
         views={
             "response_window": TrialView(
@@ -217,7 +225,7 @@ def _empty_stage3_prototype_inputs() -> PrototypeSupplementInputs:
 
 
 def _stage3_outputs_with_prototype_supplement() -> dict[str, pd.DataFrame]:
-    return run_stage3_rsa(
+    return run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=_stage3_prototype_inputs(),
@@ -741,8 +749,8 @@ def test_compute_rsa_score_rejects_labels_that_collide_after_string_normalizatio
         compute_rsa_score(matrix, matrix)
 
 
-def test_write_stage3_outputs_writes_required_tables(tmp_path, synthetic_stage3_outputs):
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_writes_required_tables(tmp_path, synthetic_stage3_outputs):
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
 
     assert (written["tables_dir"] / "stimulus_sample_map.parquet").exists()
     assert (written["tables_dir"] / "rsa_results.parquet").exists()
@@ -750,7 +758,7 @@ def test_write_stage3_outputs_writes_required_tables(tmp_path, synthetic_stage3_
     assert (written["tables_dir"] / "rsa_leave_one_stimulus_out.parquet").exists()
     assert (written["qc_dir"] / "model_input_coverage.parquet").exists()
     assert (written["qc_dir"] / "model_feature_filtering.parquet").exists()
-    assert (written["figures_dir"] / "ranked_primary_model_rsa.png").exists()
+    assert (written["figures_dir"] / "ranked_model_rsa.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
     assert (written["figures_dir"] / "leave_one_stimulus_out_robustness.png").exists()
@@ -758,33 +766,33 @@ def test_write_stage3_outputs_writes_required_tables(tmp_path, synthetic_stage3_
     assert (written["output_root"] / "run_summary.json").exists()
     assert (written["output_root"] / "run_summary.md").exists()
 
-def test_write_stage3_outputs_writes_per_view_neural_model_figures(tmp_path, synthetic_stage3_outputs):
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_writes_per_view_neural_model_figures(tmp_path, synthetic_stage3_outputs):
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
 
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
     assert not (written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
 
 
-def test_write_stage3_outputs_removes_legacy_panel_figure(tmp_path, synthetic_stage3_outputs):
-    output_root = tmp_path / "stage3_rsa"
+def test_write_rsa_outputs_removes_legacy_panel_figure(tmp_path, synthetic_stage3_outputs):
+    output_root = tmp_path / "rsa"
     legacy_panel = output_root / "figures" / "neural_vs_top_model_rdm_panel.png"
     legacy_panel.parent.mkdir(parents=True, exist_ok=True)
     legacy_panel.write_bytes(b"legacy panel")
 
-    written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+    written = write_rsa_outputs(synthetic_stage3_outputs, output_root)
 
     assert not legacy_panel.exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
 
 
-def test_write_stage3_outputs_removes_stale_per_view_figures_when_view_set_narrows(
+def test_write_rsa_outputs_removes_stale_per_view_figures_when_view_set_narrows(
     tmp_path, synthetic_stage3_outputs
 ):
-    output_root = tmp_path / "stage3_rsa"
+    output_root = tmp_path / "rsa"
 
-    first_written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+    first_written = write_rsa_outputs(synthetic_stage3_outputs, output_root)
     stale_full_trajectory = first_written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png"
     assert stale_full_trajectory.exists()
 
@@ -799,7 +807,7 @@ def test_write_stage3_outputs_removes_stale_per_view_figures_when_view_set_narro
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
 
-    second_written = write_stage3_outputs(narrowed_outputs, output_root)
+    second_written = write_rsa_outputs(narrowed_outputs, output_root)
 
     assert (second_written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert not stale_full_trajectory.exists()
@@ -807,12 +815,12 @@ def test_write_stage3_outputs_removes_stale_per_view_figures_when_view_set_narro
     assert not (second_written["figures_dir"] / "neural_vs_top_model_rdm_panel.png").exists()
 
 
-def test_write_stage3_outputs_reports_per_view_figure_names(tmp_path, synthetic_stage3_outputs):
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_reports_per_view_figure_names(tmp_path, synthetic_stage3_outputs):
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -820,7 +828,7 @@ def test_write_stage3_outputs_reports_per_view_figure_names(tmp_path, synthetic_
     ]
 
 
-def test_write_stage3_outputs_reports_canonical_per_view_figure_name_order(tmp_path, synthetic_stage3_outputs):
+def test_write_rsa_outputs_reports_canonical_per_view_figure_name_order(tmp_path, synthetic_stage3_outputs):
     rsa_results = synthetic_stage3_outputs["rsa_results"].copy()
     rsa_results["view_name"] = pd.Categorical(
         rsa_results["view_name"],
@@ -911,11 +919,11 @@ def test_write_stage3_outputs_reports_canonical_per_view_figure_name_order(tmp_p
             "model_rdm__global_profile__response_window"
         ].copy()
 
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -925,18 +933,18 @@ def test_write_stage3_outputs_reports_canonical_per_view_figure_name_order(tmp_p
     ]
 
 
-def test_write_stage3_outputs_writes_default_per_view_placeholders_when_views_missing(tmp_path, synthetic_stage3_outputs):
+def test_write_rsa_outputs_writes_default_per_view_placeholders_when_views_missing(tmp_path, synthetic_stage3_outputs):
     synthetic_stage3_outputs["rsa_results"] = pd.DataFrame()
     synthetic_stage3_outputs["cross_view_comparison"] = pd.DataFrame()
 
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
     assert summary["views"] == []
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -944,15 +952,15 @@ def test_write_stage3_outputs_writes_default_per_view_placeholders_when_views_mi
     ]
 
 
-def test_write_stage3_outputs_records_primary_and_supplementary_models(tmp_path, synthetic_stage3_outputs):
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_records_ranked_and_additional_models(tmp_path, synthetic_stage3_outputs):
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert summary["primary_view"] == "response_window"
-    assert summary["primary_models"] == ["global_profile", "bile_acid"]
-    assert summary["supplementary_models"] == ["lipid_panel"]
+    assert summary["focus_view"] == "response_window"
+    assert summary["ranked_models"] == ["global_profile", "bile_acid"]
+    assert summary["additional_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
-    assert summary["top_primary_models_by_view"] == {
+    assert summary["top_models_by_view"] == {
         "response_window": "global_profile",
         "full_trajectory": "global_profile",
     }
@@ -1385,29 +1393,29 @@ def test_plot_pooled_prototype_rdm_reuses_neural_order_for_paired_model(tmp_path
     assert captured["model_columns"] == ["b3_1", "b1_1"]
 
 
-def test_write_stage3_outputs_keeps_skipped_supplementary_models_in_supplementary_bucket(
+def test_write_rsa_outputs_keeps_skipped_additional_models_in_additional_bucket(
     tmp_path, synthetic_stage3_outputs
 ):
     registry = synthetic_stage3_outputs["model_registry_resolved"].copy()
     registry.loc[registry["model_id"] == "lipid_panel", "excluded_from_primary_ranking"] = True
     synthetic_stage3_outputs["model_registry_resolved"] = registry
 
-    written = write_stage3_outputs(synthetic_stage3_outputs, tmp_path / "stage3_rsa")
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert summary["supplementary_models"] == ["lipid_panel"]
+    assert summary["additional_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
 
 
-def test_write_stage3_outputs_writes_per_date_prototype_comparison_figures(tmp_path):
-    written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_writes_per_date_prototype_comparison_figures(tmp_path):
+    written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "rsa")
 
     assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
     assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
 
 
-def test_write_stage3_outputs_keeps_pooled_prototype_filenames(tmp_path):
-    written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "stage3_rsa")
+def test_write_rsa_outputs_keeps_pooled_prototype_filenames(tmp_path):
+    written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "rsa")
 
     assert sorted(path.name for path in written["figures_dir"].glob("prototype_rdm__pooled__*.png")) == [
         "prototype_rdm__pooled__full_trajectory.png",
@@ -1415,10 +1423,10 @@ def test_write_stage3_outputs_keeps_pooled_prototype_filenames(tmp_path):
     ]
 
 
-def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path):
+def test_write_rsa_outputs_writes_prototype_context_artifacts(tmp_path):
     core_outputs = _stage3_outputs_with_prototype_supplement()
 
-    written = write_stage3_outputs(core_outputs, tmp_path / "stage3_rsa")
+    written = write_rsa_outputs(core_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert (written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
@@ -1451,7 +1459,7 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
     assert not any(key.startswith("internal__") for key in written)
     assert not any(name.startswith("internal__") for name in summary["additional_table_names"])
     assert not list((written["tables_dir"]).glob("internal__*.parquet"))
-    assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_context_enabled"] is True
     assert summary["prototype_aggregation"] == "mean"
     assert summary["prototype_views"] == ["response_window", "full_trajectory"]
     assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
@@ -1473,7 +1481,7 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
         "prototype_rdm__pooled__full_trajectory",
     ]
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -1487,10 +1495,10 @@ def test_write_stage3_outputs_writes_prototype_supplementary_artifacts(tmp_path)
     ]
 
 
-def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narrows(tmp_path):
-    output_root = tmp_path / "stage3_rsa"
+def test_write_rsa_outputs_removes_stale_prototype_figures_when_view_set_narrows(tmp_path):
+    output_root = tmp_path / "rsa"
 
-    first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
+    first_written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
     stale_prototype_rsa = first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png"
     stale_prototype_rdm_comparison = first_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png"
     stale_prototype_rdm = first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png"
@@ -1520,7 +1528,7 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     ].copy()
     narrowed_outputs.pop("prototype_rdm__pooled__full_trajectory")
 
-    second_written = write_stage3_outputs(narrowed_outputs, output_root)
+    second_written = write_rsa_outputs(narrowed_outputs, output_root)
     summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert (second_written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
@@ -1555,7 +1563,7 @@ def test_write_stage3_outputs_removes_stale_prototype_figures_when_view_set_narr
     ]
 
 
-def test_write_stage3_outputs_writes_empty_per_date_prototype_comparison_for_view_without_per_date_data(tmp_path):
+def test_write_rsa_outputs_writes_empty_per_date_prototype_comparison_for_view_without_per_date_data(tmp_path):
     outputs = {
         key: value.copy() if isinstance(value, pd.DataFrame) else value
         for key, value in _stage3_outputs_with_prototype_supplement().items()
@@ -1570,7 +1578,7 @@ def test_write_stage3_outputs_writes_empty_per_date_prototype_comparison_for_vie
         if key.startswith("internal__prototype_rdm__per_date__full_trajectory__"):
             outputs.pop(key)
 
-    written = write_stage3_outputs(outputs, tmp_path / "stage3_rsa")
+    written = write_rsa_outputs(outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
@@ -1584,12 +1592,12 @@ def test_write_stage3_outputs_writes_empty_per_date_prototype_comparison_for_vie
     ]
 
 
-def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_without_supplement(
+def test_write_rsa_outputs_removes_stale_prototype_artifacts_when_rerun_without_supplement(
     tmp_path, synthetic_stage3_outputs
 ):
-    output_root = tmp_path / "stage3_rsa"
+    output_root = tmp_path / "rsa"
 
-    first_written = write_stage3_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
+    first_written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
     stale_paths = [
         first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet",
         first_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet",
@@ -1607,12 +1615,12 @@ def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_witho
     for stale_path in stale_paths:
         assert stale_path.exists()
 
-    second_written = write_stage3_outputs(synthetic_stage3_outputs, output_root)
+    second_written = write_rsa_outputs(synthetic_stage3_outputs, output_root)
     summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     for stale_path in stale_paths:
         assert not stale_path.exists()
-    assert summary["prototype_supplement_enabled"] is False
+    assert summary["prototype_context_enabled"] is False
     assert summary["prototype_views"] == []
     assert summary["prototype_dates"] == []
     assert summary["prototype_table_names"] == []
@@ -1620,7 +1628,7 @@ def test_write_stage3_outputs_removes_stale_prototype_artifacts_when_rerun_witho
     assert summary["prototype_descriptive_outputs"] == []
 
 
-def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():
+def test_run_biochemical_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():
     resolved_inputs = _resolved_stage3_inputs(
         matrix_rows=[
             {"sample_id": "A001", "f1": 1.0, "f2": 2.0, "f3": 0.5},
@@ -1656,13 +1664,13 @@ def test_run_stage3_rsa_marks_tiny_primary_models_excluded_from_primary_ranking(
         ],
     )
 
-    results = run_stage3_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
+    results = run_biochemical_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
 
     excluded = results["model_registry_resolved"].loc[lambda df: df["model_id"] == "tiny_primary"]
     assert bool(excluded["excluded_from_primary_ranking"].iloc[0])
 
 
-def test_run_stage3_rsa_keeps_global_profile_when_curated_subset_membership_is_empty():
+def test_run_biochemical_rsa_keeps_global_profile_when_curated_subset_membership_is_empty():
     resolved_inputs = _resolved_stage3_inputs(
         matrix_rows=[
             {"sample_id": "A001", "f1": 1.0, "f2": 2.0, "f3": 0.5, "f4": 3.0, "f5": 4.5},
@@ -1695,14 +1703,14 @@ def test_run_stage3_rsa_keeps_global_profile_when_curated_subset_membership_is_e
         membership_rows=[],
     )
 
-    results = run_stage3_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
+    results = run_biochemical_rsa(resolved_inputs, neural_matrices=_stage3_neural_rdms(), permutations=10, seed=0)
 
     assert "global_profile" in set(results["rsa_results"]["model_id"])
     assert "bile_acid" not in set(results["rsa_results"]["model_id"])
 
 
-def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present():
-    results = run_stage3_rsa(
+def test_run_biochemical_rsa_adds_prototype_tables_when_prototype_inputs_are_present():
+    results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=_stage3_prototype_inputs(),
@@ -1753,8 +1761,8 @@ def test_run_stage3_rsa_adds_prototype_tables_when_prototype_inputs_are_present(
     }.issubset(results["prototype_rsa_results__per_date"].columns)
 
 
-def test_run_stage3_rsa_returns_empty_prototype_outputs_with_expected_schema_for_empty_views():
-    results = run_stage3_rsa(
+def test_run_biochemical_rsa_returns_empty_prototype_outputs_with_expected_schema_for_empty_views():
+    results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=_empty_stage3_prototype_inputs(),
@@ -1810,14 +1818,14 @@ def test_run_stage3_rsa_returns_empty_prototype_outputs_with_expected_schema_for
     assert results["prototype_rdm__pooled__full_trajectory"].columns.tolist() == ["stimulus_row"]
 
 
-def test_run_stage3_rsa_keeps_primary_rsa_results_unchanged_when_prototype_inputs_are_present():
-    baseline = run_stage3_rsa(
+def test_run_biochemical_rsa_keeps_primary_rsa_results_unchanged_when_prototype_inputs_are_present():
+    baseline = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         permutations=10,
         seed=0,
     )
-    supplemented = run_stage3_rsa(
+    supplemented = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=_stage3_prototype_inputs(),
@@ -1830,8 +1838,8 @@ def test_run_stage3_rsa_keeps_primary_rsa_results_unchanged_when_prototype_input
     pd.testing.assert_frame_equal(baseline["rsa_leave_one_stimulus_out"], supplemented["rsa_leave_one_stimulus_out"])
 
 
-def test_run_stage3_rsa_corrects_prototype_fdr_across_full_table_and_ignores_excluded_rows_for_top_model():
-    results = run_stage3_rsa(
+def test_run_biochemical_rsa_corrects_prototype_fdr_across_full_table_and_ignores_excluded_rows_for_top_model():
+    results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=_stage3_prototype_inputs(),
@@ -1857,10 +1865,10 @@ def test_run_stage3_rsa_corrects_prototype_fdr_across_full_table_and_ignores_exc
         assert int(eligible["is_top_model"].sum()) == 1
 
 
-def test_run_stage3_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks_sparse_rows_invalid():
+def test_run_biochemical_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks_sparse_rows_invalid():
     resolved_inputs = _stage3_prototype_resolved_inputs()
     prototype_inputs = _stage3_prototype_inputs()
-    results = run_stage3_rsa(
+    results = run_biochemical_rsa(
         resolved_inputs,
         neural_matrices=_stage3_neural_rdms(),
         prototype_inputs=prototype_inputs,
@@ -1916,4 +1924,5 @@ def test_run_stage3_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks_spar
     assert sparse_rows["n_stimuli"].eq(2).all()
     assert sparse_rows["score_status"].eq("invalid").all()
     assert sparse_rows["n_shared_entries"].fillna(0).astype(int).max() < 2
+
 

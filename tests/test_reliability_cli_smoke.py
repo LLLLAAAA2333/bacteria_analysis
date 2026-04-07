@@ -5,11 +5,11 @@ import pytest
 
 
 @pytest.fixture
-def tiny_stage0_root(stage1_stage0_root):
-    return stage1_stage0_root
+def tiny_preprocess_root(synthetic_preprocess_root):
+    return synthetic_preprocess_root
 
 
-def test_cli_runs_and_writes_stage1_outputs(tmp_path, tiny_stage0_root):
+def test_cli_runs_and_writes_reliability_outputs(tmp_path, tiny_preprocess_root):
     output_root = tmp_path / "results"
     result = subprocess.run(
         [
@@ -18,7 +18,7 @@ def test_cli_runs_and_writes_stage1_outputs(tmp_path, tiny_stage0_root):
             "python",
             "scripts/run_reliability.py",
             "--input-root",
-            str(tiny_stage0_root),
+            str(tiny_preprocess_root),
             "--output-root",
             str(output_root),
         ],
@@ -29,45 +29,55 @@ def test_cli_runs_and_writes_stage1_outputs(tmp_path, tiny_stage0_root):
 
     assert result.returncode == 0, result.stderr
 
-    stage1_root = output_root / "stage1_reliability"
+    reliability_root = output_root / "reliability"
     expected_paths = [
-        stage1_root / "tables" / "reliability_summary.parquet",
-        stage1_root / "tables" / "primary_view_summary.parquet",
-        stage1_root / "tables" / "same_vs_different_summary.parquet",
-        stage1_root / "tables" / "within_date_cross_individual_comparisons.parquet",
-        stage1_root / "tables" / "within_date_cross_individual_same_vs_different_summary.parquet",
-        stage1_root / "tables" / "leave_one_individual_out.parquet",
-        stage1_root / "tables" / "leave_one_date_out.parquet",
-        stage1_root / "tables" / "per_date_loio_trials.parquet",
-        stage1_root / "tables" / "per_date_loio_groups.parquet",
-        stage1_root / "tables" / "per_date_loio_summary.parquet",
-        stage1_root / "tables" / "split_half_reliability.parquet",
-        stage1_root / "tables" / "stimulus_distance_pairs.parquet",
-        stage1_root / "tables" / "stimulus_distance_matrix__full_trajectory.parquet",
-        stage1_root / "tables" / "stimulus_distance_matrix__on_window.parquet",
-        stage1_root / "tables" / "stimulus_distance_matrix__response_window.parquet",
-        stage1_root / "tables" / "stimulus_distance_matrix__post_window.parquet",
-        stage1_root / "tables" / "permutation_null.parquet",
-        stage1_root / "tables" / "grouped_bootstrap.parquet",
-        stage1_root / "qc" / "overlap_neuron_counts.parquet",
-        stage1_root / "run_summary.json",
-        stage1_root / "run_summary.md",
-        stage1_root / "figures" / "within_date_cross_individual_same_vs_different.png",
-        stage1_root / "figures" / "per_date_loio_overview.png",
-        stage1_root / "figures" / "stimulus_distance_matrix__response_window.png",
+        reliability_root / "tables" / "reliability_summary.parquet",
+        reliability_root / "tables" / "focus_view_summary.parquet",
+        reliability_root / "tables" / "same_vs_different_summary.parquet",
+        reliability_root / "tables" / "within_date_cross_individual_comparisons.parquet",
+        reliability_root / "tables" / "within_date_cross_individual_same_vs_different_summary.parquet",
+        reliability_root / "tables" / "leave_one_individual_out.parquet",
+        reliability_root / "tables" / "leave_one_date_out.parquet",
+        reliability_root / "tables" / "per_date_loio_trials.parquet",
+        reliability_root / "tables" / "per_date_loio_groups.parquet",
+        reliability_root / "tables" / "per_date_loio_summary.parquet",
+        reliability_root / "tables" / "split_half_reliability.parquet",
+        reliability_root / "tables" / "stimulus_distance_pairs.parquet",
+        reliability_root / "tables" / "stimulus_distance_matrix__full_trajectory.parquet",
+        reliability_root / "tables" / "stimulus_distance_matrix__on_window.parquet",
+        reliability_root / "tables" / "stimulus_distance_matrix__response_window.parquet",
+        reliability_root / "tables" / "stimulus_distance_matrix__post_window.parquet",
+        reliability_root / "tables" / "permutation_null.parquet",
+        reliability_root / "tables" / "grouped_bootstrap.parquet",
+        reliability_root / "qc" / "overlap_neuron_counts.parquet",
+        reliability_root / "run_summary.json",
+        reliability_root / "run_summary.md",
+        reliability_root / "figures" / "same_vs_different_distributions__boxen_points.png",
+        reliability_root / "figures" / "same_vs_different_distributions__ecdf.png",
+        reliability_root / "figures" / "overlap_neuron_qc_summary.png",
+        reliability_root / "figures" / "within_date_cross_individual_same_vs_different.png",
+        reliability_root / "figures" / "per_date_loio_overview.png",
     ]
 
     for path in expected_paths:
         assert path.exists(), path
 
-    run_summary = json.loads((stage1_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert run_summary["primary_view"] == "response_window"
+    run_summary = json.loads((reliability_root / "run_summary.json").read_text(encoding="utf-8"))
+    assert run_summary["focus_view"] == "response_window"
+    assert not (reliability_root / "figures" / "same_vs_different_distributions.png").exists()
+    assert not (reliability_root / "figures" / "same_vs_different_distributions__raincloud.png").exists()
+    assert not (reliability_root / "figures" / "same_vs_different_distributions__violin_clean.png").exists()
+    assert not (reliability_root / "figures" / "cross_view_reliability_comparison.png").exists()
+    assert not (reliability_root / "figures" / "leave_one_individual_out_summary.png").exists()
+    assert not (reliability_root / "figures" / "leave_one_date_out_summary.png").exists()
+    assert not (reliability_root / "figures" / "split_half_summary.png").exists()
+    assert not list((reliability_root / "figures").glob("stimulus_distance_matrix__*.png"))
 
-    figure_files = list((stage1_root / "figures").glob("*"))
-    assert figure_files, "expected at least one Stage 1 figure"
+    figure_files = list((reliability_root / "figures").glob("*"))
+    assert figure_files, "expected at least one reliability figure"
 
 
-def test_cli_allows_primary_view_override(tmp_path, tiny_stage0_root):
+def test_cli_allows_focus_view_override(tmp_path, tiny_preprocess_root):
     output_root = tmp_path / "results"
     result = subprocess.run(
         [
@@ -76,7 +86,34 @@ def test_cli_allows_primary_view_override(tmp_path, tiny_stage0_root):
             "python",
             "scripts/run_reliability.py",
             "--input-root",
-            str(tiny_stage0_root),
+            str(tiny_preprocess_root),
+            "--output-root",
+            str(output_root),
+            "--focus-view",
+            "on_window",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    reliability_root = output_root / "reliability"
+    run_summary = json.loads((reliability_root / "run_summary.json").read_text(encoding="utf-8"))
+    assert run_summary["focus_view"] == "on_window"
+
+
+def test_cli_keeps_primary_view_alias_for_focus_view(tmp_path, tiny_preprocess_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_reliability.py",
+            "--input-root",
+            str(tiny_preprocess_root),
             "--output-root",
             str(output_root),
             "--primary-view",
@@ -89,6 +126,7 @@ def test_cli_allows_primary_view_override(tmp_path, tiny_stage0_root):
 
     assert result.returncode == 0, result.stderr
 
-    stage1_root = output_root / "stage1_reliability"
-    run_summary = json.loads((stage1_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert run_summary["primary_view"] == "on_window"
+    reliability_root = output_root / "reliability"
+    run_summary = json.loads((reliability_root / "run_summary.json").read_text(encoding="utf-8"))
+    assert run_summary["focus_view"] == "on_window"
+

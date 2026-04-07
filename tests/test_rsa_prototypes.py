@@ -139,13 +139,13 @@ def test_build_prototype_rdm_ignores_grouped_metadata_columns():
     )
 
 
-def test_load_prototype_supplement_inputs_allows_missing_wide_table(stage1_stage0_root):
+def test_load_prototype_context_inputs_allows_missing_wide_table(synthetic_preprocess_root):
     from bacteria_analysis import rsa_prototypes
 
-    wide_path = stage1_stage0_root / "trial_level" / "trial_wide_baseline_centered.parquet"
+    wide_path = synthetic_preprocess_root / "trial_level" / "trial_wide_baseline_centered.parquet"
     wide_path.unlink()
 
-    inputs = rsa_prototypes.load_prototype_supplement_inputs(stage1_stage0_root, view_names=("response_window",))
+    inputs = rsa_prototypes.load_prototype_context_inputs(synthetic_preprocess_root, view_names=("response_window",))
 
     assert inputs.metadata.shape[0] > 0
     assert "response_window" in inputs.views

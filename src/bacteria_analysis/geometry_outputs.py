@@ -1,4 +1,4 @@
-"""Output writers and figures for Stage 2 geometry."""
+"""Output writers and figures for geometry analysis."""
 
 from __future__ import annotations
 
@@ -19,17 +19,17 @@ from scipy.spatial.distance import squareform
 from bacteria_analysis.io import write_json, write_parquet
 
 
-def ensure_stage2_output_dirs(output_root: str | Path) -> dict[str, Path]:
+def ensure_geometry_output_dirs(output_root: str | Path) -> dict[str, Path]:
     root = Path(output_root)
-    return _mkdir_stage2_dirs(root)
+    return _mkdir_geometry_dirs(root)
 
 
-def write_stage2_outputs(core_outputs: dict[str, pd.DataFrame], output_root: str | Path) -> dict[str, Path]:
-    dirs = ensure_stage2_output_dirs(output_root)
-    return _write_stage2_artifacts(core_outputs, dirs)
+def write_geometry_outputs(core_outputs: dict[str, pd.DataFrame], output_root: str | Path) -> dict[str, Path]:
+    dirs = ensure_geometry_output_dirs(output_root)
+    return _write_geometry_artifacts(core_outputs, dirs)
 
 
-def _mkdir_stage2_dirs(root: Path) -> dict[str, Path]:
+def _mkdir_geometry_dirs(root: Path) -> dict[str, Path]:
     tables_dir = root / "tables"
     figures_dir = root / "figures"
     qc_dir = root / "qc"
@@ -45,7 +45,7 @@ def _mkdir_stage2_dirs(root: Path) -> dict[str, Path]:
     }
 
 
-def _write_stage2_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, Path]) -> dict[str, Path]:
+def _write_geometry_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, Path]) -> dict[str, Path]:
     written: dict[str, Path] = {
         "output_root": dirs["output_root"],
         "tables_dir": dirs["tables_dir"],
@@ -367,7 +367,7 @@ def _ordered_views_for_summary(
 
 def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     lines = [
-        "# Stage 2 Geometry Run Summary",
+        "# Geometry Analysis Run Summary",
         "",
         "## Views",
         f"- Views: {', '.join(summary['views']) if summary['views'] else 'None'}",
@@ -388,3 +388,7 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     output_path = Path(path)
     output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return output_path
+
+
+ensure_stage2_output_dirs = ensure_geometry_output_dirs
+write_stage2_outputs = write_geometry_outputs

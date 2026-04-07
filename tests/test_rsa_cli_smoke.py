@@ -27,11 +27,11 @@ RUN_RSA = _load_run_rsa_module()
 @pytest.fixture
 def stage3_fixture_root(tmp_path):
     root = tmp_path / "stage3_fixture"
-    stage2_tables_dir = root / "stage2_geometry" / "tables"
+    geometry_tables_dir = root / "geometry" / "tables"
     model_input_root = root / "model_space"
     preprocess_trial_level_dir = root / "preprocess" / "trial_level"
 
-    for directory in (stage2_tables_dir, model_input_root, preprocess_trial_level_dir):
+    for directory in (geometry_tables_dir, model_input_root, preprocess_trial_level_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
     response_window_matrix = pd.DataFrame.from_records(
@@ -48,8 +48,8 @@ def stage3_fixture_root(tmp_path):
             {"stimulus_row": "A003", "A001": 0.5, "A002": 0.2, "A003": 0.0},
         ]
     )
-    write_parquet(response_window_matrix, stage2_tables_dir / "rdm_matrix__response_window__pooled.parquet")
-    write_parquet(full_trajectory_matrix, stage2_tables_dir / "rdm_matrix__full_trajectory__pooled.parquet")
+    write_parquet(response_window_matrix, geometry_tables_dir / "rdm_matrix__response_window__pooled.parquet")
+    write_parquet(full_trajectory_matrix, geometry_tables_dir / "rdm_matrix__full_trajectory__pooled.parquet")
 
     pd.DataFrame.from_records(
         [
@@ -276,7 +276,7 @@ def stage3_fixture_root(tmp_path):
     return root
 
 
-def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
+def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
     output_root = tmp_path / "results"
     result = subprocess.run(
         [
@@ -284,8 +284,8 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
             "run",
             "python",
             "scripts/run_rsa.py",
-            "--stage2-root",
-            str(stage3_fixture_root / "stage2_geometry"),
+            "--geometry-root",
+            str(stage3_fixture_root / "geometry"),
             "--matrix",
             str(stage3_fixture_root / "matrix.xlsx"),
             "--model-input-root",
@@ -302,14 +302,14 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
 
     assert result.returncode == 0, result.stderr
 
-    stage3_root = output_root / "stage3_rsa"
+    stage3_root = output_root / "rsa"
     expected_paths = [
         stage3_root / "tables" / "rsa_results.parquet",
         stage3_root / "tables" / "model_registry_resolved.parquet",
         stage3_root / "tables" / "rsa_leave_one_stimulus_out.parquet",
         stage3_root / "qc" / "model_input_coverage.parquet",
         stage3_root / "qc" / "model_feature_filtering.parquet",
-        stage3_root / "figures" / "ranked_primary_model_rsa.png",
+        stage3_root / "figures" / "ranked_model_rsa.png",
         stage3_root / "figures" / "neural_vs_top_model_rdm__response_window.png",
         stage3_root / "figures" / "neural_vs_top_model_rdm__full_trajectory.png",
         stage3_root / "run_summary.json",
@@ -320,13 +320,13 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
         assert path.exists(), path
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["primary_view"] == "response_window"
-    assert summary["primary_models"] == ["global_profile", "bile_acid"]
-    assert summary["prototype_supplement_enabled"] is False
+    assert summary["focus_view"] == "response_window"
+    assert summary["ranked_models"] == ["global_profile", "bile_acid"]
+    assert summary["prototype_context_enabled"] is False
     assert summary["prototype_views"] == []
     assert summary["prototype_dates"] == []
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -334,10 +334,10 @@ def test_cli_runs_and_writes_stage3_outputs(tmp_path, stage3_fixture_root):
     ]
     assert not (stage3_root / "figures" / "neural_vs_top_model_rdm_panel.png").exists()
     assert not (stage3_root / "tables" / "prototype_rsa_results__per_date.parquet").exists()
-    assert "Included primary models: global_profile, bile_acid" in result.stdout
+    assert "Included ranked models: global_profile, bile_acid" in result.stdout
 
 
-def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage3_fixture_root):
+def test_cli_runs_and_writes_rsa_prototype_context_outputs(tmp_path, stage3_fixture_root):
     output_root = tmp_path / "results"
     result = subprocess.run(
         [
@@ -345,8 +345,8 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
             "run",
             "python",
             "scripts/run_rsa.py",
-            "--stage2-root",
-            str(stage3_fixture_root / "stage2_geometry"),
+            "--geometry-root",
+            str(stage3_fixture_root / "geometry"),
             "--matrix",
             str(stage3_fixture_root / "matrix.xlsx"),
             "--model-input-root",
@@ -365,7 +365,7 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
 
     assert result.returncode == 0, result.stderr
 
-    stage3_root = output_root / "stage3_rsa"
+    stage3_root = output_root / "rsa"
     expected_paths = [
         stage3_root / "tables" / "prototype_rsa_results__per_date.parquet",
         stage3_root / "tables" / "prototype_rdm__pooled__response_window.parquet",
@@ -384,7 +384,7 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
         assert path.exists(), path
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_context_enabled"] is True
     assert summary["prototype_aggregation"] == "mean"
     assert summary["prototype_views"] == ["response_window", "full_trajectory"]
     assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
@@ -394,7 +394,7 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
         "prototype_rdm__pooled__full_trajectory",
     ]
     assert summary["figure_names"] == [
-        "ranked_primary_model_rsa",
+        "ranked_model_rsa",
         "leave_one_stimulus_out_robustness",
         "view_comparison_summary",
         "neural_vs_top_model_rdm__response_window",
@@ -416,7 +416,7 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs(tmp_path, stage
     ]
 
 
-def test_cli_runs_and_writes_stage3_prototype_supplement_outputs_with_median_aggregation(tmp_path, stage3_fixture_root):
+def test_cli_runs_and_writes_rsa_prototype_context_outputs_with_median_aggregation(tmp_path, stage3_fixture_root):
     output_root = tmp_path / "results"
     result = subprocess.run(
         [
@@ -424,8 +424,8 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs_with_median_agg
             "run",
             "python",
             "scripts/run_rsa.py",
-            "--stage2-root",
-            str(stage3_fixture_root / "stage2_geometry"),
+            "--geometry-root",
+            str(stage3_fixture_root / "geometry"),
             "--matrix",
             str(stage3_fixture_root / "matrix.xlsx"),
             "--model-input-root",
@@ -446,29 +446,31 @@ def test_cli_runs_and_writes_stage3_prototype_supplement_outputs_with_median_agg
 
     assert result.returncode == 0, result.stderr
 
-    stage3_root = output_root / "stage3_rsa"
+    stage3_root = output_root / "rsa"
     assert (stage3_root / "figures" / "prototype_rdm_comparison__per_date__response_window.png").exists()
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["prototype_supplement_enabled"] is True
+    assert summary["prototype_context_enabled"] is True
     assert summary["prototype_aggregation"] == "median"
 
 
 def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path):
     repo_root = tmp_path / "repo"
     worktree_root = repo_root / ".worktrees" / "stage3-rsa"
-    shared_stage2_root = repo_root / "results" / "stage2_geometry"
+    shared_geometry_root = repo_root / "results" / "geometry"
     shared_model_input_root = repo_root / "data" / "model_space"
     shared_matrix_path = repo_root / "data" / "matrix.xlsx"
     shared_preprocess_root = repo_root / "data" / "preprocess"
 
-    shared_stage2_root.mkdir(parents=True)
+    shared_geometry_root.mkdir(parents=True)
     shared_model_input_root.mkdir(parents=True)
     shared_preprocess_root.mkdir(parents=True)
     shared_matrix_path.parent.mkdir(parents=True, exist_ok=True)
     shared_matrix_path.write_bytes(b"matrix")
 
-    assert RUN_RSA.resolve_stage2_root(str(RUN_RSA.DEFAULT_STAGE2_ROOT), root_dir=worktree_root) == shared_stage2_root
+    assert RUN_RSA.resolve_geometry_root(str(RUN_RSA.DEFAULT_GEOMETRY_ROOT), root_dir=worktree_root) == shared_geometry_root
+    assert RUN_RSA.resolve_stage2_root(str(RUN_RSA.DEFAULT_STAGE2_ROOT), root_dir=worktree_root) == shared_geometry_root
     assert RUN_RSA.resolve_model_input_root(str(RUN_RSA.DEFAULT_MODEL_INPUT_ROOT), root_dir=worktree_root) == shared_model_input_root
     assert RUN_RSA.resolve_matrix_path(str(RUN_RSA.DEFAULT_MATRIX_PATH), root_dir=worktree_root) == shared_matrix_path
     assert RUN_RSA.resolve_preprocess_root("data/preprocess", root_dir=worktree_root) == shared_preprocess_root
+
