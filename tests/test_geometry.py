@@ -1294,14 +1294,14 @@ def test_write_geometry_outputs_writes_required_tables(tmp_path, synthetic_geome
     assert (written["qc_dir"] / "stimulus_overlap__date.parquet").exists()
     assert (written["qc_dir"] / "stimulus_overlap__individual.parquet").exists()
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
-    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
-    assert (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled.png").exists()
-    assert (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled__clustered.png").exists()
-    assert (written["figures_dir"] / "rdm_stability_by_individual.png").exists()
-    assert (written["figures_dir"] / "rdm_stability_by_date.png").exists()
-    assert (written["figures_dir"] / "rdm_view_comparison.png").exists()
     assert (written["figures_dir"] / "stimulus_overlap__date.png").exists()
-    assert (written["figures_dir"] / "stimulus_overlap__individual.png").exists()
+    assert not (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
+    assert not (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled.png").exists()
+    assert not (written["figures_dir"] / "rdm_matrix__full_trajectory__pooled__clustered.png").exists()
+    assert not (written["figures_dir"] / "rdm_stability_by_individual.png").exists()
+    assert not (written["figures_dir"] / "rdm_stability_by_date.png").exists()
+    assert not (written["figures_dir"] / "rdm_view_comparison.png").exists()
+    assert not (written["figures_dir"] / "stimulus_overlap__individual.png").exists()
 
 
 def test_write_geometry_outputs_skips_non_pooled_matrix_parquet_artifacts(tmp_path, synthetic_geometry_outputs):
@@ -1319,7 +1319,6 @@ def test_write_geometry_outputs_handles_empty_pooled_matrix_frames(tmp_path, syn
     written = write_geometry_outputs(outputs, tmp_path / "geometry")
 
     assert (written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
-    assert (written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png").exists()
     assert (written["output_root"] / "run_summary.json").exists()
 
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
@@ -1365,6 +1364,8 @@ def test_write_geometry_outputs_records_only_actual_included_views(tmp_path, syn
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["views"] == ["full_trajectory"]
+    assert summary["focus_view"] == "full_trajectory"
+    assert summary["primary_figure"] == "rdm_matrix__full_trajectory__pooled"
     assert summary["pooled_matrix_views"] == ["full_trajectory"]
     assert summary["pair_table_names"] == [
         "rdm_pairs__full_trajectory__date",
@@ -1379,6 +1380,11 @@ def test_write_geometry_outputs_writes_run_summary(tmp_path, synthetic_geometry_
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["views"] == ["response_window", "full_trajectory"]
+    assert summary["focus_view"] == "response_window"
+    assert summary["sensitivity_views"] == ["full_trajectory"]
+    assert summary["primary_figure"] == "rdm_matrix__response_window__pooled"
+    assert summary["support_figure"] == "stimulus_overlap__date"
+    assert summary["figure_names"] == ["rdm_matrix__response_window__pooled", "stimulus_overlap__date"]
     assert summary["pooled_matrix_views"] == ["response_window", "full_trajectory"]
     assert summary["pair_table_names"] == [
         "rdm_pairs__full_trajectory__date",
@@ -1395,10 +1401,46 @@ def test_write_geometry_outputs_writes_run_summary(tmp_path, synthetic_geometry_
         "stimulus_overlap__date",
         "stimulus_overlap__individual",
     ]
+    assert summary["pooled_cross_view"]["similarity"] == pytest.approx(0.99)
+    assert summary["pooled_cross_view"]["n_shared_entries"] == pytest.approx(3.0)
+    assert summary["individual_stability"]["within_group_median_by_view"] == {"response_window": pytest.approx(0.95)}
+    assert summary["individual_stability"]["pooled_vs_group_median_by_view"] == {"full_trajectory": pytest.approx(0.9)}
+    assert summary["date_stability"]["within_group_median_by_view"] == {"response_window": pytest.approx(0.88)}
+    assert summary["date_stability"]["pooled_vs_group_median_by_view"] == {}
+    assert summary["date_overlap"]["group_count"] == 2
+    assert summary["date_overlap"]["stimuli_per_group_median"] == pytest.approx(1.5)
+    assert summary["date_overlap"]["pairwise_shared_stimuli_median"] == pytest.approx(1.0)
     assert summary["tables_dir"].endswith("geometry\\tables")
     assert summary["figures_dir"].endswith("geometry\\figures")
 
     markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
     assert "# Geometry Analysis Run Summary" in markdown
-    assert "- Views: response_window, full_trajectory" in markdown
+    assert "## Bottom Line" in markdown
+    assert "- Included views: response_window, full_trajectory" in markdown
+    assert "- Primary figure: rdm_matrix__response_window__pooled" in markdown
+    assert "## Individual Stability" in markdown
+    assert "## Date Stability" in markdown
+    assert "## Overlap Limits" in markdown
+    assert "Readout: Pooled neural geometry is consistent across the included views." in markdown
+
+
+def test_write_geometry_outputs_removes_stale_legacy_figures(tmp_path, synthetic_geometry_outputs):
+    geometry_root = tmp_path / "geometry"
+    first_written = write_geometry_outputs(synthetic_geometry_outputs, geometry_root)
+
+    stale_paths = [
+        first_written["figures_dir"] / "rdm_matrix__full_trajectory__pooled.png",
+        first_written["figures_dir"] / "rdm_matrix__response_window__pooled__clustered.png",
+        first_written["figures_dir"] / "rdm_stability_by_individual.png",
+        first_written["figures_dir"] / "stimulus_overlap__individual.png",
+    ]
+    for stale_path in stale_paths:
+        stale_path.write_text("stale", encoding="utf-8")
+
+    second_written = write_geometry_outputs(synthetic_geometry_outputs, geometry_root)
+
+    assert (second_written["figures_dir"] / "rdm_matrix__response_window__pooled.png").exists()
+    assert (second_written["figures_dir"] / "stimulus_overlap__date.png").exists()
+    for stale_path in stale_paths:
+        assert not stale_path.exists()
 
