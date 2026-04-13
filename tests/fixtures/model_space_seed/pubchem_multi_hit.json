@@ -1,0 +1,24 @@
+{
+  "query": "Muricholic acid",
+  "source": "pubchem",
+  "candidates": [
+    {
+      "pubchem_cid": "5283856",
+      "candidate_name": "Alpha-muricholic acid",
+      "synonyms": [
+        "alpha-Muricholic acid"
+      ],
+      "smiles": "CC(CCC(=O)O)C1CCC2C3CC(O)C4CC(O)CCC4(C)C3CCC12C",
+      "inchikey": "AAAABBBBCCCCDD-ALPHA"
+    },
+    {
+      "pubchem_cid": "6439854",
+      "candidate_name": "Beta-muricholic acid",
+      "synonyms": [
+        "beta-Muricholic acid"
+      ],
+      "smiles": "CC(CCC(=O)O)C1CCC2C3CC(O)C4CC(O)CCC4(C)C3CCC12C",
+      "inchikey": "AAAABBBBCCCCDD-BETA"
+    }
+  ]
+}

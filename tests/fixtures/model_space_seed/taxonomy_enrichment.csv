@@ -1,0 +1,3 @@
+normalized_name,pubchem_cid,chebi_id,hmdb_id,inchikey,chebi_parent_terms,hmdb_super_class,hmdb_class,hmdb_sub_class,classyfire_kingdom,classyfire_superclass,classyfire_class,classyfire_subclass,pathway_tags,annotation_confidence,annotation_status,annotation_evidence
+Cholic acid (CA),221493,CHEBI:3098,HMDB0000037,BHQCQFFYRZLCQQ-OELDTZBJSA-N,bile acid,Lipids and lipid-like molecules,Steroids and steroid derivatives,"Bile acids, alcohols and derivatives",Organic compounds,Lipids and lipid-like molecules,Steroids and steroid derivatives,"Bile acids, alcohols and derivatives",bile acid,high,resolved_high_confidence,fixture_cache
+Mystery metabolite,,,,,,,,,,,,,,unresolved,fixture_cache

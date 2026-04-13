@@ -1,0 +1,3 @@
+original_header,normalized_name,stage3_metabolite_name,canonical_compound_name,resolution_status,source,pubchem_cid,chebi_id,hmdb_id,inchikey,smiles,synonyms,match_score,match_reason,evidence_json
+Cholic acid (CA),Cholic acid (CA),Cholic acid (CA),Cholic acid,resolved_high_confidence,pubchem,221493,CHEBI:3098,HMDB0000037,BHQCQFFYRZLCQQ-OELDTZBJSA-N,C[C@H](CCC(=O)O)C1CCC2C3CC[C@H]4C[C@H](O)CC[C@]4(C)C3CC[C@]12C,Cholic acid | CA,100,exact_candidate_name_match,"{""selected_candidate"":{""pubchem_cid"":""221493""}}"
+Mystery metabolite,Mystery metabolite,Mystery metabolite,,unresolved,,,,,,,0,no_identity_candidates,{}

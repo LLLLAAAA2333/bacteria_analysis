@@ -1,0 +1,16 @@
+{
+  "query": "Cholic acid (CA)",
+  "source": "pubchem",
+  "candidates": [
+    {
+      "pubchem_cid": "221493",
+      "candidate_name": "Cholic acid",
+      "synonyms": [
+        "Cholic acid",
+        "CA"
+      ],
+      "smiles": "C[C@H](CCC(=O)O)C1CCC2C3CC[C@H]4C[C@H](O)CC[C@]4(C)C3CC[C@]12C",
+      "inchikey": "BHQCQFFYRZLCQQ-OELDTZBJSA-N"
+    }
+  ]
+}

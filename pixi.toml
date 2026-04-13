@@ -11,6 +11,7 @@ preprocess = "python scripts/run_preprocessing.py"
 reliability = "python scripts/run_reliability.py"
 geometry = "python scripts/run_geometry.py"
 rsa = "python scripts/run_rsa.py"
+model-space = "python scripts/build_model_space.py"
 
 
 [dependencies]
