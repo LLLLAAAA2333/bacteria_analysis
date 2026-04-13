@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import warnings
 
 import matplotlib
 
@@ -35,34 +37,63 @@ QC_ARTIFACT_SPECS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 REQUIRED_FIGURES: tuple[str, ...] = (
-    "ranked_model_rsa",
-    "leave_one_stimulus_out_robustness",
-    "view_comparison_summary",
+    "single_stimulus_sensitivity",
 )
 DEFAULT_FIGURE_VIEWS: tuple[str, ...] = ("response_window", "full_trajectory")
+RANKED_MODEL_RSA_DETAIL_FIELDS: tuple[str, ...] = (
+    "view_name",
+    "model_id",
+    "rsa_similarity",
+    "p_value_raw",
+    "p_value_fdr",
+    "n_shared_entries",
+    "score_status",
+    "is_top_model",
+)
+VIEW_COMPARISON_DETAIL_FIELDS: tuple[str, ...] = (
+    "view_name",
+    "reference_view_name",
+    "comparison_scope",
+    "rsa_similarity",
+    "p_value_raw",
+    "p_value_fdr",
+    "n_shared_entries",
+    "score_status",
+)
 PROTOTYPE_QC_ARTIFACT_NAMES: tuple[str, ...] = (
-    "prototype_support__per_date",
-    "prototype_support__pooled",
+    "aggregated_response_support__per_date",
+    "aggregated_response_support__pooled",
 )
 INTERNAL_ONLY_ARTIFACT_PREFIX = "internal__"
-INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}prototype_rdm__per_date__"
-INTERNAL_PROTOTYPE_AGGREGATION_KEY = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}prototype_aggregation"
+INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX = (
+    f"{INTERNAL_ONLY_ARTIFACT_PREFIX}aggregated_response_rdm__per_date__"
+)
+INTERNAL_RESPONSE_AGGREGATION_KEY = f"{INTERNAL_ONLY_ARTIFACT_PREFIX}response_aggregation"
+INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX
+INTERNAL_PROTOTYPE_AGGREGATION_KEY = INTERNAL_RESPONSE_AGGREGATION_KEY
+
+
+@dataclass(frozen=True)
+class RdmDisplayParameters:
+    vmin: float
+    vmax: float
+    norm: matplotlib.colors.PowerNorm
 
 
 def _build_neural_vs_model_figure_names(view_names: list[str]) -> list[str]:
     return [f"neural_vs_top_model_rdm__{view_name}" for view_name in view_names]
 
 
-def _build_prototype_rsa_figure_names(view_names: list[str]) -> list[str]:
-    return [f"prototype_rsa__per_date__{view_name}" for view_name in view_names]
+def _build_aggregated_response_rsa_figure_names(view_names: list[str]) -> list[str]:
+    return [f"aggregated_response_rsa__per_date__{view_name}" for view_name in view_names]
 
 
-def _build_prototype_rdm_comparison_figure_names(view_names: list[str]) -> list[str]:
-    return [f"prototype_rdm_comparison__per_date__{view_name}" for view_name in view_names]
+def _build_aggregated_response_rdm_comparison_figure_names(view_names: list[str]) -> list[str]:
+    return [f"aggregated_response_rdm_comparison__per_date__{view_name}" for view_name in view_names]
 
 
-def _build_prototype_rdm_figure_names(view_names: list[str]) -> list[str]:
-    return [f"prototype_rdm__pooled__{view_name}" for view_name in view_names]
+def _build_aggregated_response_rdm_figure_names(view_names: list[str]) -> list[str]:
+    return [f"aggregated_response_rdm__pooled__{view_name}" for view_name in view_names]
 
 
 def _canonicalize_view_order(view_names: list[str]) -> list[str]:
@@ -76,8 +107,8 @@ def _canonicalize_view_order(view_names: list[str]) -> list[str]:
     return ordered_views
 
 
-def _internal_prototype_per_date_rdm_key(view_name: str, date_value: str) -> str:
-    return f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{date_value}"
+def _internal_aggregated_response_per_date_rdm_key(view_name: str, date_value: str) -> str:
+    return f"{INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX}{view_name}__{date_value}"
 
 
 def ensure_rsa_output_dirs(output_root: str | Path) -> dict[str, Path]:
@@ -148,11 +179,10 @@ def _write_rsa_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, 
     top_models = _build_top_models_by_view(rsa_results, group_summary["ranked_models"])
     focus_view = _choose_focus_view(rsa_results, view_candidates=view_names)
 
-    written["ranked_model_rsa"] = _plot_ranked_model_rsa(
-        rsa_results,
+    written["single_stimulus_sensitivity"] = _plot_single_stimulus_sensitivity(
+        leave_one_out,
         group_summary["ranked_models"],
-        path=dirs["figures_dir"] / "ranked_model_rsa.png",
-        focus_view=focus_view,
+        dirs["figures_dir"] / "single_stimulus_sensitivity.png",
     )
     for figure_name, view_name in zip(
         _build_neural_vs_model_figure_names(figure_view_names), figure_view_names, strict=False
@@ -163,16 +193,7 @@ def _write_rsa_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, 
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
         )
-    written["leave_one_stimulus_out_robustness"] = _plot_leave_one_stimulus_out_robustness(
-        leave_one_out,
-        group_summary["ranked_models"],
-        dirs["figures_dir"] / "leave_one_stimulus_out_robustness.png",
-    )
-    written["view_comparison_summary"] = _plot_view_comparison_summary(
-        view_comparison,
-        dirs["figures_dir"] / "view_comparison_summary.png",
-    )
-    prototype_summary = _write_prototype_context_figures(
+    aggregated_response_summary = _write_aggregated_response_context_figures(
         core_outputs,
         dirs,
         written,
@@ -186,7 +207,7 @@ def _write_rsa_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, 
         group_summary=group_summary,
         top_models=top_models,
         focus_view=focus_view,
-        prototype_summary=prototype_summary,
+        aggregated_response_summary=aggregated_response_summary,
     )
     written["run_summary_json"] = write_json(summary, dirs["output_root"] / "run_summary.json")
     written["run_summary_md"] = _write_markdown_summary(summary, dirs["output_root"] / "run_summary.md")
@@ -194,12 +215,20 @@ def _write_rsa_artifacts(core_outputs: dict[str, pd.DataFrame], dirs: dict[str, 
 
 
 def _remove_legacy_rsa_figures(figures_dir: Path) -> None:
-    for legacy_name in ("neural_vs_top_model_rdm_panel.png", "ranked_primary_model_rsa.png"):
+    for legacy_name in (
+        "neural_vs_top_model_rdm_panel.png",
+        "ranked_primary_model_rsa.png",
+        "ranked_model_rsa.png",
+        "view_comparison_summary.png",
+        "leave_one_stimulus_out_robustness.png",
+    ):
         legacy_figure = figures_dir / legacy_name
         if legacy_figure.exists():
             legacy_figure.unlink()
 
     for stale_figure in figures_dir.glob("neural_vs_top_model_rdm__*.png"):
+        stale_figure.unlink()
+    for stale_figure in figures_dir.glob("aggregated_response_*.png"):
         stale_figure.unlink()
     for stale_figure in figures_dir.glob("prototype_*.png"):
         stale_figure.unlink()
@@ -207,6 +236,8 @@ def _remove_legacy_rsa_figures(figures_dir: Path) -> None:
 
 def _remove_stale_prototype_parquets(tables_dir: Path, qc_dir: Path) -> None:
     for directory in (tables_dir, qc_dir):
+        for stale_artifact in directory.glob("aggregated_response_*.parquet"):
+            stale_artifact.unlink()
         for stale_artifact in directory.glob("prototype_*.parquet"):
             stale_artifact.unlink()
 
@@ -307,15 +338,81 @@ def _build_top_models_by_view(rsa_results: pd.DataFrame, ranked_models: list[str
     return top_models
 
 
-def _build_top_prototype_models_by_date_and_view(prototype_rsa_results: pd.DataFrame | None) -> dict[tuple[str, str], str]:
-    if prototype_rsa_results is None or prototype_rsa_results.empty:
+def _build_ranked_model_rsa_details(
+    rsa_results: pd.DataFrame,
+    ranked_models: list[str],
+    *,
+    focus_view: str | None,
+) -> list[dict[str, Any]]:
+    if rsa_results.empty or not ranked_models:
+        return []
+
+    required_columns = {"view_name", "model_id", "rsa_similarity"}
+    if not required_columns.issubset(rsa_results.columns):
+        return []
+
+    filtered = rsa_results.copy()
+    filtered["view_name"] = filtered["view_name"].astype(str)
+    filtered["model_id"] = filtered["model_id"].astype(str)
+    filtered["rsa_similarity"] = pd.to_numeric(filtered["rsa_similarity"], errors="coerce")
+    filtered = filtered.loc[filtered["model_id"].isin(ranked_models)]
+    if focus_view is not None:
+        filtered = filtered.loc[filtered["view_name"] == str(focus_view)]
+    filtered = filtered.loc[np.isfinite(filtered["rsa_similarity"])]
+    if filtered.empty:
+        return []
+
+    ordered = filtered.sort_values(["rsa_similarity", "model_id"], ascending=[False, True], kind="mergesort")
+    return [_build_summary_detail_record(row, RANKED_MODEL_RSA_DETAIL_FIELDS) for _, row in ordered.iterrows()]
+
+
+def _build_view_comparison_details(view_comparison: pd.DataFrame) -> list[dict[str, Any]]:
+    if view_comparison.empty:
+        return []
+
+    required_columns = {"view_name", "reference_view_name", "rsa_similarity"}
+    if not required_columns.issubset(view_comparison.columns):
+        return []
+
+    filtered = view_comparison.copy()
+    filtered["view_name"] = filtered["view_name"].astype(str)
+    filtered["reference_view_name"] = filtered["reference_view_name"].astype(str)
+    filtered["rsa_similarity"] = pd.to_numeric(filtered["rsa_similarity"], errors="coerce")
+    filtered = filtered.loc[np.isfinite(filtered["rsa_similarity"])]
+    if filtered.empty:
+        return []
+
+    return [_build_summary_detail_record(row, VIEW_COMPARISON_DETAIL_FIELDS) for _, row in filtered.iterrows()]
+
+
+def _build_summary_detail_record(row: pd.Series, field_names: tuple[str, ...]) -> dict[str, Any]:
+    record: dict[str, Any] = {}
+    for field_name in field_names:
+        if field_name not in row.index:
+            continue
+        record[field_name] = _summary_json_value(row[field_name])
+    return record
+
+
+def _summary_json_value(value: Any) -> Any:
+    if pd.isna(value):
+        return None
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _build_top_aggregated_response_models_by_date_and_view(
+    aggregated_response_rsa_results: pd.DataFrame | None,
+) -> dict[tuple[str, str], str]:
+    if aggregated_response_rsa_results is None or aggregated_response_rsa_results.empty:
         return {}
 
     required_columns = {"date", "view_name", "model_id", "is_top_model"}
-    if not required_columns.issubset(prototype_rsa_results.columns):
+    if not required_columns.issubset(aggregated_response_rsa_results.columns):
         return {}
 
-    selected = prototype_rsa_results.copy()
+    selected = aggregated_response_rsa_results.copy()
     selected["date"] = selected["date"].astype(str)
     selected["view_name"] = selected["view_name"].astype(str)
     selected["model_id"] = selected["model_id"].astype(str)
@@ -331,45 +428,6 @@ def _build_top_prototype_models_by_date_and_view(prototype_rsa_results: pd.DataF
     return top_models
 
 
-def _plot_ranked_model_rsa(
-    rsa_results: pd.DataFrame,
-    ranked_models: list[str],
-    *,
-    focus_view: str | None,
-    path: Path,
-) -> Path:
-    if rsa_results.empty or not ranked_models:
-        return _plot_empty_figure(path, title="Ranked Model RSA", message="No ranked RSA results")
-
-    required_columns = {"model_id", "view_name", "rsa_similarity"}
-    if not required_columns.issubset(rsa_results.columns):
-        return _plot_empty_figure(path, title="Ranked Model RSA", message="Missing rsa_results columns")
-
-    ranked = rsa_results.copy()
-    ranked["model_id"] = ranked["model_id"].astype(str)
-    ranked["view_name"] = ranked["view_name"].astype(str)
-    ranked["rsa_similarity"] = pd.to_numeric(ranked["rsa_similarity"], errors="coerce")
-    ranked = ranked.loc[ranked["model_id"].isin(ranked_models)]
-    if focus_view is not None:
-        ranked = ranked.loc[ranked["view_name"] == focus_view]
-    ranked = ranked.loc[np.isfinite(ranked["rsa_similarity"])]
-    if ranked.empty:
-        return _plot_empty_figure(path, title="Ranked Model RSA", message="No finite ranked RSA values")
-
-    ranked = ranked.sort_values(["rsa_similarity", "model_id"], ascending=[True, True])
-    y_positions = np.arange(len(ranked), dtype=float)
-    plt.figure(figsize=(7.5, max(3.5, 0.8 * len(ranked) + 1.5)))
-    plt.barh(y_positions, ranked["rsa_similarity"].to_numpy(dtype=float))
-    plt.yticks(y_positions, ranked["model_id"].tolist())
-    plt.xlabel("RSA similarity")
-    plt.ylabel("Model")
-    if focus_view is None:
-        plt.title("Ranked Model RSA")
-    else:
-        plt.title(f"Ranked Model RSA ({focus_view})")
-    return _save_figure(path)
-
-
 def _plot_neural_vs_top_model_rdm_view(
     core_outputs: dict[str, pd.DataFrame],
     top_models: dict[str, str],
@@ -377,12 +435,14 @@ def _plot_neural_vs_top_model_rdm_view(
     view_name: str,
     path: Path,
 ) -> Path:
-    figure, axes = plt.subplots(
-        ncols=2,
-        figsize=(9.5, 4.0),
-        squeeze=False,
+    figure, axes, colorbar_axes = _create_rdm_panel_figure(nrows=2, figsize=(10.2, 7.0))
+    comparison_title = (
+        "Aggregated-Response Versus Top-Model RDM Comparison"
+        if _aggregated_response_context_enabled(core_outputs)
+        else "Neural-Versus-Top-Model RDM Comparison"
     )
-    figure.suptitle(f"Neural-Versus-Top-Model RDM Comparison ({view_name})", fontsize=12)
+    left_label = "aggregated response" if _aggregated_response_context_enabled(core_outputs) else "neural"
+    figure.suptitle(f"{comparison_title} ({view_name})", fontsize=12)
 
     top_model_id = top_models.get(view_name)
     stimulus_sample_map = core_outputs.get("stimulus_sample_map")
@@ -397,42 +457,60 @@ def _plot_neural_vs_top_model_rdm_view(
     model_matrix = None
     if top_model_id:
         model_matrix = _find_matrix_frame(core_outputs, _model_rdm_aliases(top_model_id, view_name))
+        if model_matrix is not None and neural_matrix is not None:
+            neural_labels = _coerce_rdm_heatmap_frame(neural_matrix).index.tolist()
+            model_matrix = _restrict_rdm_to_labels(model_matrix, neural_labels)
 
-    neural_order_labels: list[str] | None = []
-    if neural_matrix is not None:
-        _, neural_order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
+    prepared_panels: list[tuple[int, int, pd.DataFrame | None, str, str]] = []
+    for row_index, order_source in enumerate(("neural", "model")):
+        order_labels_for_pair = _resolve_pair_order_labels(
+            order_source=order_source,
+            neural_matrix=neural_matrix,
+            model_matrix=model_matrix,
+            stimulus_sample_map=stimulus_sample_map,
+        )
+        prepared_panels.extend(
+            [
+                (
+                    row_index,
+                    0,
+                    _prepare_rdm_display_frame(
+                        neural_matrix,
+                        stimulus_sample_map,
+                        order_labels=order_labels_for_pair,
+                    ),
+                    f"{view_name}: {left_label} ({order_source} order)",
+                    "No neural matrix provided",
+                ),
+                (
+                    row_index,
+                    1,
+                    _prepare_rdm_display_frame(
+                        model_matrix,
+                        stimulus_sample_map,
+                        order_labels=order_labels_for_pair,
+                    ),
+                    f"{view_name}: {top_model_id or 'no top model'} ({order_source} order)",
+                    "No top-model matrix provided",
+                ),
+            ]
+        )
+    _render_prepared_rdm_panels(figure, axes, colorbar_axes, prepared_panels)
 
-    _render_rdm_axis(
-        axes[0, 0],
-        neural_matrix,
-        stimulus_sample_map=stimulus_sample_map,
-        title=f"{view_name}: neural",
-        fallback_message="No neural matrix provided",
-        order_labels=neural_order_labels,
-    )
-    _render_rdm_axis(
-        axes[0, 1],
-        model_matrix,
-        stimulus_sample_map=stimulus_sample_map,
-        title=f"{view_name}: {top_model_id or 'no top model'}",
-        fallback_message="No top-model matrix provided",
-        order_labels=neural_order_labels,
-    )
-
-    return _save_figure(path)
+    return _save_figure(path, tight_layout=False)
 
 
-def _plot_leave_one_stimulus_out_robustness(
+def _plot_single_stimulus_sensitivity(
     leave_one_out: pd.DataFrame,
     ranked_models: list[str],
     path: Path,
 ) -> Path:
     if leave_one_out.empty:
-        return _plot_empty_figure(path, title="Leave-One-Stimulus-Out Robustness", message="No robustness table")
+        return _plot_empty_figure(path, title="Single-Stimulus Sensitivity", message="No sensitivity table")
 
     required_columns = {"excluded_stimulus", "model_id", "rsa_similarity"}
     if not required_columns.issubset(leave_one_out.columns):
-        return _plot_empty_figure(path, title="Leave-One-Stimulus-Out Robustness", message="Missing robustness columns")
+        return _plot_empty_figure(path, title="Single-Stimulus Sensitivity", message="Missing sensitivity columns")
 
     summary = leave_one_out.copy()
     summary["excluded_stimulus"] = summary["excluded_stimulus"].astype(str)
@@ -442,7 +520,7 @@ def _plot_leave_one_stimulus_out_robustness(
     if ranked_models:
         summary = summary.loc[summary["model_id"].isin(ranked_models)]
     if summary.empty:
-        return _plot_empty_figure(path, title="Leave-One-Stimulus-Out Robustness", message="No finite robustness data")
+        return _plot_empty_figure(path, title="Single-Stimulus Sensitivity", message="No finite sensitivity data")
 
     figure_width = max(6.5, 0.9 * summary["excluded_stimulus"].nunique() + 2.0)
     plt.figure(figsize=(figure_width, 4.5))
@@ -456,90 +534,62 @@ def _plot_leave_one_stimulus_out_robustness(
         )
     plt.xlabel("Excluded stimulus")
     plt.ylabel("RSA similarity")
-    plt.title("Leave-One-Stimulus-Out Robustness")
+    plt.title("Single-Stimulus Sensitivity")
     plt.xticks(rotation=45, ha="right")
     plt.legend(title="Model")
     return _save_figure(path)
 
 
-def _plot_view_comparison_summary(view_comparison: pd.DataFrame, path: Path) -> Path:
-    if view_comparison.empty:
-        return _plot_empty_figure(path, title="View Comparison Summary", message="No cross-view table")
-
-    required_columns = {"view_name", "rsa_similarity"}
-    if not required_columns.issubset(view_comparison.columns):
-        return _plot_empty_figure(path, title="View Comparison Summary", message="Missing cross-view columns")
-
-    summary = view_comparison.copy()
-    summary["view_name"] = summary["view_name"].astype(str)
-    if "reference_view_name" in summary.columns:
-        summary["reference_view_name"] = summary["reference_view_name"].astype(str)
-        labels = summary["view_name"] + " vs " + summary["reference_view_name"]
-    else:
-        labels = summary["view_name"]
-    summary["plot_label"] = labels
-    summary["rsa_similarity"] = pd.to_numeric(summary["rsa_similarity"], errors="coerce")
-    summary = summary.loc[np.isfinite(summary["rsa_similarity"])]
-    if summary.empty:
-        return _plot_empty_figure(path, title="View Comparison Summary", message="No finite cross-view values")
-
-    plt.figure(figsize=(max(6.0, 0.9 * len(summary) + 2.0), 4.5))
-    plt.bar(summary["plot_label"], summary["rsa_similarity"].to_numpy(dtype=float))
-    plt.xlabel("Comparison")
-    plt.ylabel("RSA similarity")
-    plt.title("View Comparison Summary")
-    plt.xticks(rotation=45, ha="right")
-    return _save_figure(path)
-
-
-def _write_prototype_context_figures(
+def _write_aggregated_response_context_figures(
     core_outputs: dict[str, pd.DataFrame],
     dirs: dict[str, Path],
     written: dict[str, Path],
     *,
     top_models: dict[str, str],
 ) -> dict[str, Any]:
-    prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
-    top_prototype_models = _build_top_prototype_models_by_date_and_view(prototype_rsa_results)
-    prototype_rsa_views = _prototype_rsa_views(prototype_rsa_results)
-    prototype_comparison_views = _prototype_views(core_outputs)
-    prototype_rdm_views = _prototype_rdm_views(core_outputs)
-    prototype_figure_names = [
-        *_build_prototype_rsa_figure_names(prototype_rsa_views),
-        *_build_prototype_rdm_comparison_figure_names(prototype_comparison_views),
-        *_build_prototype_rdm_figure_names(prototype_rdm_views),
+    aggregated_response_rsa_results = _dataframe_or_none(core_outputs, "aggregated_response_rsa_results__per_date")
+    top_aggregated_response_models = _build_top_aggregated_response_models_by_date_and_view(
+        aggregated_response_rsa_results
+    )
+    aggregated_response_rsa_views = _aggregated_response_rsa_views(aggregated_response_rsa_results)
+    aggregated_response_comparison_views = _aggregated_response_views(core_outputs)
+    aggregated_response_rdm_views = _aggregated_response_rdm_views(core_outputs)
+    aggregated_response_figure_names = [
+        *_build_aggregated_response_rsa_figure_names(aggregated_response_rsa_views),
+        *_build_aggregated_response_rdm_comparison_figure_names(aggregated_response_comparison_views),
+        *_build_aggregated_response_rdm_figure_names(aggregated_response_rdm_views),
     ]
 
     for figure_name, view_name in zip(
-        _build_prototype_rsa_figure_names(prototype_rsa_views),
-        prototype_rsa_views,
+        _build_aggregated_response_rsa_figure_names(aggregated_response_rsa_views),
+        aggregated_response_rsa_views,
         strict=False,
     ):
-        written[figure_name] = _plot_prototype_rsa_per_date(
-            prototype_rsa_results,
+        written[figure_name] = _plot_aggregated_response_rsa_per_date(
+            aggregated_response_rsa_results,
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
         )
 
     for figure_name, view_name in zip(
-        _build_prototype_rdm_comparison_figure_names(prototype_comparison_views),
-        prototype_comparison_views,
+        _build_aggregated_response_rdm_comparison_figure_names(aggregated_response_comparison_views),
+        aggregated_response_comparison_views,
         strict=False,
     ):
-        written[figure_name] = _plot_prototype_rdm_comparison_per_date(
+        written[figure_name] = _plot_aggregated_response_rdm_comparison_per_date(
             core_outputs,
-            prototype_rsa_results,
-            top_prototype_models,
+            aggregated_response_rsa_results,
+            top_aggregated_response_models,
             view_name=view_name,
             path=dirs["figures_dir"] / f"{figure_name}.png",
         )
 
     for figure_name, view_name in zip(
-        _build_prototype_rdm_figure_names(prototype_rdm_views),
-        prototype_rdm_views,
+        _build_aggregated_response_rdm_figure_names(aggregated_response_rdm_views),
+        aggregated_response_rdm_views,
         strict=False,
     ):
-        written[f"figure__{figure_name}"] = _plot_prototype_pooled_rdm(
+        written[f"figure__{figure_name}"] = _plot_aggregated_response_pooled_rdm(
             core_outputs,
             _dataframe_or_none(core_outputs, figure_name),
             top_models,
@@ -549,34 +599,38 @@ def _write_prototype_context_figures(
         )
 
     return {
-        "prototype_context_enabled": _prototype_context_enabled(core_outputs),
-        "prototype_aggregation": _prototype_aggregation(core_outputs),
-        "prototype_views": _prototype_views(core_outputs),
-        "prototype_dates": _prototype_dates(core_outputs),
-        "prototype_table_names": _prototype_table_names(core_outputs),
-        "prototype_figure_names": prototype_figure_names,
-        "prototype_descriptive_outputs": _prototype_descriptive_outputs(core_outputs),
+        "aggregated_response_context_enabled": _aggregated_response_context_enabled(core_outputs),
+        "response_aggregation": _response_aggregation(core_outputs),
+        "aggregated_response_views": _aggregated_response_views(core_outputs),
+        "aggregated_response_dates": _aggregated_response_dates(core_outputs),
+        "aggregated_response_table_names": _aggregated_response_table_names(core_outputs),
+        "aggregated_response_figure_names": aggregated_response_figure_names,
+        "aggregated_response_descriptive_outputs": _aggregated_response_descriptive_outputs(core_outputs),
     }
 
 
-def _plot_prototype_rsa_per_date(
-    prototype_rsa_results: pd.DataFrame | None,
+def _plot_aggregated_response_rsa_per_date(
+    aggregated_response_rsa_results: pd.DataFrame | None,
     *,
     view_name: str,
     path: Path,
 ) -> Path:
-    if prototype_rsa_results is None or prototype_rsa_results.empty:
-        return _plot_empty_figure(path, title=f"Prototype RSA By Date ({view_name})", message="No prototype RSA table")
-
-    required_columns = {"date", "view_name", "model_id", "rsa_similarity"}
-    if not required_columns.issubset(prototype_rsa_results.columns):
+    if aggregated_response_rsa_results is None or aggregated_response_rsa_results.empty:
         return _plot_empty_figure(
             path,
-            title=f"Prototype RSA By Date ({view_name})",
-            message="Missing prototype RSA columns",
+            title=f"Aggregated-Response RSA By Date ({view_name})",
+            message="No aggregated-response RSA table",
         )
 
-    summary = prototype_rsa_results.copy()
+    required_columns = {"date", "view_name", "model_id", "rsa_similarity"}
+    if not required_columns.issubset(aggregated_response_rsa_results.columns):
+        return _plot_empty_figure(
+            path,
+            title=f"Aggregated-Response RSA By Date ({view_name})",
+            message="Missing aggregated-response RSA columns",
+        )
+
+    summary = aggregated_response_rsa_results.copy()
     summary["date"] = summary["date"].astype(str)
     summary["view_name"] = summary["view_name"].astype(str)
     summary["model_id"] = summary["model_id"].astype(str)
@@ -588,8 +642,8 @@ def _plot_prototype_rsa_per_date(
     if summary.empty:
         return _plot_empty_figure(
             path,
-            title=f"Prototype RSA By Date ({view_name})",
-            message="No finite prototype RSA values",
+            title=f"Aggregated-Response RSA By Date ({view_name})",
+            message="No finite aggregated-response RSA values",
         )
 
     ordered_dates = sorted(summary["date"].unique().tolist())
@@ -604,157 +658,189 @@ def _plot_prototype_rsa_per_date(
         )
     plt.xlabel("Date")
     plt.ylabel("RSA similarity")
-    plt.title(f"Prototype RSA By Date ({view_name})")
+    plt.title(f"Aggregated-Response RSA By Date ({view_name})")
     plt.xticks(rotation=45, ha="right")
     plt.legend(title="Model")
     return _save_figure(path)
 
 
-def _plot_prototype_rdm_comparison_per_date(
+def _plot_aggregated_response_rdm_comparison_per_date(
     core_outputs: dict[str, pd.DataFrame],
-    prototype_rsa_results: pd.DataFrame | None,
-    top_prototype_models: dict[tuple[str, str], str],
+    aggregated_response_rsa_results: pd.DataFrame | None,
+    top_aggregated_response_models: dict[tuple[str, str], str],
     *,
     view_name: str,
     path: Path,
 ) -> Path:
-    ordered_dates = _prototype_per_date_comparison_dates(
+    ordered_dates = _aggregated_response_per_date_comparison_dates(
         core_outputs,
-        prototype_rsa_results,
+        aggregated_response_rsa_results,
         view_name=view_name,
     )
     if not ordered_dates:
         return _plot_empty_figure(
             path,
-            title=f"Prototype RDM Comparison By Date ({view_name})",
-            message="No prototype data for this view",
+            title=f"Aggregated-Response RDM Comparison By Date ({view_name})",
+            message="No aggregated-response data for this view",
         )
 
     stimulus_sample_map = _dataframe_or_none(core_outputs, "stimulus_sample_map")
-    figure, axes = plt.subplots(
-        nrows=len(ordered_dates),
-        ncols=2,
-        figsize=(9.5, max(4.0, 3.8 * len(ordered_dates))),
-        squeeze=False,
+    row_labels = ("neural", "model")
+    figure, axes, colorbar_axes = _create_rdm_panel_figure(
+        nrows=len(ordered_dates) * len(row_labels),
+        figsize=(10.2, max(5.0, 3.4 * len(ordered_dates) * len(row_labels))),
     )
-    figure.suptitle(f"Prototype RDM Comparison By Date ({view_name})", fontsize=12)
+    figure.suptitle(f"Aggregated-Response RDM Comparison By Date ({view_name})", fontsize=12)
 
-    for row_index, date_value in enumerate(ordered_dates):
-        neural_matrix = _find_internal_prototype_per_date_rdm(core_outputs, view_name=view_name, date_value=date_value)
-        neural_order_labels: list[str] = []
-        if neural_matrix is not None:
-            _, neural_order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
-
-        top_model_id = top_prototype_models.get((date_value, view_name))
+    prepared_panels: list[tuple[int, int, pd.DataFrame | None, str, str]] = []
+    for date_offset, date_value in enumerate(ordered_dates):
+        neural_matrix = _find_internal_aggregated_response_per_date_rdm(
+            core_outputs,
+            view_name=view_name,
+            date_value=date_value,
+        )
+        top_model_id = top_aggregated_response_models.get((date_value, view_name))
         model_matrix = None
-        if top_model_id and neural_order_labels:
+        if top_model_id:
             model_matrix = _find_matrix_frame(
                 core_outputs,
-                (
-                    f"model_rdm__{top_model_id}__{view_name}",
-                    f"model_rdm__{view_name}__{top_model_id}",
-                    f"model_rdm__{top_model_id}",
-                ),
+                _model_rdm_aliases(top_model_id, view_name),
             )
-            if model_matrix is not None:
-                model_matrix = _restrict_rdm_to_labels(model_matrix, neural_order_labels)
+            if model_matrix is not None and neural_matrix is not None:
+                neural_labels = _coerce_rdm_heatmap_frame(neural_matrix).index.tolist()
+                model_matrix = _restrict_rdm_to_labels(model_matrix, neural_labels)
+        for order_offset, order_source in enumerate(row_labels):
+            row_index = (date_offset * len(row_labels)) + order_offset
+            order_labels_for_pair = _resolve_pair_order_labels(
+                order_source=order_source,
+                neural_matrix=neural_matrix,
+                model_matrix=model_matrix,
+                stimulus_sample_map=stimulus_sample_map,
+            )
+            prepared_panels.extend(
+                [
+                    (
+                        row_index,
+                        0,
+                        _prepare_rdm_display_frame(
+                            neural_matrix,
+                            stimulus_sample_map,
+                            order_labels=order_labels_for_pair,
+                        ),
+                        f"{date_value}: aggregated response ({order_source} order)",
+                        "No per-date aggregated-response RDM",
+                    ),
+                    (
+                        row_index,
+                        1,
+                        _prepare_rdm_display_frame(
+                            model_matrix,
+                            stimulus_sample_map,
+                            order_labels=order_labels_for_pair,
+                        ),
+                        f"{date_value}: {top_model_id or 'no top model'} ({order_source} order)",
+                        "No paired top-model RDM",
+                    ),
+                ]
+            )
 
-        _render_rdm_axis(
-            axes[row_index, 0],
-            neural_matrix,
-            stimulus_sample_map=stimulus_sample_map,
-            title=f"{date_value}: neural prototype",
-            fallback_message="No per-date neural prototype RDM",
-            order_labels=neural_order_labels,
-        )
-        _render_rdm_axis(
-            axes[row_index, 1],
-            model_matrix,
-            stimulus_sample_map=stimulus_sample_map,
-            title=f"{date_value}: {top_model_id or 'no top model'}",
-            fallback_message="No paired top-model RDM",
-            order_labels=neural_order_labels,
-        )
+    _render_prepared_rdm_panels(figure, axes, colorbar_axes, prepared_panels)
 
-    return _save_figure(path)
+    return _save_figure(path, tight_layout=False)
 
 
-def _plot_prototype_pooled_rdm(
+def _plot_aggregated_response_pooled_rdm(
     core_outputs: dict[str, pd.DataFrame],
-    prototype_rdm: pd.DataFrame | None,
+    aggregated_response_rdm: pd.DataFrame | None,
     top_models: dict[str, str],
     *,
     stimulus_sample_map: pd.DataFrame | None,
     view_name: str,
     path: Path,
 ) -> Path:
-    figure, axes = plt.subplots(
-        ncols=2,
-        figsize=(9.5, 4.0),
-        squeeze=False,
-    )
-    figure.suptitle(f"Prototype Pooled RDM Comparison ({view_name})", fontsize=12)
-
-    neural_order_labels: list[str] = []
-    if prototype_rdm is not None:
-        _, neural_order_labels = _prepare_rdm_heatmap_frame(prototype_rdm, stimulus_sample_map)
+    figure, axes, colorbar_axes = _create_rdm_panel_figure(nrows=2, figsize=(10.2, 7.0))
+    figure.suptitle(f"Aggregated-Response Pooled RDM Comparison ({view_name})", fontsize=12)
 
     top_model_id = top_models.get(view_name)
     model_matrix = None
     if top_model_id:
         model_matrix = _find_matrix_frame(core_outputs, _model_rdm_aliases(top_model_id, view_name))
-        if model_matrix is not None:
-            model_matrix = _restrict_rdm_to_labels(model_matrix, neural_order_labels)
+        if model_matrix is not None and aggregated_response_rdm is not None:
+            response_labels = _coerce_rdm_heatmap_frame(aggregated_response_rdm).index.tolist()
+            model_matrix = _restrict_rdm_to_labels(model_matrix, response_labels)
 
-    _render_rdm_axis(
-        axes[0, 0],
-        prototype_rdm,
-        stimulus_sample_map=stimulus_sample_map,
-        title=f"{view_name}: pooled prototype",
-        fallback_message="No pooled prototype RDM provided",
-        order_labels=neural_order_labels,
-    )
-    _render_rdm_axis(
-        axes[0, 1],
-        model_matrix,
-        stimulus_sample_map=stimulus_sample_map,
-        title=f"{view_name}: {top_model_id or 'no top model'}",
-        fallback_message="No paired top-model RDM",
-        order_labels=neural_order_labels,
-    )
-    return _save_figure(path)
+    prepared_panels: list[tuple[int, int, pd.DataFrame | None, str, str]] = []
+    for row_index, order_source in enumerate(("neural", "model")):
+        order_labels_for_pair = _resolve_pair_order_labels(
+            order_source=order_source,
+            neural_matrix=aggregated_response_rdm,
+            model_matrix=model_matrix,
+            stimulus_sample_map=stimulus_sample_map,
+        )
+        prepared_panels.extend(
+            [
+                (
+                    row_index,
+                    0,
+                    _prepare_rdm_display_frame(
+                        aggregated_response_rdm,
+                        stimulus_sample_map,
+                        order_labels=order_labels_for_pair,
+                    ),
+                    f"{view_name}: pooled aggregated response ({order_source} order)",
+                    "No pooled aggregated-response RDM provided",
+                ),
+                (
+                    row_index,
+                    1,
+                    _prepare_rdm_display_frame(
+                        model_matrix,
+                        stimulus_sample_map,
+                        order_labels=order_labels_for_pair,
+                    ),
+                    f"{view_name}: {top_model_id or 'no top model'} ({order_source} order)",
+                    "No paired top-model RDM",
+                ),
+            ]
+        )
+    _render_prepared_rdm_panels(figure, axes, colorbar_axes, prepared_panels)
+    return _save_figure(path, tight_layout=False)
 
 
-def _find_internal_prototype_per_date_rdm(
+def _find_internal_aggregated_response_per_date_rdm(
     core_outputs: dict[str, pd.DataFrame],
     *,
     view_name: str,
     date_value: str,
 ) -> pd.DataFrame | None:
-    return _dataframe_or_none(core_outputs, _internal_prototype_per_date_rdm_key(view_name, date_value))
+    return _dataframe_or_none(core_outputs, _internal_aggregated_response_per_date_rdm_key(view_name, date_value))
 
 
-def _prototype_per_date_comparison_dates(
+def _aggregated_response_per_date_comparison_dates(
     core_outputs: dict[str, pd.DataFrame],
-    prototype_rsa_results: pd.DataFrame | None,
+    aggregated_response_rsa_results: pd.DataFrame | None,
     *,
     view_name: str,
 ) -> list[str]:
-    dates = set(_prototype_internal_per_date_dates(core_outputs, view_name=view_name))
-    if prototype_rsa_results is None or prototype_rsa_results.empty:
+    dates = set(_aggregated_response_internal_per_date_dates(core_outputs, view_name=view_name))
+    if aggregated_response_rsa_results is None or aggregated_response_rsa_results.empty:
         return sorted(dates)
-    if not {"date", "view_name"}.issubset(prototype_rsa_results.columns):
+    if not {"date", "view_name"}.issubset(aggregated_response_rsa_results.columns):
         return sorted(dates)
 
-    view_rows = prototype_rsa_results.copy()
+    view_rows = aggregated_response_rsa_results.copy()
     view_rows["date"] = view_rows["date"].astype(str)
     view_rows["view_name"] = view_rows["view_name"].astype(str)
     dates.update(view_rows.loc[view_rows["view_name"] == view_name, "date"].tolist())
     return sorted(date_value for date_value in dates if date_value)
 
 
-def _prototype_internal_per_date_dates(core_outputs: dict[str, pd.DataFrame], *, view_name: str) -> list[str]:
-    prefix = f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__"
+def _aggregated_response_internal_per_date_dates(
+    core_outputs: dict[str, pd.DataFrame],
+    *,
+    view_name: str,
+) -> list[str]:
+    prefix = f"{INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX}{view_name}__"
     return sorted(
         artifact_name.removeprefix(prefix)
         for artifact_name, frame in core_outputs.items()
@@ -791,33 +877,37 @@ def _restrict_rdm_to_labels(matrix_frame: pd.DataFrame, order_labels: list[str])
     return restricted.reset_index(drop=True)
 
 
-def _render_rdm_axis(
-    axis: plt.Axes,
-    matrix_frame: pd.DataFrame | None,
+def _resolve_pair_order_labels(
     *,
+    order_source: str,
+    neural_matrix: pd.DataFrame | None,
+    model_matrix: pd.DataFrame | None,
     stimulus_sample_map: pd.DataFrame | None,
-    title: str,
-    fallback_message: str,
+) -> list[str]:
+    preferred_matrix = neural_matrix if order_source == "neural" else model_matrix
+    fallback_matrix = model_matrix if order_source == "neural" else neural_matrix
+    for candidate in (preferred_matrix, fallback_matrix):
+        if candidate is None:
+            continue
+        _, order_labels = _prepare_rdm_heatmap_frame(candidate, stimulus_sample_map)
+        if order_labels:
+            return order_labels
+    return []
+
+
+def _prepare_rdm_display_frame(
+    matrix_frame: pd.DataFrame | None,
+    stimulus_sample_map: pd.DataFrame | None,
+    *,
     order_labels: list[str] | None = None,
-) -> None:
-    axis.set_title(title)
+) -> pd.DataFrame | None:
     if matrix_frame is None:
-        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
-        axis.axis("off")
-        return
+        return None
 
     heatmap_frame, _ = _prepare_rdm_heatmap_frame(matrix_frame, stimulus_sample_map, order_labels=order_labels)
     if heatmap_frame.empty:
-        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
-        axis.axis("off")
-        return
-
-    image = axis.imshow(heatmap_frame.to_numpy(dtype=float), cmap="viridis")
-    axis.set_xticks(np.arange(len(heatmap_frame.columns)))
-    axis.set_yticks(np.arange(len(heatmap_frame.index)))
-    axis.set_xticklabels(heatmap_frame.columns.tolist(), rotation=45, ha="right")
-    axis.set_yticklabels(heatmap_frame.index.tolist())
-    plt.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
+        return None
+    return _mask_rdm_diagonal(heatmap_frame)
 
 
 def _resolve_rdm_heatmap_frame(
@@ -836,6 +926,153 @@ def _resolve_rdm_heatmap_frame(
     resolved_frame.index = pd.Index(resolved_labels)
     resolved_frame.columns = pd.Index(resolved_labels)
     return resolved_frame
+
+
+def _mask_rdm_diagonal(heatmap_frame: pd.DataFrame) -> pd.DataFrame:
+    masked = heatmap_frame.copy()
+    diagonal_length = min(masked.shape)
+    for diagonal_index in range(diagonal_length):
+        masked.iat[diagonal_index, diagonal_index] = np.nan
+    return masked
+
+
+def _render_prepared_rdm_panels(
+    figure: plt.Figure,
+    axes: np.ndarray,
+    colorbar_axes: np.ndarray,
+    panels: list[tuple[int, int, pd.DataFrame | None, str, str]],
+) -> None:
+    cmap = matplotlib.colormaps["viridis"].copy()
+    cmap.set_bad("#f2f2f2")
+
+    for row_index, col_index, frame, title, fallback_message in panels:
+        axis = axes[row_index, col_index]
+        colorbar_axis = colorbar_axes[row_index, col_index]
+        axis.set_title(title)
+        image = _render_prepared_rdm_axis(
+            axis,
+            frame,
+            fallback_message=fallback_message,
+            cmap=cmap,
+        )
+        if image is None:
+            colorbar_axis.set_visible(False)
+            continue
+        try:
+            colorbar_axis.set_visible(True)
+            figure.colorbar(image, cax=colorbar_axis, label="RDM dissimilarity")
+        except Exception as exc:
+            warnings.warn(
+                f"RDM colorbar failed for panel ({row_index}, {col_index}): {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            colorbar_axis.set_visible(False)
+
+
+def _create_rdm_panel_figure(
+    *,
+    nrows: int,
+    figsize: tuple[float, float],
+) -> tuple[plt.Figure, np.ndarray, np.ndarray]:
+    figure = plt.figure(figsize=figsize)
+    grid = figure.add_gridspec(
+        nrows=nrows,
+        ncols=4,
+        width_ratios=(1.0, 0.06, 1.0, 0.06),
+        left=0.07,
+        right=0.96,
+        bottom=0.08,
+        top=0.9,
+        wspace=0.28,
+        hspace=0.34,
+    )
+    axes = np.empty((nrows, 2), dtype=object)
+    colorbar_axes = np.empty((nrows, 2), dtype=object)
+    for row_index in range(nrows):
+        axes[row_index, 0] = figure.add_subplot(grid[row_index, 0])
+        colorbar_axes[row_index, 0] = figure.add_subplot(grid[row_index, 1])
+        axes[row_index, 1] = figure.add_subplot(grid[row_index, 2])
+        colorbar_axes[row_index, 1] = figure.add_subplot(grid[row_index, 3])
+    return figure, axes, colorbar_axes
+
+
+def _render_prepared_rdm_axis(
+    axis: plt.Axes,
+    heatmap_frame: pd.DataFrame | None,
+    *,
+    fallback_message: str,
+    cmap: matplotlib.colors.Colormap,
+) -> matplotlib.image.AxesImage | None:
+    if heatmap_frame is None or heatmap_frame.empty:
+        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
+        axis.axis("off")
+        return None
+
+    display_frame = _coerce_rdm_heatmap_frame(heatmap_frame)
+    display_parameters = _compute_rdm_display_parameters(display_frame)
+    if display_parameters is None:
+        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
+        axis.axis("off")
+        return None
+
+    values = display_frame.to_numpy(dtype=float)
+    axis.set_axis_on()
+    image = axis.imshow(values, cmap=cmap, norm=display_parameters.norm)
+    axis.set_xticks(np.arange(len(display_frame.columns)))
+    axis.set_yticks(np.arange(len(display_frame.index)))
+    axis.set_xticklabels(display_frame.columns.tolist(), rotation=45, ha="right")
+    axis.set_yticklabels(display_frame.index.tolist())
+    return image
+
+
+def _compute_rdm_display_parameters(
+    heatmap_frame: pd.DataFrame,
+    *,
+    lower_quantile: float = 0.05,
+    upper_quantile: float = 0.95,
+) -> RdmDisplayParameters | None:
+    finite_off_diagonal_values = _finite_off_diagonal_values(heatmap_frame)
+    if finite_off_diagonal_values.size == 0:
+        return None
+
+    quantiles = np.quantile(finite_off_diagonal_values, [lower_quantile, upper_quantile])
+    if not np.all(np.isfinite(quantiles)):
+        vmin = float(np.min(finite_off_diagonal_values))
+        vmax = float(np.max(finite_off_diagonal_values))
+    else:
+        vmin = float(quantiles[0])
+        vmax = float(quantiles[1])
+
+    if vmin > vmax:
+        vmin, vmax = vmax, vmin
+
+    finite_min = float(np.min(finite_off_diagonal_values))
+    finite_max = float(np.max(finite_off_diagonal_values))
+    if vmin == vmax:
+        if finite_min != finite_max:
+            vmin, vmax = finite_min, finite_max
+        else:
+            constant_value = finite_min
+            padding = max(abs(constant_value) * 0.05, 1e-6)
+            vmin = constant_value - padding
+            vmax = constant_value + padding
+
+    norm = matplotlib.colors.PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax, clip=True)
+    return RdmDisplayParameters(vmin=vmin, vmax=vmax, norm=norm)
+
+
+def _finite_off_diagonal_values(heatmap_frame: pd.DataFrame) -> np.ndarray:
+    values = _coerce_rdm_heatmap_frame(heatmap_frame).to_numpy(dtype=float)
+    if values.size == 0:
+        return np.array([], dtype=float)
+
+    finite_mask = np.isfinite(values)
+    diagonal_length = min(values.shape)
+    if diagonal_length:
+        diagonal_indices = np.arange(diagonal_length)
+        finite_mask[diagonal_indices, diagonal_indices] = False
+    return values[finite_mask]
 
 
 def _prepare_rdm_heatmap_frame(
@@ -968,7 +1205,7 @@ def _build_run_summary(
     group_summary: dict[str, list[str]],
     top_models: dict[str, str],
     focus_view: str | None,
-    prototype_summary: dict[str, Any],
+    aggregated_response_summary: dict[str, Any],
 ) -> dict[str, Any]:
     table_names = [artifact_name for artifact_name, _ in TABLE_ARTIFACT_SPECS]
     qc_table_names = [artifact_name for artifact_name, _ in QC_ARTIFACT_SPECS]
@@ -985,8 +1222,14 @@ def _build_run_summary(
     figure_names = [
         *REQUIRED_FIGURES,
         *_build_neural_vs_model_figure_names(figure_view_names),
-        *prototype_summary["prototype_figure_names"],
+        *aggregated_response_summary["aggregated_response_figure_names"],
     ]
+    ranked_model_rsa_details = _build_ranked_model_rsa_details(
+        required_tables["rsa_results"],
+        group_summary["ranked_models"],
+        focus_view=focus_view,
+    )
+    view_comparison_details = _build_view_comparison_details(required_tables["rsa_view_comparison"])
 
     return {
         "views": view_names,
@@ -995,6 +1238,8 @@ def _build_run_summary(
         "ranked_models": group_summary["ranked_models"],
         "additional_models": group_summary["additional_models"],
         "excluded_models": group_summary["excluded_models"],
+        "ranked_model_rsa_details": ranked_model_rsa_details,
+        "view_comparison_details": view_comparison_details,
         "top_models_by_view": top_models,
         "resolved_input_tables": [
             "stimulus_sample_map",
@@ -1016,59 +1261,67 @@ def _build_run_summary(
         "tables_dir": str(written["tables_dir"]),
         "figures_dir": str(written["figures_dir"]),
         "qc_dir": str(written["qc_dir"]),
-        "prototype_context_enabled": prototype_summary["prototype_context_enabled"],
-        "prototype_aggregation": prototype_summary["prototype_aggregation"],
-        "prototype_views": prototype_summary["prototype_views"],
-        "prototype_dates": prototype_summary["prototype_dates"],
-        "prototype_table_names": prototype_summary["prototype_table_names"],
-        "prototype_figure_names": prototype_summary["prototype_figure_names"],
-        "prototype_descriptive_outputs": prototype_summary["prototype_descriptive_outputs"],
+        "aggregated_response_context_enabled": aggregated_response_summary["aggregated_response_context_enabled"],
+        "response_aggregation": aggregated_response_summary["response_aggregation"],
+        "aggregated_response_views": aggregated_response_summary["aggregated_response_views"],
+        "aggregated_response_dates": aggregated_response_summary["aggregated_response_dates"],
+        "aggregated_response_table_names": aggregated_response_summary["aggregated_response_table_names"],
+        "aggregated_response_figure_names": aggregated_response_summary["aggregated_response_figure_names"],
+        "aggregated_response_descriptive_outputs": aggregated_response_summary[
+            "aggregated_response_descriptive_outputs"
+        ],
     }
 
 
-def _prototype_context_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
-    return any(key.startswith("prototype_") and isinstance(value, pd.DataFrame) for key, value in core_outputs.items())
+def _aggregated_response_context_enabled(core_outputs: dict[str, pd.DataFrame]) -> bool:
+    return any(
+        key.startswith("aggregated_response_") and isinstance(value, pd.DataFrame) for key, value in core_outputs.items()
+    )
 
 
-def _prototype_aggregation(core_outputs: dict[str, pd.DataFrame]) -> str | None:
-    config = _dataframe_or_none(core_outputs, INTERNAL_PROTOTYPE_AGGREGATION_KEY)
-    if config is None or config.empty or "prototype_aggregation" not in config.columns:
+def _response_aggregation(core_outputs: dict[str, pd.DataFrame]) -> str | None:
+    config = _dataframe_or_none(core_outputs, INTERNAL_RESPONSE_AGGREGATION_KEY)
+    if config is None or config.empty or "response_aggregation" not in config.columns:
         return None
-    value = str(config["prototype_aggregation"].iloc[0]).strip().lower()
+    value = str(config["response_aggregation"].iloc[0]).strip().lower()
     return value or None
 
 
-def _prototype_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+def _aggregated_response_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
     view_names: list[str] = []
-    prototype_rsa_results = _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date")
-    prototype_support_per_date = _dataframe_or_none(core_outputs, "prototype_support__per_date")
-    prototype_support_pooled = _dataframe_or_none(core_outputs, "prototype_support__pooled")
-    for frame in (prototype_rsa_results, prototype_support_per_date, prototype_support_pooled):
+    aggregated_response_rsa_results = _dataframe_or_none(core_outputs, "aggregated_response_rsa_results__per_date")
+    aggregated_response_support_per_date = _dataframe_or_none(core_outputs, "aggregated_response_support__per_date")
+    aggregated_response_support_pooled = _dataframe_or_none(core_outputs, "aggregated_response_support__pooled")
+    for frame in (
+        aggregated_response_rsa_results,
+        aggregated_response_support_per_date,
+        aggregated_response_support_pooled,
+    ):
         if frame is None or "view_name" not in frame.columns:
             continue
         view_names.extend(frame["view_name"].astype(str).tolist())
-    view_names.extend(_prototype_rdm_views(core_outputs))
+    view_names.extend(_aggregated_response_rdm_views(core_outputs))
     return _canonicalize_view_order(view_names)
 
 
-def _prototype_rsa_views(prototype_rsa_results: pd.DataFrame | None) -> list[str]:
-    if prototype_rsa_results is None or "view_name" not in prototype_rsa_results.columns:
+def _aggregated_response_rsa_views(aggregated_response_rsa_results: pd.DataFrame | None) -> list[str]:
+    if aggregated_response_rsa_results is None or "view_name" not in aggregated_response_rsa_results.columns:
         return []
-    return _canonicalize_view_order(prototype_rsa_results["view_name"].astype(str).tolist())
+    return _canonicalize_view_order(aggregated_response_rsa_results["view_name"].astype(str).tolist())
 
 
-def _prototype_rdm_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+def _aggregated_response_rdm_views(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
     view_names = [
-        artifact_name.removeprefix("prototype_rdm__pooled__")
+        artifact_name.removeprefix("aggregated_response_rdm__pooled__")
         for artifact_name, frame in core_outputs.items()
-        if artifact_name.startswith("prototype_rdm__pooled__") and isinstance(frame, pd.DataFrame)
+        if artifact_name.startswith("aggregated_response_rdm__pooled__") and isinstance(frame, pd.DataFrame)
     ]
     return _canonicalize_view_order(view_names)
 
 
-def _prototype_dates(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+def _aggregated_response_dates(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
     dates: set[str] = set()
-    for artifact_name in ("prototype_rsa_results__per_date", "prototype_support__per_date"):
+    for artifact_name in ("aggregated_response_rsa_results__per_date", "aggregated_response_support__per_date"):
         frame = _dataframe_or_none(core_outputs, artifact_name)
         if frame is None or "date" not in frame.columns:
             continue
@@ -1078,16 +1331,16 @@ def _prototype_dates(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
     return sorted(dates)
 
 
-def _prototype_table_names(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+def _aggregated_response_table_names(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
     table_names: list[str] = []
-    if _dataframe_or_none(core_outputs, "prototype_rsa_results__per_date") is not None:
-        table_names.append("prototype_rsa_results__per_date")
-    table_names.extend(_build_prototype_rdm_figure_names(_prototype_rdm_views(core_outputs)))
+    if _dataframe_or_none(core_outputs, "aggregated_response_rsa_results__per_date") is not None:
+        table_names.append("aggregated_response_rsa_results__per_date")
+    table_names.extend(_build_aggregated_response_rdm_figure_names(_aggregated_response_rdm_views(core_outputs)))
     return table_names
 
 
-def _prototype_descriptive_outputs(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
-    return _build_prototype_rdm_figure_names(_prototype_rdm_views(core_outputs))
+def _aggregated_response_descriptive_outputs(core_outputs: dict[str, pd.DataFrame]) -> list[str]:
+    return _build_aggregated_response_rdm_figure_names(_aggregated_response_rdm_views(core_outputs))
 
 
 def _ordered_views(rsa_results: pd.DataFrame, view_comparison: pd.DataFrame) -> list[str]:
@@ -1140,6 +1393,28 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     lines.extend(
         [
             "",
+            "## Ranked Model RSA Details",
+        ]
+    )
+    if summary["ranked_model_rsa_details"]:
+        lines.extend(_format_ranked_model_rsa_detail(detail) for detail in summary["ranked_model_rsa_details"])
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
+            "## View Comparison Details",
+        ]
+    )
+    if summary["view_comparison_details"]:
+        lines.extend(_format_view_comparison_detail(detail) for detail in summary["view_comparison_details"])
+    else:
+        lines.append("- None")
+
+    lines.extend(
+        [
+            "",
             "## Artifacts",
             f"- Resolved input tables: {', '.join(summary['resolved_input_tables'])}",
             f"- RSA tables: {', '.join(summary['rsa_table_names'])}",
@@ -1149,16 +1424,16 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
         ]
     )
 
-    if summary["prototype_context_enabled"]:
+    if summary["aggregated_response_context_enabled"]:
         lines.extend(
             [
-                "## Prototype Context",
-                f"- Prototype aggregation: {summary['prototype_aggregation'] or 'None'}",
-                f"- Views: {', '.join(summary['prototype_views']) if summary['prototype_views'] else 'None'}",
-                f"- Dates: {', '.join(summary['prototype_dates']) if summary['prototype_dates'] else 'None'}",
-                f"- Prototype tables: {', '.join(summary['prototype_table_names']) if summary['prototype_table_names'] else 'None'}",
-                f"- Prototype figures: {', '.join(summary['prototype_figure_names']) if summary['prototype_figure_names'] else 'None'}",
-                f"- Prototype descriptive outputs: {', '.join(summary['prototype_descriptive_outputs']) if summary['prototype_descriptive_outputs'] else 'None'}",
+                "## Aggregated Response Context",
+                f"- Response aggregation: {summary['response_aggregation'] or 'None'}",
+                f"- Views: {', '.join(summary['aggregated_response_views']) if summary['aggregated_response_views'] else 'None'}",
+                f"- Dates: {', '.join(summary['aggregated_response_dates']) if summary['aggregated_response_dates'] else 'None'}",
+                f"- Aggregated-response tables: {', '.join(summary['aggregated_response_table_names']) if summary['aggregated_response_table_names'] else 'None'}",
+                f"- Aggregated-response figures: {', '.join(summary['aggregated_response_figure_names']) if summary['aggregated_response_figure_names'] else 'None'}",
+                f"- Aggregated-response descriptive outputs: {', '.join(summary['aggregated_response_descriptive_outputs']) if summary['aggregated_response_descriptive_outputs'] else 'None'}",
                 "",
             ]
         )
@@ -1177,6 +1452,37 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
     return output_path
 
 
+def _format_ranked_model_rsa_detail(detail: dict[str, Any]) -> str:
+    return (
+        f"- {detail.get('model_id', 'None')} | view={_summary_markdown_value(detail.get('view_name'))} | "
+        f"rsa={_summary_markdown_value(detail.get('rsa_similarity'))} | "
+        f"p_raw={_summary_markdown_value(detail.get('p_value_raw'))} | "
+        f"p_fdr={_summary_markdown_value(detail.get('p_value_fdr'))} | "
+        f"n={_summary_markdown_value(detail.get('n_shared_entries'))} | "
+        f"status={_summary_markdown_value(detail.get('score_status'))} | "
+        f"top={_summary_markdown_value(detail.get('is_top_model'))}"
+    )
+
+
+def _format_view_comparison_detail(detail: dict[str, Any]) -> str:
+    return (
+        f"- {_summary_markdown_value(detail.get('view_name'))} vs "
+        f"{_summary_markdown_value(detail.get('reference_view_name'))} | "
+        f"scope={_summary_markdown_value(detail.get('comparison_scope'))} | "
+        f"rsa={_summary_markdown_value(detail.get('rsa_similarity'))} | "
+        f"p_raw={_summary_markdown_value(detail.get('p_value_raw'))} | "
+        f"p_fdr={_summary_markdown_value(detail.get('p_value_fdr'))} | "
+        f"n={_summary_markdown_value(detail.get('n_shared_entries'))} | "
+        f"status={_summary_markdown_value(detail.get('score_status'))}"
+    )
+
+
+def _summary_markdown_value(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return "None"
+    return str(value)
+
+
 def _string_column(frame: pd.DataFrame, column_name: str) -> pd.Series:
     if column_name not in frame.columns:
         return pd.Series("", index=frame.index, dtype="object")
@@ -1189,15 +1495,17 @@ def _bool_column(frame: pd.DataFrame, column_name: str) -> pd.Series:
     series = frame[column_name]
     if pd.api.types.is_bool_dtype(series):
         return series.fillna(False)
-    normalized = series.fillna(False).astype(str).str.strip().str.lower()
+    normalized = series.astype("string").fillna("").str.strip().str.lower()
     return normalized.isin({"1", "true", "yes"})
 
 
-def _save_figure(path: Path) -> Path:
+def _save_figure(path: Path, *, tight_layout: bool = True) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    plt.tight_layout()
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close()
+    figure = plt.gcf()
+    if tight_layout:
+        figure.tight_layout()
+    figure.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(figure)
     return path
 
 

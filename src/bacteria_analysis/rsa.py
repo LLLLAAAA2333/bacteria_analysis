@@ -9,11 +9,17 @@ import pandas as pd
 
 from bacteria_analysis.io import read_parquet
 from bacteria_analysis.model_space import build_model_rdm, summarize_model_input_coverage
-from bacteria_analysis.rsa_prototypes import PrototypeContextInputs, build_grouped_prototypes, build_prototype_rdm
+from bacteria_analysis.rsa_aggregated_responses import (
+    AggregatedResponseContextInputs,
+    build_aggregated_response_rdm,
+    build_grouped_aggregated_responses,
+)
 
 DEFAULT_CROSS_VIEW_NAMES = ("response_window", "full_trajectory")
-INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = "internal__prototype_rdm__per_date__"
-INTERNAL_PROTOTYPE_AGGREGATION_KEY = "internal__prototype_aggregation"
+INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX = "internal__aggregated_response_rdm__per_date__"
+INTERNAL_RESPONSE_AGGREGATION_KEY = "internal__response_aggregation"
+INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX = INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX
+INTERNAL_PROTOTYPE_AGGREGATION_KEY = INTERNAL_RESPONSE_AGGREGATION_KEY
 
 
 def align_rdm_upper_triangles(neural_matrix: pd.DataFrame, model_matrix: pd.DataFrame) -> pd.DataFrame:
@@ -237,29 +243,39 @@ def load_geometry_pooled_neural_rdms(
 def run_biochemical_rsa(
     resolved_inputs: dict[str, pd.DataFrame],
     *,
-    neural_matrices: dict[str, pd.DataFrame],
-    prototype_inputs: PrototypeContextInputs | None = None,
-    prototype_aggregation: str = "mean",
+    neural_matrices: dict[str, pd.DataFrame] | None = None,
+    aggregated_response_inputs: AggregatedResponseContextInputs | None = None,
+    response_aggregation: str = "mean",
+    prototype_inputs: AggregatedResponseContextInputs | None = None,
+    prototype_aggregation: str | None = None,
     permutations: int = 0,
     seed: int = 0,
     view_names: tuple[str, ...] | list[str] = DEFAULT_CROSS_VIEW_NAMES,
     primary_view: str = "response_window",
 ) -> dict[str, pd.DataFrame]:
-    requested_views = _resolve_requested_views(neural_matrices, view_names)
+    if aggregated_response_inputs is None and prototype_inputs is not None:
+        aggregated_response_inputs = prototype_inputs
+    if prototype_aggregation is not None:
+        response_aggregation = prototype_aggregation
+
+    requested_views = _resolve_requested_views_for_stage3(
+        neural_matrices,
+        aggregated_response_inputs,
+        view_names,
+    )
     resolved_primary_view = primary_view if primary_view in requested_views else requested_views[0]
     registry = resolved_inputs["model_registry_resolved"].copy()
     results_rows: list[dict[str, object]] = []
     leave_one_out_frames: list[pd.DataFrame] = []
     cross_view_frames: list[pd.DataFrame] = []
     model_summary_rows: list[dict[str, object]] = []
+    built_registry_rows: list[pd.Series] = []
 
     core_outputs: dict[str, pd.DataFrame] = {
         "stimulus_sample_map": resolved_inputs["stimulus_sample_map"].copy(),
         "metabolite_annotation_resolved": resolved_inputs["metabolite_annotation"].copy(),
         "model_membership_resolved": resolved_inputs["model_membership_resolved"].copy(),
     }
-    for view_name in requested_views:
-        core_outputs[f"neural_rdm__{view_name}"] = neural_matrices[view_name].copy()
 
     for _, registry_row in registry.iterrows():
         model_id = str(registry_row["model_id"]).strip().lower()
@@ -276,13 +292,33 @@ def run_biochemical_rsa(
             continue
         core_outputs[f"model_rdm__{model_id}"] = model_matrix.copy()
         model_summary_rows.append(_build_model_rdm_summary_row(model_id, registry_row, model_matrix))
+        built_registry_rows.append(registry_row.copy())
 
+    built_registry = pd.DataFrame(built_registry_rows).reset_index(drop=True)
+    core_outputs["model_rdm_summary"] = pd.DataFrame.from_records(model_summary_rows)
+    active_neural_matrices = _resolve_active_neural_matrices(
+        neural_matrices,
+        aggregated_response_inputs,
+        resolved_inputs=resolved_inputs,
+        core_outputs=core_outputs,
+        requested_views=requested_views,
+        response_aggregation=response_aggregation,
+        permutations=permutations,
+        seed=seed,
+    )
+    for view_name in requested_views:
+        core_outputs[f"neural_rdm__{view_name}"] = active_neural_matrices[view_name].copy()
+
+    for _, registry_row in built_registry.iterrows():
+        model_id = str(registry_row["model_id"]).strip().lower()
+        model_status = str(registry_row["model_status"]).strip().lower()
+        model_matrix = core_outputs[f"model_rdm__{model_id}"]
         for view_index, view_name in enumerate(requested_views):
-            score = compute_rsa_score(neural_matrices[view_name], model_matrix)
+            score = compute_rsa_score(active_neural_matrices[view_name], model_matrix)
             p_value_raw = np.nan
             if permutations > 0 and score["score_status"] == "ok":
                 null = build_permutation_null(
-                    neural_matrices[view_name],
+                    active_neural_matrices[view_name],
                     model_matrix,
                     n_iterations=permutations,
                     seed=seed + (1000 * view_index),
@@ -312,7 +348,7 @@ def run_biochemical_rsa(
             )
 
         leave_one_out = summarize_leave_one_stimulus_out(
-            neural_matrices[resolved_primary_view],
+            active_neural_matrices[resolved_primary_view],
             model_matrix,
             n_iterations=permutations,
             seed=seed,
@@ -332,7 +368,7 @@ def run_biochemical_rsa(
         leave_one_out_frames.append(leave_one_out)
 
         cross_view = summarize_cross_view_comparison(
-            {view_name: neural_matrices[view_name] for view_name in requested_views},
+            {view_name: active_neural_matrices[view_name] for view_name in requested_views},
             model_matrix,
             view_names=requested_views,
             n_iterations=permutations,
@@ -369,7 +405,6 @@ def run_biochemical_rsa(
     core_outputs["model_input_coverage"] = summarize_model_input_coverage(resolved_inputs)
     core_outputs["model_feature_qc"] = resolved_inputs.get("model_feature_qc", pd.DataFrame()).copy()
     core_outputs["model_feature_filtering"] = core_outputs["model_feature_qc"].copy()
-    core_outputs["model_rdm_summary"] = pd.DataFrame.from_records(model_summary_rows)
     core_outputs["rsa_results"] = rsa_results
     core_outputs["rsa_leave_one_stimulus_out"] = _concat_summary_frames(
         leave_one_out_frames,
@@ -412,30 +447,53 @@ def run_biochemical_rsa(
             "p_value_fdr",
         ],
     )
-    if prototype_inputs is not None:
-        core_outputs[INTERNAL_PROTOTYPE_AGGREGATION_KEY] = pd.DataFrame(
-            {"prototype_aggregation": [prototype_aggregation]}
-        )
-        core_outputs.update(
-            _build_prototype_context_outputs(
-                resolved_inputs,
-                core_outputs=core_outputs,
-                prototype_inputs=prototype_inputs,
-                prototype_aggregation=prototype_aggregation,
-                view_names=requested_views,
-                permutations=permutations,
-                seed=seed,
-            )
-        )
     return core_outputs
 
 
-def _build_prototype_context_outputs(
+def _resolve_active_neural_matrices(
+    neural_matrices: dict[str, pd.DataFrame] | None,
+    aggregated_response_inputs: AggregatedResponseContextInputs | None,
+    *,
+    resolved_inputs: dict[str, pd.DataFrame],
+    core_outputs: dict[str, pd.DataFrame],
+    requested_views: list[str],
+    response_aggregation: str,
+    permutations: int,
+    seed: int,
+) -> dict[str, pd.DataFrame]:
+    if aggregated_response_inputs is None:
+        if neural_matrices is None:
+            raise ValueError("neural_matrices are required when aggregated_response_inputs are not provided")
+        return {view_name: neural_matrices[view_name].copy() for view_name in requested_views}
+
+    core_outputs[INTERNAL_RESPONSE_AGGREGATION_KEY] = pd.DataFrame(
+        {"response_aggregation": [response_aggregation]}
+    )
+    aggregated_outputs = _build_aggregated_response_context_outputs(
+        resolved_inputs,
+        core_outputs=core_outputs,
+        aggregated_response_inputs=aggregated_response_inputs,
+        response_aggregation=response_aggregation,
+        view_names=requested_views,
+        permutations=permutations,
+        seed=seed,
+    )
+    core_outputs.update(aggregated_outputs)
+    return {
+        view_name: aggregated_outputs.get(
+            f"aggregated_response_rdm__pooled__{view_name}",
+            pd.DataFrame(columns=["stimulus_row"]),
+        ).copy()
+        for view_name in requested_views
+    }
+
+
+def _build_aggregated_response_context_outputs(
     resolved_inputs: dict[str, pd.DataFrame],
     *,
     core_outputs: dict[str, pd.DataFrame],
-    prototype_inputs: PrototypeContextInputs,
-    prototype_aggregation: str,
+    aggregated_response_inputs: AggregatedResponseContextInputs,
+    response_aggregation: str,
     view_names: list[str],
     permutations: int,
     seed: int,
@@ -457,22 +515,22 @@ def _build_prototype_context_outputs(
     internal_per_date_rdms: dict[str, pd.DataFrame] = {}
 
     for view_index, view_name in enumerate(view_names):
-        if view_name not in prototype_inputs.views:
-            raise ValueError(f"missing prototype view for view_name {view_name!r}")
+        if view_name not in aggregated_response_inputs.views:
+            raise ValueError(f"missing aggregated response view for view_name {view_name!r}")
 
-        view = prototype_inputs.views[view_name]
-        per_date_prototypes, per_date_support = build_grouped_prototypes(
+        view = aggregated_response_inputs.views[view_name]
+        per_date_responses, per_date_support = build_grouped_aggregated_responses(
             view,
             group_columns=("date", "stimulus", "stim_name"),
-            aggregation=prototype_aggregation,
+            aggregation=response_aggregation,
         )
-        pooled_prototypes, pooled_support = build_grouped_prototypes(
+        pooled_responses, pooled_support = build_grouped_aggregated_responses(
             view,
             group_columns=("stimulus", "stim_name"),
-            aggregation=prototype_aggregation,
+            aggregation=response_aggregation,
         )
-        per_date_prototypes = _ensure_frame_schema(per_date_prototypes, ["date", "stimulus", "stim_name"])
-        pooled_prototypes = _ensure_frame_schema(pooled_prototypes, ["stimulus", "stim_name"])
+        per_date_responses = _ensure_frame_schema(per_date_responses, ["date", "stimulus", "stim_name"])
+        pooled_responses = _ensure_frame_schema(pooled_responses, ["stimulus", "stim_name"])
         per_date_support = _ensure_frame_schema(
             per_date_support,
             [
@@ -526,22 +584,22 @@ def _build_prototype_context_outputs(
                 ]
             ]
         )
-        pooled_rdms[f"prototype_rdm__pooled__{view_name}"] = (
-            build_prototype_rdm(pooled_prototypes, id_columns=("stimulus",))
-            if not pooled_prototypes.empty
+        pooled_rdms[f"aggregated_response_rdm__pooled__{view_name}"] = (
+            build_aggregated_response_rdm(pooled_responses, id_columns=("stimulus",))
+            if not pooled_responses.empty
             else pd.DataFrame(columns=["stimulus_row"])
         )
 
-        for date_index, (date_value, date_prototypes) in enumerate(per_date_prototypes.groupby("date", sort=False)):
-            date_prototypes = date_prototypes.reset_index(drop=True)
-            stimulus_labels = date_prototypes["stimulus"].astype(str).tolist()
+        for date_index, (date_value, date_responses) in enumerate(per_date_responses.groupby("date", sort=False)):
+            date_responses = date_responses.reset_index(drop=True)
+            stimulus_labels = date_responses["stimulus"].astype(str).tolist()
             neural_matrix = (
-                build_prototype_rdm(date_prototypes, id_columns=("stimulus",))
-                if not date_prototypes.empty
+                build_aggregated_response_rdm(date_responses, id_columns=("stimulus",))
+                if not date_responses.empty
                 else pd.DataFrame(columns=["stimulus_row"])
             )
             internal_per_date_rdms[
-                f"{INTERNAL_PROTOTYPE_PER_DATE_RDM_PREFIX}{view_name}__{str(date_value)}"
+                f"{INTERNAL_AGGREGATED_RESPONSE_PER_DATE_RDM_PREFIX}{view_name}__{str(date_value)}"
             ] = neural_matrix.copy()
 
             for model_index, registry_row in registry.iterrows():
@@ -569,7 +627,7 @@ def _build_prototype_context_outputs(
                         "date": str(date_value),
                         "view_name": view_name,
                         "reference_view_name": "model_rdm",
-                        "comparison_scope": "prototype_neural_vs_model",
+                        "comparison_scope": "aggregated_response_vs_model",
                         "model_id": model_id,
                         "model_label": str(registry_row["model_label"]).strip(),
                         "model_tier": str(registry_row["model_tier"]).strip().lower(),
@@ -590,7 +648,7 @@ def _build_prototype_context_outputs(
                     }
                 )
 
-    prototype_rsa_results = pd.DataFrame.from_records(
+    aggregated_response_rsa_results = pd.DataFrame.from_records(
         per_date_rows,
         columns=[
             "date",
@@ -614,11 +672,11 @@ def _build_prototype_context_outputs(
             "is_top_model",
         ],
     )
-    if not prototype_rsa_results.empty:
-        prototype_rsa_results["p_value_fdr"] = benjamini_hochberg(
-            prototype_rsa_results["p_value_raw"].to_numpy(dtype=float)
+    if not aggregated_response_rsa_results.empty:
+        aggregated_response_rsa_results["p_value_fdr"] = benjamini_hochberg(
+            aggregated_response_rsa_results["p_value_raw"].to_numpy(dtype=float)
         )
-        for _, group in prototype_rsa_results.groupby(["date", "view_name"], sort=False):
+        for _, group in aggregated_response_rsa_results.groupby(["date", "view_name"], sort=False):
             eligible = group.loc[
                 group["score_status"].astype(str).str.strip().str.lower().eq("ok")
                 & ~group["excluded_from_primary_ranking"].astype(bool)
@@ -627,11 +685,11 @@ def _build_prototype_context_outputs(
             if eligible.empty:
                 continue
             top_index = eligible["rsa_similarity"].astype(float).idxmax()
-            prototype_rsa_results.loc[top_index, "is_top_model"] = True
+            aggregated_response_rsa_results.loc[top_index, "is_top_model"] = True
 
     outputs: dict[str, pd.DataFrame] = {
-        "prototype_rsa_results__per_date": prototype_rsa_results,
-        "prototype_support__per_date": _concat_summary_frames(
+        "aggregated_response_rsa_results__per_date": aggregated_response_rsa_results,
+        "aggregated_response_support__per_date": _concat_summary_frames(
             per_date_support_frames,
             columns=[
                 "date",
@@ -644,7 +702,7 @@ def _build_prototype_context_outputs(
                 "n_all_nan_features",
             ],
         ),
-        "prototype_support__pooled": _concat_summary_frames(
+        "aggregated_response_support__pooled": _concat_summary_frames(
             pooled_support_frames,
             columns=[
                 "view_name",
@@ -777,6 +835,26 @@ def _resolve_requested_views(
         if normalized_view not in requested_views:
             requested_views.append(normalized_view)
     return requested_views
+
+
+def _resolve_requested_views_for_stage3(
+    neural_matrices: dict[str, pd.DataFrame] | None,
+    aggregated_response_inputs: AggregatedResponseContextInputs | None,
+    view_names: tuple[str, ...] | list[str],
+) -> list[str]:
+    if aggregated_response_inputs is not None:
+        available_views = set(aggregated_response_inputs.views)
+        requested_views: list[str] = []
+        for view_name in view_names:
+            normalized_view = str(view_name)
+            if normalized_view not in available_views:
+                raise ValueError(f"missing aggregated response view for view_name {normalized_view!r}")
+            if normalized_view not in requested_views:
+                requested_views.append(normalized_view)
+        return requested_views
+    if neural_matrices is None:
+        raise ValueError("neural_matrices are required when aggregated_response_inputs are not provided")
+    return _resolve_requested_views(neural_matrices, view_names)
 
 
 def _build_model_rdm_summary_row(

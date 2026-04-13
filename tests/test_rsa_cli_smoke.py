@@ -24,6 +24,34 @@ def _load_run_rsa_module():
 RUN_RSA = _load_run_rsa_module()
 
 
+def _markdown_section(markdown: str, heading: str) -> list[str]:
+    lines = markdown.splitlines()
+    start_index = lines.index(heading)
+    section_lines: list[str] = []
+    for line in lines[start_index + 1 :]:
+        if line.startswith("## "):
+            break
+        if line:
+            section_lines.append(line)
+    return section_lines
+
+
+def _ranked_model_detail_line(detail: dict[str, object]) -> str:
+    return (
+        f"- {detail['model_id']} | view={detail['view_name']} | rsa={detail['rsa_similarity']} | "
+        f"p_raw={detail['p_value_raw']} | p_fdr={detail['p_value_fdr']} | "
+        f"n={detail['n_shared_entries']} | status={detail['score_status']} | top={detail['is_top_model']}"
+    )
+
+
+def _view_comparison_detail_line(detail: dict[str, object]) -> str:
+    return (
+        f"- {detail['view_name']} vs {detail['reference_view_name']} | scope={detail['comparison_scope']} | "
+        f"rsa={detail['rsa_similarity']} | p_raw={detail['p_value_raw']} | p_fdr={detail['p_value_fdr']} | "
+        f"n={detail['n_shared_entries']} | status={detail['score_status']}"
+    )
+
+
 @pytest.fixture
 def stage3_fixture_root(tmp_path):
     root = tmp_path / "stage3_fixture"
@@ -309,7 +337,7 @@ def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
         stage3_root / "tables" / "rsa_leave_one_stimulus_out.parquet",
         stage3_root / "qc" / "model_input_coverage.parquet",
         stage3_root / "qc" / "model_feature_filtering.parquet",
-        stage3_root / "figures" / "ranked_model_rsa.png",
+        stage3_root / "figures" / "single_stimulus_sensitivity.png",
         stage3_root / "figures" / "neural_vs_top_model_rdm__response_window.png",
         stage3_root / "figures" / "neural_vs_top_model_rdm__full_trajectory.png",
         stage3_root / "run_summary.json",
@@ -320,20 +348,30 @@ def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
         assert path.exists(), path
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
+    markdown = (stage3_root / "run_summary.md").read_text(encoding="utf-8")
     assert summary["focus_view"] == "response_window"
     assert summary["ranked_models"] == ["global_profile", "bile_acid"]
-    assert summary["prototype_context_enabled"] is False
-    assert summary["prototype_views"] == []
-    assert summary["prototype_dates"] == []
+    assert summary["ranked_model_rsa_details"]
+    assert summary["view_comparison_details"]
+    assert summary["aggregated_response_context_enabled"] is False
+    assert summary["aggregated_response_views"] == []
+    assert summary["aggregated_response_dates"] == []
+    ranked_section = _markdown_section(markdown, "## Ranked Model RSA Details")
+    view_comparison_section = _markdown_section(markdown, "## View Comparison Details")
+    assert _ranked_model_detail_line(summary["ranked_model_rsa_details"][0]) in ranked_section
+    assert _view_comparison_detail_line(summary["view_comparison_details"][0]) in view_comparison_section
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
     ]
+    assert not (stage3_root / "figures" / "ranked_model_rsa.png").exists()
+    assert not (stage3_root / "figures" / "view_comparison_summary.png").exists()
+    assert not (stage3_root / "figures" / "leave_one_stimulus_out_robustness.png").exists()
     assert not (stage3_root / "figures" / "neural_vs_top_model_rdm_panel.png").exists()
-    assert not (stage3_root / "tables" / "prototype_rsa_results__per_date.parquet").exists()
+    assert not (stage3_root / "tables" / "aggregated_response_rsa_results__per_date.parquet").exists()
+    assert "## Ranked Model RSA Details" in markdown
+    assert "## View Comparison Details" in markdown
     assert "Included ranked models: global_profile, bile_acid" in result.stdout
 
 
@@ -367,53 +405,61 @@ def test_cli_runs_and_writes_rsa_prototype_context_outputs(tmp_path, stage3_fixt
 
     stage3_root = output_root / "rsa"
     expected_paths = [
-        stage3_root / "tables" / "prototype_rsa_results__per_date.parquet",
-        stage3_root / "tables" / "prototype_rdm__pooled__response_window.parquet",
-        stage3_root / "tables" / "prototype_rdm__pooled__full_trajectory.parquet",
-        stage3_root / "qc" / "prototype_support__per_date.parquet",
-        stage3_root / "qc" / "prototype_support__pooled.parquet",
-        stage3_root / "figures" / "prototype_rsa__per_date__response_window.png",
-        stage3_root / "figures" / "prototype_rsa__per_date__full_trajectory.png",
-        stage3_root / "figures" / "prototype_rdm_comparison__per_date__response_window.png",
-        stage3_root / "figures" / "prototype_rdm_comparison__per_date__full_trajectory.png",
-        stage3_root / "figures" / "prototype_rdm__pooled__response_window.png",
-        stage3_root / "figures" / "prototype_rdm__pooled__full_trajectory.png",
+        stage3_root / "tables" / "aggregated_response_rsa_results__per_date.parquet",
+        stage3_root / "tables" / "aggregated_response_rdm__pooled__response_window.parquet",
+        stage3_root / "tables" / "aggregated_response_rdm__pooled__full_trajectory.parquet",
+        stage3_root / "qc" / "aggregated_response_support__per_date.parquet",
+        stage3_root / "qc" / "aggregated_response_support__pooled.parquet",
+        stage3_root / "figures" / "aggregated_response_rsa__per_date__response_window.png",
+        stage3_root / "figures" / "aggregated_response_rsa__per_date__full_trajectory.png",
+        stage3_root / "figures" / "aggregated_response_rdm_comparison__per_date__response_window.png",
+        stage3_root / "figures" / "aggregated_response_rdm_comparison__per_date__full_trajectory.png",
+        stage3_root / "figures" / "aggregated_response_rdm__pooled__response_window.png",
+        stage3_root / "figures" / "aggregated_response_rdm__pooled__full_trajectory.png",
     ]
 
     for path in expected_paths:
         assert path.exists(), path
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["prototype_context_enabled"] is True
-    assert summary["prototype_aggregation"] == "mean"
-    assert summary["prototype_views"] == ["response_window", "full_trajectory"]
-    assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
-    assert summary["prototype_table_names"] == [
-        "prototype_rsa_results__per_date",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    markdown = (stage3_root / "run_summary.md").read_text(encoding="utf-8")
+    assert summary["aggregated_response_context_enabled"] is True
+    assert summary["response_aggregation"] == "mean"
+    assert summary["aggregated_response_views"] == ["response_window", "full_trajectory"]
+    assert summary["aggregated_response_dates"] == ["2026-03-11", "2026-03-13"]
+    assert summary["aggregated_response_table_names"] == [
+        "aggregated_response_rsa_results__per_date",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
-        "prototype_rsa__per_date__response_window",
-        "prototype_rsa__per_date__full_trajectory",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm_comparison__per_date__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rsa__per_date__full_trajectory",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
-    assert summary["prototype_figure_names"] == [
-        "prototype_rsa__per_date__response_window",
-        "prototype_rsa__per_date__full_trajectory",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm_comparison__per_date__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    assert summary["aggregated_response_figure_names"] == [
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rsa__per_date__full_trajectory",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
+    assert not (stage3_root / "figures" / "ranked_model_rsa.png").exists()
+    assert not (stage3_root / "figures" / "view_comparison_summary.png").exists()
+    assert not (stage3_root / "figures" / "leave_one_stimulus_out_robustness.png").exists()
+    assert _ranked_model_detail_line(summary["ranked_model_rsa_details"][0]) in _markdown_section(
+        markdown, "## Ranked Model RSA Details"
+    )
+    assert _view_comparison_detail_line(summary["view_comparison_details"][0]) in _markdown_section(
+        markdown, "## View Comparison Details"
+    )
 
 
 def test_cli_runs_and_writes_rsa_prototype_context_outputs_with_median_aggregation(tmp_path, stage3_fixture_root):
@@ -432,7 +478,7 @@ def test_cli_runs_and_writes_rsa_prototype_context_outputs_with_median_aggregati
             str(stage3_fixture_root / "model_space"),
             "--preprocess-root",
             str(stage3_fixture_root / "preprocess"),
-            "--prototype-aggregation",
+            "--response-aggregation",
             "median",
             "--output-root",
             str(output_root),
@@ -447,11 +493,11 @@ def test_cli_runs_and_writes_rsa_prototype_context_outputs_with_median_aggregati
     assert result.returncode == 0, result.stderr
 
     stage3_root = output_root / "rsa"
-    assert (stage3_root / "figures" / "prototype_rdm_comparison__per_date__response_window.png").exists()
+    assert (stage3_root / "figures" / "aggregated_response_rdm_comparison__per_date__response_window.png").exists()
 
     summary = json.loads((stage3_root / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["prototype_context_enabled"] is True
-    assert summary["prototype_aggregation"] == "median"
+    assert summary["aggregated_response_context_enabled"] is True
+    assert summary["response_aggregation"] == "median"
 
 
 def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path):
@@ -473,4 +519,5 @@ def test_resolve_default_paths_use_shared_repo_locations_for_worktrees(tmp_path)
     assert RUN_RSA.resolve_model_input_root(str(RUN_RSA.DEFAULT_MODEL_INPUT_ROOT), root_dir=worktree_root) == shared_model_input_root
     assert RUN_RSA.resolve_matrix_path(str(RUN_RSA.DEFAULT_MATRIX_PATH), root_dir=worktree_root) == shared_matrix_path
     assert RUN_RSA.resolve_preprocess_root("data/preprocess", root_dir=worktree_root) == shared_preprocess_root
+
 

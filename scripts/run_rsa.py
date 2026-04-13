@@ -16,7 +16,7 @@ if str(SRC_DIR) not in sys.path:
 from bacteria_analysis.model_space import resolve_model_inputs
 from bacteria_analysis.rsa import load_geometry_pooled_neural_rdms, run_biochemical_rsa
 from bacteria_analysis.rsa_outputs import write_rsa_outputs
-from bacteria_analysis.rsa_prototypes import load_prototype_context_inputs
+from bacteria_analysis.rsa_aggregated_responses import load_aggregated_response_context_inputs
 
 DEFAULT_GEOMETRY_ROOT = Path("results/geometry")
 LEGACY_STAGE2_ROOT = Path("results/stage2_geometry")
@@ -25,12 +25,14 @@ DEFAULT_MODEL_INPUT_ROOT = Path("data/model_space")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run pooled biochemical RSA from geometry pooled RDM outputs.")
+    parser = argparse.ArgumentParser(
+        description="Run biochemical RSA from aggregated neural responses, with geometry pooled RDMs as fallback."
+    )
     parser.add_argument(
         "--geometry-root",
         dest="geometry_root",
         default=str(DEFAULT_GEOMETRY_ROOT),
-        help="Geometry output root containing pooled RDM parquet files.",
+        help="Geometry output root containing pooled RDM parquet files for legacy fallback runs.",
     )
     parser.add_argument("--stage2-root", dest="geometry_root", help=argparse.SUPPRESS)
     parser.add_argument("--matrix", default=str(DEFAULT_MATRIX_PATH), help="Path to the metabolite matrix workbook.")
@@ -42,14 +44,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--preprocess-root",
         default=None,
-        help="Optional preprocessing output root containing trial-level prototype inputs.",
+        help="Optional preprocessing output root containing trial-level inputs for aggregated-response Stage 3.",
     )
     parser.add_argument(
-        "--prototype-aggregation",
+        "--response-aggregation",
         choices=("mean", "median"),
         default="mean",
-        help="Aggregation used for prototype context vectors when --preprocess-root is provided.",
+        help="Aggregation used to build grouped neural responses when --preprocess-root is provided.",
     )
+    parser.add_argument("--prototype-aggregation", dest="response_aggregation", help=argparse.SUPPRESS)
     parser.add_argument("--output-root", default="results", help="Base directory for RSA outputs.")
     parser.add_argument("--permutations", type=int, default=1000, help="Number of stimulus-label permutations.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed for permutation and robustness summaries.")
@@ -125,19 +128,20 @@ def main(argv: list[str] | None = None) -> int:
         matrix_path = resolve_matrix_path(args.matrix)
         model_input_root = resolve_model_input_root(args.model_input_root)
         preprocess_root = resolve_preprocess_root(args.preprocess_root)
-        neural_matrices = load_geometry_pooled_neural_rdms(geometry_root)
         resolved_inputs = resolve_model_inputs(model_input_root, matrix_path)
         run_kwargs: dict[str, object] = {
-            "neural_matrices": neural_matrices,
             "permutations": args.permutations,
             "seed": args.seed,
         }
         if preprocess_root is not None:
-            run_kwargs["prototype_inputs"] = load_prototype_context_inputs(
+            run_kwargs["aggregated_response_inputs"] = load_aggregated_response_context_inputs(
                 preprocess_root,
-                view_names=tuple(neural_matrices),
+                view_names=("response_window", "full_trajectory"),
             )
-            run_kwargs["prototype_aggregation"] = args.prototype_aggregation
+            run_kwargs["response_aggregation"] = args.response_aggregation
+        else:
+            geometry_root = resolve_geometry_root(args.geometry_root)
+            run_kwargs["neural_matrices"] = load_geometry_pooled_neural_rdms(geometry_root)
         core_outputs = run_biochemical_rsa(resolved_inputs, **run_kwargs)
         rsa_output_root = Path(args.output_root) / "rsa"
         written = write_rsa_outputs(core_outputs, rsa_output_root)

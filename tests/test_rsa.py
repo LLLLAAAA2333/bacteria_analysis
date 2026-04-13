@@ -1,6 +1,8 @@
 import json
 
 import bacteria_analysis.rsa as rsa_module
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,6 +32,18 @@ def test_rsa_aliases_remain_available():
 
 def _matrix(rows: list[dict[str, object]]) -> pd.DataFrame:
     return pd.DataFrame.from_records(rows)
+
+
+def _markdown_section(markdown: str, heading: str) -> list[str]:
+    lines = markdown.splitlines()
+    start_index = lines.index(heading)
+    section_lines: list[str] = []
+    for line in lines[start_index + 1 :]:
+        if line.startswith("## "):
+            break
+        if line:
+            section_lines.append(line)
+    return section_lines
 
 
 def _stage3_neural_rdms() -> dict[str, pd.DataFrame]:
@@ -228,7 +242,7 @@ def _stage3_outputs_with_prototype_supplement() -> dict[str, pd.DataFrame]:
     return run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_stage3_prototype_inputs(),
+        aggregated_response_inputs=_stage3_prototype_inputs(),
         permutations=10,
         seed=0,
     )
@@ -758,13 +772,31 @@ def test_write_rsa_outputs_writes_required_tables(tmp_path, synthetic_stage3_out
     assert (written["tables_dir"] / "rsa_leave_one_stimulus_out.parquet").exists()
     assert (written["qc_dir"] / "model_input_coverage.parquet").exists()
     assert (written["qc_dir"] / "model_feature_filtering.parquet").exists()
-    assert (written["figures_dir"] / "ranked_model_rsa.png").exists()
+    assert (written["figures_dir"] / "single_stimulus_sensitivity.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
-    assert (written["figures_dir"] / "leave_one_stimulus_out_robustness.png").exists()
-    assert (written["figures_dir"] / "view_comparison_summary.png").exists()
     assert (written["output_root"] / "run_summary.json").exists()
     assert (written["output_root"] / "run_summary.md").exists()
+
+
+def test_write_rsa_outputs_removes_stale_summary_figures(tmp_path, synthetic_stage3_outputs):
+    output_root = tmp_path / "rsa"
+    figures_dir = output_root / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    stale_paths = [
+        figures_dir / "ranked_model_rsa.png",
+        figures_dir / "view_comparison_summary.png",
+        figures_dir / "leave_one_stimulus_out_robustness.png",
+    ]
+    for stale_path in stale_paths:
+        stale_path.write_bytes(b"legacy figure")
+
+    written = write_rsa_outputs(synthetic_stage3_outputs, output_root)
+
+    assert (written["figures_dir"] / "single_stimulus_sensitivity.png").exists()
+    for stale_path in stale_paths:
+        assert not stale_path.exists()
+
 
 def test_write_rsa_outputs_writes_per_view_neural_model_figures(tmp_path, synthetic_stage3_outputs):
     written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
@@ -820,9 +852,7 @@ def test_write_rsa_outputs_reports_per_view_figure_names(tmp_path, synthetic_sta
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
     ]
@@ -923,9 +953,7 @@ def test_write_rsa_outputs_reports_canonical_per_view_figure_name_order(tmp_path
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
         "neural_vs_top_model_rdm__alpha_view",
@@ -939,16 +967,36 @@ def test_write_rsa_outputs_writes_default_per_view_placeholders_when_views_missi
 
     written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
+    markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
 
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__response_window.png").exists()
     assert (written["figures_dir"] / "neural_vs_top_model_rdm__full_trajectory.png").exists()
     assert summary["views"] == []
+    assert summary["ranked_model_rsa_details"] == []
+    assert summary["view_comparison_details"] == []
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
+    ]
+    assert _markdown_section(markdown, "## Ranked Model RSA Details") == ["- None"]
+    assert _markdown_section(markdown, "## View Comparison Details") == ["- None"]
+
+
+def test_write_rsa_outputs_markdown_summary_includes_detail_sections(tmp_path, synthetic_stage3_outputs):
+    written = write_rsa_outputs(synthetic_stage3_outputs, tmp_path / "rsa")
+    markdown = (written["output_root"] / "run_summary.md").read_text(encoding="utf-8")
+
+    ranked_section = _markdown_section(markdown, "## Ranked Model RSA Details")
+    view_comparison_section = _markdown_section(markdown, "## View Comparison Details")
+
+    assert ranked_section == [
+        "- global_profile | view=response_window | rsa=0.94 | p_raw=0.01 | p_fdr=0.015 | n=3 | status=ok | top=True",
+        "- bile_acid | view=response_window | rsa=0.88 | p_raw=0.02 | p_fdr=0.025 | n=3 | status=ok | top=False",
+    ]
+    assert view_comparison_section == [
+        "- response_window vs full_trajectory | scope=neural_vs_neural | rsa=0.98 | p_raw=0.01 | p_fdr=0.015 | n=3 | status=ok",
+        "- full_trajectory vs response_window | scope=neural_vs_neural | rsa=0.98 | p_raw=0.01 | p_fdr=0.015 | n=3 | status=ok",
     ]
 
 
@@ -960,10 +1008,161 @@ def test_write_rsa_outputs_records_ranked_and_additional_models(tmp_path, synthe
     assert summary["ranked_models"] == ["global_profile", "bile_acid"]
     assert summary["additional_models"] == ["lipid_panel"]
     assert summary["excluded_models"] == ["excluded_sparse"]
+    assert summary["ranked_model_rsa_details"][0]["view_name"] == "response_window"
+    assert summary["ranked_model_rsa_details"][0]["model_id"] == "global_profile"
+    assert summary["view_comparison_details"][0]["view_name"] == "response_window"
     assert summary["top_models_by_view"] == {
         "response_window": "global_profile",
         "full_trajectory": "global_profile",
     }
+
+
+def test_ranked_model_rsa_details_filters_focus_view_and_sorts_by_similarity_then_model_id():
+    rsa_results = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "model_id": "model_b",
+                "rsa_similarity": 0.91,
+                "p_value_raw": 0.020,
+                "p_value_fdr": 0.030,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+                "is_top_model": False,
+            },
+            {
+                "view_name": "response_window",
+                "model_id": "model_a",
+                "rsa_similarity": 0.91,
+                "p_value_raw": 0.010,
+                "p_value_fdr": 0.015,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+                "is_top_model": True,
+            },
+            {
+                "view_name": "response_window",
+                "model_id": "model_c",
+                "rsa_similarity": np.inf,
+                "p_value_raw": 0.5,
+                "p_value_fdr": 0.5,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+                "is_top_model": False,
+            },
+            {
+                "view_name": "full_trajectory",
+                "model_id": "model_a",
+                "rsa_similarity": 0.99,
+                "p_value_raw": 0.001,
+                "p_value_fdr": 0.002,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+                "is_top_model": True,
+            },
+            {
+                "view_name": "response_window",
+                "model_id": "model_z",
+                "rsa_similarity": 0.95,
+                "p_value_raw": 0.5,
+                "p_value_fdr": 0.5,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+                "is_top_model": False,
+            },
+        ]
+    )
+
+    details = rsa_outputs._build_ranked_model_rsa_details(
+        rsa_results,
+        ["model_a", "model_b"],
+        focus_view="response_window",
+    )
+
+    assert details == [
+        {
+            "view_name": "response_window",
+            "model_id": "model_a",
+            "rsa_similarity": 0.91,
+            "p_value_raw": 0.01,
+            "p_value_fdr": 0.015,
+            "n_shared_entries": 3,
+            "score_status": "ok",
+            "is_top_model": True,
+        },
+        {
+            "view_name": "response_window",
+            "model_id": "model_b",
+            "rsa_similarity": 0.91,
+            "p_value_raw": 0.02,
+            "p_value_fdr": 0.03,
+            "n_shared_entries": 3,
+            "score_status": "ok",
+            "is_top_model": False,
+        },
+    ]
+
+
+def test_view_comparison_details_preserves_input_order_and_filters_finite_rows():
+    view_comparison = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "reference_view_name": "full_trajectory",
+                "comparison_scope": "neural_vs_neural",
+                "rsa_similarity": 0.82,
+                "p_value_raw": 0.030,
+                "p_value_fdr": 0.040,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+            },
+            {
+                "view_name": "full_trajectory",
+                "reference_view_name": "response_window",
+                "comparison_scope": "neural_vs_neural",
+                "rsa_similarity": np.nan,
+                "p_value_raw": 0.10,
+                "p_value_fdr": 0.20,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+            },
+            {
+                "view_name": "alpha_view",
+                "reference_view_name": "response_window",
+                "comparison_scope": "neural_vs_neural",
+                "rsa_similarity": 0.91,
+                "p_value_raw": 0.020,
+                "p_value_fdr": 0.025,
+                "n_shared_entries": 3,
+                "score_status": "ok",
+            },
+        ]
+    )
+
+    details = rsa_outputs._build_view_comparison_details(view_comparison)
+
+    assert details == [
+        {
+            "view_name": "response_window",
+            "reference_view_name": "full_trajectory",
+            "comparison_scope": "neural_vs_neural",
+            "rsa_similarity": 0.82,
+            "p_value_raw": 0.03,
+            "p_value_fdr": 0.04,
+            "n_shared_entries": 3,
+            "score_status": "ok",
+        },
+        {
+            "view_name": "alpha_view",
+            "reference_view_name": "response_window",
+            "comparison_scope": "neural_vs_neural",
+            "rsa_similarity": 0.91,
+            "p_value_raw": 0.02,
+            "p_value_fdr": 0.025,
+            "n_shared_entries": 3,
+            "score_status": "ok",
+        },
+    ]
 
 
 def test_resolve_rdm_heatmap_frame_prefers_sample_id_labels_and_preserves_order():
@@ -1210,29 +1409,14 @@ def test_plot_neural_vs_top_model_rdm_view_keeps_model_in_original_order_when_ne
         "model_rdm__global_profile__response_window": model_matrix,
     }
     captured: dict[str, object] = {}
-    original_render = rsa_outputs._render_rdm_axis
 
-    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
-        if title.endswith("global_profile"):
-            heatmap_frame, resolved_order = rsa_outputs._prepare_rdm_heatmap_frame(
-                matrix_frame,
-                stimulus_sample_map,
-                order_labels=order_labels,
-            )
-            captured["order_labels"] = order_labels
-            captured["resolved_order"] = resolved_order
-            captured["index_labels"] = heatmap_frame.index.tolist()
-        return original_render(
-            axis,
-            matrix_frame,
-            stimulus_sample_map=stimulus_sample_map,
-            title=title,
-            fallback_message=fallback_message,
-            order_labels=order_labels,
-        )
+    def _capturing_panels(figure, axes, colorbar_axes, panels):
+        model_panels = [panel for panel in panels if "global_profile" in panel[3]]
+        captured["titles"] = [panel[3] for panel in model_panels]
+        captured["index_labels"] = [panel[2].index.tolist() if panel[2] is not None else None for panel in model_panels]
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    monkeypatch.setattr(rsa_outputs, "_render_prepared_rdm_panels", _capturing_panels)
     try:
         rsa_outputs._plot_neural_vs_top_model_rdm_view(
             core_outputs,
@@ -1243,13 +1427,220 @@ def test_plot_neural_vs_top_model_rdm_view_keeps_model_in_original_order_when_ne
     finally:
         monkeypatch.undo()
 
-    assert captured["order_labels"] == []
-    assert captured["resolved_order"] == ["b3_1", "b1_1", "b4_1", "b2_1"]
-    assert captured["index_labels"] == ["S003", "S001", "S004", "S002"]
+    assert captured["titles"] == [
+        "response_window: global_profile (neural order)",
+        "response_window: global_profile (model order)",
+    ]
+    assert captured["index_labels"][0] == captured["index_labels"][1]
+    assert set(captured["index_labels"][0]) == {"S001", "S002", "S003", "S004"}
 
 
-def test_build_top_prototype_models_by_date_and_view():
-    prototype_rsa_results = pd.DataFrame.from_records(
+def test_create_rdm_panel_figure_reserves_separate_colorbar_column():
+    figure, axes, colorbar_axes = rsa_outputs._create_rdm_panel_figure(nrows=2, figsize=(10.2, 7.0))
+    try:
+        assert axes.shape == (2, 2)
+        assert colorbar_axes.shape == (2, 2)
+        assert len(figure.axes) == 8
+        for row_index in range(2):
+            left_panel = axes[row_index, 0].get_position()
+            left_colorbar = colorbar_axes[row_index, 0].get_position()
+            right_panel = axes[row_index, 1].get_position()
+            right_colorbar = colorbar_axes[row_index, 1].get_position()
+            assert left_panel.x1 < left_colorbar.x0
+            assert left_colorbar.x1 < right_panel.x0
+            assert right_panel.x1 < right_colorbar.x0
+    finally:
+        plt.close(figure)
+
+
+def test_compute_rdm_display_parameters_uses_custom_quantiles_from_off_diagonal_values():
+    heatmap_frame = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 1.0, "S3": 7.0},
+            {"stimulus_row": "S2", "S1": 2.0, "S2": 0.0, "S3": 8.0},
+            {"stimulus_row": "S3", "S1": 3.0, "S2": 4.0, "S3": 0.0},
+        ]
+    )
+
+    display_parameters = rsa_outputs._compute_rdm_display_parameters(
+        heatmap_frame,
+        lower_quantile=0.25,
+        upper_quantile=0.75,
+    )
+
+    assert display_parameters is not None
+    expected_vmin, expected_vmax = np.quantile(np.array([1.0, 7.0, 2.0, 8.0, 3.0, 4.0]), [0.25, 0.75])
+    assert display_parameters.vmin == pytest.approx(expected_vmin)
+    assert display_parameters.vmax == pytest.approx(expected_vmax)
+    assert isinstance(display_parameters.norm, matplotlib.colors.PowerNorm)
+    assert display_parameters.norm.gamma == pytest.approx(0.7)
+    assert display_parameters.norm.clip is True
+
+
+def test_compute_rdm_display_parameters_widens_constant_off_diagonal_values():
+    heatmap_frame = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 2.0, "S3": 2.0},
+            {"stimulus_row": "S2", "S1": 2.0, "S2": 0.0, "S3": 2.0},
+            {"stimulus_row": "S3", "S1": 2.0, "S2": 2.0, "S3": 0.0},
+        ]
+    )
+
+    display_parameters = rsa_outputs._compute_rdm_display_parameters(heatmap_frame)
+
+    assert display_parameters is not None
+    assert display_parameters.vmin < 2.0 < display_parameters.vmax
+    assert display_parameters.vmin < display_parameters.vmax
+    assert display_parameters.norm.vmin == pytest.approx(display_parameters.vmin)
+    assert display_parameters.norm.vmax == pytest.approx(display_parameters.vmax)
+
+
+def test_compute_rdm_display_parameters_returns_none_when_no_finite_off_diagonal_values():
+    heatmap_frame = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": np.nan},
+            {"stimulus_row": "S2", "S1": np.nan, "S2": 0.0},
+        ]
+    )
+
+    assert rsa_outputs._compute_rdm_display_parameters(heatmap_frame) is None
+
+
+def test_render_prepared_rdm_panels_uses_raw_value_colorbar_label(monkeypatch):
+    figure, axes, colorbar_axes = rsa_outputs._create_rdm_panel_figure(nrows=1, figsize=(10.2, 3.6))
+    heatmap_frame = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 0.12, "S3": 0.91},
+            {"stimulus_row": "S2", "S1": 0.12, "S2": 0.0, "S3": 0.44},
+            {"stimulus_row": "S3", "S1": 0.91, "S2": 0.44, "S3": 0.0},
+        ]
+    )
+    panels = [
+        (0, 0, heatmap_frame, "left", "empty"),
+        (0, 1, heatmap_frame, "right", "empty"),
+    ]
+    captured_labels: list[str | None] = []
+    original_colorbar = figure.colorbar
+
+    def _capturing_colorbar(*args, **kwargs):
+        captured_labels.append(kwargs.get("label"))
+        return original_colorbar(*args, **kwargs)
+
+    monkeypatch.setattr(figure, "colorbar", _capturing_colorbar)
+    try:
+        rsa_outputs._render_prepared_rdm_panels(figure, axes, colorbar_axes, panels)
+    finally:
+        plt.close(figure)
+
+    assert captured_labels == ["RDM dissimilarity", "RDM dissimilarity"]
+
+
+def test_render_prepared_rdm_panels_uses_panel_local_norms():
+    figure, axes, colorbar_axes = rsa_outputs._create_rdm_panel_figure(nrows=1, figsize=(10.2, 3.6))
+    left_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 0.10, "S3": 0.30},
+            {"stimulus_row": "S2", "S1": 0.10, "S2": 0.0, "S3": 0.20},
+            {"stimulus_row": "S3", "S1": 0.30, "S2": 0.20, "S3": 0.0},
+        ]
+    )
+    right_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 10.0, "S3": 30.0},
+            {"stimulus_row": "S2", "S1": 10.0, "S2": 0.0, "S3": 20.0},
+            {"stimulus_row": "S3", "S1": 30.0, "S2": 20.0, "S3": 0.0},
+        ]
+    )
+    try:
+        rsa_outputs._render_prepared_rdm_panels(
+            figure,
+            axes,
+            colorbar_axes,
+            [
+                (0, 0, left_panel, "left", "No data"),
+                (0, 1, right_panel, "right", "No data"),
+            ],
+        )
+        left_norm = axes[0, 0].images[0].norm
+        right_norm = axes[0, 1].images[0].norm
+        assert left_norm.vmin != right_norm.vmin
+        assert left_norm.vmax != right_norm.vmax
+        assert left_norm.vmax < right_norm.vmax
+    finally:
+        plt.close(figure)
+
+
+def test_render_prepared_rdm_panels_hides_empty_panel_colorbar_axis():
+    figure, axes, colorbar_axes = rsa_outputs._create_rdm_panel_figure(nrows=1, figsize=(10.2, 3.6))
+    empty_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": np.nan},
+            {"stimulus_row": "S2", "S1": np.nan, "S2": 0.0},
+        ]
+    )
+    non_empty_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 0.3},
+            {"stimulus_row": "S2", "S1": 0.3, "S2": 0.0},
+        ]
+    )
+    panels = [
+        (0, 0, empty_panel, "empty", "No data"),
+        (0, 1, non_empty_panel, "full", "No data"),
+    ]
+    try:
+        rsa_outputs._render_prepared_rdm_panels(figure, axes, colorbar_axes, panels)
+        assert not colorbar_axes[0, 0].get_visible()
+        assert colorbar_axes[0, 1].get_visible()
+    finally:
+        plt.close(figure)
+
+
+def test_render_prepared_rdm_panels_hides_colorbar_axis_when_colorbar_creation_fails(monkeypatch):
+    figure, axes, colorbar_axes = rsa_outputs._create_rdm_panel_figure(nrows=1, figsize=(10.2, 3.6))
+    left_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 0.1},
+            {"stimulus_row": "S2", "S1": 0.1, "S2": 0.0},
+        ]
+    )
+    right_panel = _matrix(
+        [
+            {"stimulus_row": "S1", "S1": 0.0, "S2": 0.4},
+            {"stimulus_row": "S2", "S1": 0.4, "S2": 0.0},
+        ]
+    )
+    original_colorbar = figure.colorbar
+    call_count = {"value": 0}
+
+    def _failing_first_colorbar(*args, **kwargs):
+        call_count["value"] += 1
+        if call_count["value"] == 1:
+            raise RuntimeError("colorbar failed")
+        return original_colorbar(*args, **kwargs)
+
+    monkeypatch.setattr(figure, "colorbar", _failing_first_colorbar)
+    try:
+        with pytest.warns(RuntimeWarning, match="RDM colorbar failed for panel"):
+            rsa_outputs._render_prepared_rdm_panels(
+                figure,
+                axes,
+                colorbar_axes,
+                [
+                    (0, 0, left_panel, "left", "No data"),
+                    (0, 1, right_panel, "right", "No data"),
+                ],
+            )
+        assert not colorbar_axes[0, 0].get_visible()
+        assert colorbar_axes[0, 1].get_visible()
+        assert len(axes[0, 0].images) == 1
+        assert len(axes[0, 1].images) == 1
+    finally:
+        plt.close(figure)
+
+
+def test_build_top_aggregated_response_models_by_date_and_view():
+    aggregated_response_rsa_results = pd.DataFrame.from_records(
         [
             {
                 "date": "2026-03-11",
@@ -1282,7 +1673,9 @@ def test_build_top_prototype_models_by_date_and_view():
         ]
     )
 
-    top_models = rsa_outputs._build_top_prototype_models_by_date_and_view(prototype_rsa_results)
+    top_models = rsa_outputs._build_top_aggregated_response_models_by_date_and_view(
+        aggregated_response_rsa_results
+    )
 
     assert top_models == {
         ("2026-03-11", "response_window"): "global_profile",
@@ -1290,45 +1683,40 @@ def test_build_top_prototype_models_by_date_and_view():
     }
 
 
-def test_plot_prototype_rdm_comparison_per_date_uses_internal_rdms_when_rsa_table_is_empty(tmp_path):
+def test_plot_aggregated_response_rdm_comparison_per_date_uses_internal_rdms_when_rsa_table_is_empty(tmp_path):
     core_outputs = _stage3_outputs_with_prototype_supplement()
     captured: list[tuple[str, bool]] = []
-    original_render = rsa_outputs._render_rdm_axis
 
-    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
-        captured.append((title, matrix_frame is not None))
-        return original_render(
-            axis,
-            matrix_frame,
-            stimulus_sample_map=stimulus_sample_map,
-            title=title,
-            fallback_message=fallback_message,
-            order_labels=order_labels,
-        )
+    def _capturing_panels(figure, axes, colorbar_axes, panels):
+        captured.extend((title, frame is not None) for _, _, frame, title, _ in panels)
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    monkeypatch.setattr(rsa_outputs, "_render_prepared_rdm_panels", _capturing_panels)
     try:
-        written_path = rsa_outputs._plot_prototype_rdm_comparison_per_date(
+        written_path = rsa_outputs._plot_aggregated_response_rdm_comparison_per_date(
             core_outputs,
             pd.DataFrame(),
             {},
             view_name="response_window",
-            path=tmp_path / "prototype_rdm_comparison__per_date__response_window.png",
+            path=tmp_path / "aggregated_response_rdm_comparison__per_date__response_window.png",
         )
     finally:
         monkeypatch.undo()
 
     assert written_path.exists()
     assert captured == [
-        ("2026-03-11: neural prototype", True),
-        ("2026-03-11: no top model", False),
-        ("2026-03-13: neural prototype", True),
-        ("2026-03-13: no top model", False),
+        ("2026-03-11: aggregated response (neural order)", True),
+        ("2026-03-11: no top model (neural order)", False),
+        ("2026-03-11: aggregated response (model order)", True),
+        ("2026-03-11: no top model (model order)", False),
+        ("2026-03-13: aggregated response (neural order)", True),
+        ("2026-03-13: no top model (neural order)", False),
+        ("2026-03-13: aggregated response (model order)", True),
+        ("2026-03-13: no top model (model order)", False),
     ]
 
 
-def test_plot_pooled_prototype_rdm_reuses_neural_order_for_paired_model(tmp_path):
+def test_plot_aggregated_response_pooled_rdm_uses_both_neural_and_model_order_rows(tmp_path):
     stimulus_sample_map = pd.DataFrame.from_records(
         [
             {"stimulus": "b3_1", "stim_name": "Stimulus B3", "sample_id": "S003"},
@@ -1336,7 +1724,7 @@ def test_plot_pooled_prototype_rdm_reuses_neural_order_for_paired_model(tmp_path
             {"stimulus": "b2_1", "stim_name": "Stimulus B2", "sample_id": "S002"},
         ]
     )
-    prototype_rdm = _matrix(
+    aggregated_response_rdm = _matrix(
         [
             {"stimulus_row": "b3_1", "b3_1": 0.0, "b1_1": 0.6},
             {"stimulus_row": "b1_1", "b3_1": 0.6, "b1_1": 0.0},
@@ -1354,43 +1742,40 @@ def test_plot_pooled_prototype_rdm_reuses_neural_order_for_paired_model(tmp_path
         "model_rdm__response_window__global_profile": model_matrix,
     }
     captured: dict[str, object] = {}
-    original_render = rsa_outputs._render_rdm_axis
 
-    def _capturing_render(axis, matrix_frame, *, stimulus_sample_map, title, fallback_message, order_labels=None):
-        if title.endswith("pooled prototype"):
-            captured["neural_order_labels"] = order_labels
-        if title.endswith("global_profile"):
-            captured["model_order_labels"] = order_labels
-            captured["model_rows"] = matrix_frame["stimulus_row"].tolist() if matrix_frame is not None else None
-            captured["model_columns"] = [column for column in matrix_frame.columns if column != "stimulus_row"]
-        return original_render(
-            axis,
-            matrix_frame,
-            stimulus_sample_map=stimulus_sample_map,
-            title=title,
-            fallback_message=fallback_message,
-            order_labels=order_labels,
-        )
+    def _capturing_panels(figure, axes, colorbar_axes, panels):
+        captured["titles"] = [panel[3] for panel in panels]
+        captured["model_indexes"] = [
+            panel[2].index.tolist()
+            for panel in panels
+            if panel[2] is not None and "global_profile" in panel[3]
+        ]
 
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(rsa_outputs, "_render_rdm_axis", _capturing_render)
+    monkeypatch.setattr(rsa_outputs, "_render_prepared_rdm_panels", _capturing_panels)
     try:
-        written_path = rsa_outputs._plot_prototype_pooled_rdm(
+        written_path = rsa_outputs._plot_aggregated_response_pooled_rdm(
             core_outputs,
-            prototype_rdm,
+            aggregated_response_rdm,
             {"response_window": "global_profile"},
             stimulus_sample_map=stimulus_sample_map,
             view_name="response_window",
-            path=tmp_path / "prototype_rdm__pooled__response_window.png",
+            path=tmp_path / "aggregated_response_rdm__pooled__response_window.png",
         )
     finally:
         monkeypatch.undo()
 
     assert written_path.exists()
-    assert captured["neural_order_labels"] == ["b3_1", "b1_1"]
-    assert captured["model_order_labels"] == ["b3_1", "b1_1"]
-    assert captured["model_rows"] == ["b3_1", "b1_1"]
-    assert captured["model_columns"] == ["b3_1", "b1_1"]
+    assert captured["titles"] == [
+        "response_window: pooled aggregated response (neural order)",
+        "response_window: global_profile (neural order)",
+        "response_window: pooled aggregated response (model order)",
+        "response_window: global_profile (model order)",
+    ]
+    assert captured["model_indexes"] == [
+        ["S003", "S001"],
+        ["S003", "S001"],
+    ]
 
 
 def test_write_rsa_outputs_keeps_skipped_additional_models_in_additional_bucket(
@@ -1410,16 +1795,16 @@ def test_write_rsa_outputs_keeps_skipped_additional_models_in_additional_bucket(
 def test_write_rsa_outputs_writes_per_date_prototype_comparison_figures(tmp_path):
     written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "rsa")
 
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png").exists()
 
 
 def test_write_rsa_outputs_keeps_pooled_prototype_filenames(tmp_path):
     written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), tmp_path / "rsa")
 
-    assert sorted(path.name for path in written["figures_dir"].glob("prototype_rdm__pooled__*.png")) == [
-        "prototype_rdm__pooled__full_trajectory.png",
-        "prototype_rdm__pooled__response_window.png",
+    assert sorted(path.name for path in written["figures_dir"].glob("aggregated_response_rdm__pooled__*.png")) == [
+        "aggregated_response_rdm__pooled__full_trajectory.png",
+        "aggregated_response_rdm__pooled__response_window.png",
     ]
 
 
@@ -1429,17 +1814,17 @@ def test_write_rsa_outputs_writes_prototype_context_artifacts(tmp_path):
     written = write_rsa_outputs(core_outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert (written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
-    assert (written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet").exists()
-    assert (written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet").exists()
-    assert (written["qc_dir"] / "prototype_support__per_date.parquet").exists()
-    assert (written["qc_dir"] / "prototype_support__pooled.parquet").exists()
-    assert (written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
-    assert (written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
+    assert (written["tables_dir"] / "aggregated_response_rsa_results__per_date.parquet").exists()
+    assert (written["tables_dir"] / "aggregated_response_rdm__pooled__response_window.parquet").exists()
+    assert (written["tables_dir"] / "aggregated_response_rdm__pooled__full_trajectory.parquet").exists()
+    assert (written["qc_dir"] / "aggregated_response_support__per_date.parquet").exists()
+    assert (written["qc_dir"] / "aggregated_response_support__pooled.parquet").exists()
+    assert (written["figures_dir"] / "aggregated_response_rsa__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rsa__per_date__full_trajectory.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm__pooled__response_window.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm__pooled__full_trajectory.png").exists()
     assert summary["rsa_table_names"] == [
         "model_rdm_summary",
         "rsa_results",
@@ -1447,51 +1832,49 @@ def test_write_rsa_outputs_writes_prototype_context_artifacts(tmp_path):
         "rsa_view_comparison",
     ]
     assert summary["additional_table_names"] == [
+        "aggregated_response_rdm__pooled__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rsa_results__per_date",
         "model_rdm__excluded_panel",
         "model_rdm__focused_panel",
         "model_rdm__global_profile",
         "neural_rdm__full_trajectory",
         "neural_rdm__response_window",
-        "prototype_rdm__pooled__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rsa_results__per_date",
     ]
     assert not any(key.startswith("internal__") for key in written)
     assert not any(name.startswith("internal__") for name in summary["additional_table_names"])
     assert not list((written["tables_dir"]).glob("internal__*.parquet"))
-    assert summary["prototype_context_enabled"] is True
-    assert summary["prototype_aggregation"] == "mean"
-    assert summary["prototype_views"] == ["response_window", "full_trajectory"]
-    assert summary["prototype_dates"] == ["2026-03-11", "2026-03-13"]
-    assert summary["prototype_table_names"] == [
-        "prototype_rsa_results__per_date",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    assert summary["aggregated_response_context_enabled"] is True
+    assert summary["response_aggregation"] == "mean"
+    assert summary["aggregated_response_views"] == ["response_window", "full_trajectory"]
+    assert summary["aggregated_response_dates"] == ["2026-03-11", "2026-03-13"]
+    assert summary["aggregated_response_table_names"] == [
+        "aggregated_response_rsa_results__per_date",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
-    assert summary["prototype_figure_names"] == [
-        "prototype_rsa__per_date__response_window",
-        "prototype_rsa__per_date__full_trajectory",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm_comparison__per_date__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    assert summary["aggregated_response_figure_names"] == [
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rsa__per_date__full_trajectory",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
-    assert summary["prototype_descriptive_outputs"] == [
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    assert summary["aggregated_response_descriptive_outputs"] == [
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
     assert summary["figure_names"] == [
-        "ranked_model_rsa",
-        "leave_one_stimulus_out_robustness",
-        "view_comparison_summary",
+        "single_stimulus_sensitivity",
         "neural_vs_top_model_rdm__response_window",
         "neural_vs_top_model_rdm__full_trajectory",
-        "prototype_rsa__per_date__response_window",
-        "prototype_rsa__per_date__full_trajectory",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm_comparison__per_date__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rsa__per_date__full_trajectory",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
 
 
@@ -1499,12 +1882,12 @@ def test_write_rsa_outputs_removes_stale_prototype_figures_when_view_set_narrows
     output_root = tmp_path / "rsa"
 
     first_written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
-    stale_prototype_rsa = first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png"
-    stale_prototype_rdm_comparison = first_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png"
-    stale_prototype_rdm = first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png"
-    stale_prototype_rsa_table = first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet"
-    stale_prototype_rdm_table = first_written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet"
-    stale_prototype_support_qc = first_written["qc_dir"] / "prototype_support__per_date.parquet"
+    stale_prototype_rsa = first_written["figures_dir"] / "aggregated_response_rsa__per_date__full_trajectory.png"
+    stale_prototype_rdm_comparison = first_written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png"
+    stale_prototype_rdm = first_written["figures_dir"] / "aggregated_response_rdm__pooled__full_trajectory.png"
+    stale_prototype_rsa_table = first_written["tables_dir"] / "aggregated_response_rsa_results__per_date.parquet"
+    stale_prototype_rdm_table = first_written["tables_dir"] / "aggregated_response_rdm__pooled__full_trajectory.parquet"
+    stale_prototype_support_qc = first_written["qc_dir"] / "aggregated_response_support__per_date.parquet"
 
     assert stale_prototype_rsa.exists()
     assert stale_prototype_rdm_comparison.exists()
@@ -1517,49 +1900,49 @@ def test_write_rsa_outputs_removes_stale_prototype_figures_when_view_set_narrows
         key: value.copy() if isinstance(value, pd.DataFrame) else value
         for key, value in _stage3_outputs_with_prototype_supplement().items()
     }
-    narrowed_outputs["prototype_rsa_results__per_date"] = narrowed_outputs["prototype_rsa_results__per_date"].loc[
+    narrowed_outputs["aggregated_response_rsa_results__per_date"] = narrowed_outputs["aggregated_response_rsa_results__per_date"].loc[
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
-    narrowed_outputs["prototype_support__per_date"] = narrowed_outputs["prototype_support__per_date"].loc[
+    narrowed_outputs["aggregated_response_support__per_date"] = narrowed_outputs["aggregated_response_support__per_date"].loc[
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
-    narrowed_outputs["prototype_support__pooled"] = narrowed_outputs["prototype_support__pooled"].loc[
+    narrowed_outputs["aggregated_response_support__pooled"] = narrowed_outputs["aggregated_response_support__pooled"].loc[
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
-    narrowed_outputs.pop("prototype_rdm__pooled__full_trajectory")
+    narrowed_outputs.pop("aggregated_response_rdm__pooled__full_trajectory")
 
     second_written = write_rsa_outputs(narrowed_outputs, output_root)
     summary = json.loads((second_written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert (second_written["figures_dir"] / "prototype_rsa__per_date__response_window.png").exists()
-    assert (second_written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
-    assert (second_written["figures_dir"] / "prototype_rdm__pooled__response_window.png").exists()
+    assert (second_written["figures_dir"] / "aggregated_response_rsa__per_date__response_window.png").exists()
+    assert (second_written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__response_window.png").exists()
+    assert (second_written["figures_dir"] / "aggregated_response_rdm__pooled__response_window.png").exists()
     assert not stale_prototype_rsa.exists()
     assert not stale_prototype_rdm_comparison.exists()
     assert not stale_prototype_rdm.exists()
-    assert not (second_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png").exists()
-    assert not (second_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
-    assert not (second_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png").exists()
-    assert (second_written["tables_dir"] / "prototype_rsa_results__per_date.parquet").exists()
-    assert (second_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet").exists()
+    assert not (second_written["figures_dir"] / "aggregated_response_rsa__per_date__full_trajectory.png").exists()
+    assert not (second_written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png").exists()
+    assert not (second_written["figures_dir"] / "aggregated_response_rdm__pooled__full_trajectory.png").exists()
+    assert (second_written["tables_dir"] / "aggregated_response_rsa_results__per_date.parquet").exists()
+    assert (second_written["tables_dir"] / "aggregated_response_rdm__pooled__response_window.parquet").exists()
     assert not stale_prototype_rdm_table.exists()
-    assert (second_written["qc_dir"] / "prototype_support__per_date.parquet").exists()
-    assert (second_written["qc_dir"] / "prototype_support__pooled.parquet").exists()
+    assert (second_written["qc_dir"] / "aggregated_response_support__per_date.parquet").exists()
+    assert (second_written["qc_dir"] / "aggregated_response_support__pooled.parquet").exists()
     assert stale_prototype_support_qc.exists()
-    narrowed_prototype_rsa = pd.read_parquet(second_written["tables_dir"] / "prototype_rsa_results__per_date.parquet")
-    narrowed_prototype_support = pd.read_parquet(second_written["qc_dir"] / "prototype_support__per_date.parquet")
-    narrowed_prototype_support_pooled = pd.read_parquet(second_written["qc_dir"] / "prototype_support__pooled.parquet")
+    narrowed_prototype_rsa = pd.read_parquet(second_written["tables_dir"] / "aggregated_response_rsa_results__per_date.parquet")
+    narrowed_prototype_support = pd.read_parquet(second_written["qc_dir"] / "aggregated_response_support__per_date.parquet")
+    narrowed_prototype_support_pooled = pd.read_parquet(second_written["qc_dir"] / "aggregated_response_support__pooled.parquet")
     assert narrowed_prototype_rsa["view_name"].astype(str).unique().tolist() == ["response_window"]
     assert narrowed_prototype_support["view_name"].astype(str).unique().tolist() == ["response_window"]
     assert narrowed_prototype_support_pooled["view_name"].astype(str).unique().tolist() == ["response_window"]
-    assert summary["prototype_views"] == ["response_window"]
-    assert summary["prototype_figure_names"] == [
-        "prototype_rsa__per_date__response_window",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm__pooled__response_window",
+    assert summary["aggregated_response_views"] == ["response_window"]
+    assert summary["aggregated_response_figure_names"] == [
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm__pooled__response_window",
     ]
-    assert summary["prototype_descriptive_outputs"] == [
-        "prototype_rdm__pooled__response_window",
+    assert summary["aggregated_response_descriptive_outputs"] == [
+        "aggregated_response_rdm__pooled__response_window",
     ]
 
 
@@ -1568,27 +1951,27 @@ def test_write_rsa_outputs_writes_empty_per_date_prototype_comparison_for_view_w
         key: value.copy() if isinstance(value, pd.DataFrame) else value
         for key, value in _stage3_outputs_with_prototype_supplement().items()
     }
-    outputs["prototype_rsa_results__per_date"] = outputs["prototype_rsa_results__per_date"].loc[
+    outputs["aggregated_response_rsa_results__per_date"] = outputs["aggregated_response_rsa_results__per_date"].loc[
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
-    outputs["prototype_support__per_date"] = outputs["prototype_support__per_date"].loc[
+    outputs["aggregated_response_support__per_date"] = outputs["aggregated_response_support__per_date"].loc[
         lambda frame: frame["view_name"] == "response_window"
     ].copy()
     for key in list(outputs):
-        if key.startswith("internal__prototype_rdm__per_date__full_trajectory__"):
+        if key.startswith("internal__aggregated_response_rdm__per_date__full_trajectory__"):
             outputs.pop(key)
 
     written = write_rsa_outputs(outputs, tmp_path / "rsa")
     summary = json.loads((written["output_root"] / "run_summary.json").read_text(encoding="utf-8"))
 
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png").exists()
-    assert (written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png").exists()
-    assert summary["prototype_figure_names"] == [
-        "prototype_rsa__per_date__response_window",
-        "prototype_rdm_comparison__per_date__response_window",
-        "prototype_rdm_comparison__per_date__full_trajectory",
-        "prototype_rdm__pooled__response_window",
-        "prototype_rdm__pooled__full_trajectory",
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__response_window.png").exists()
+    assert (written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png").exists()
+    assert summary["aggregated_response_figure_names"] == [
+        "aggregated_response_rsa__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__response_window",
+        "aggregated_response_rdm_comparison__per_date__full_trajectory",
+        "aggregated_response_rdm__pooled__response_window",
+        "aggregated_response_rdm__pooled__full_trajectory",
     ]
 
 
@@ -1599,17 +1982,17 @@ def test_write_rsa_outputs_removes_stale_prototype_artifacts_when_rerun_without_
 
     first_written = write_rsa_outputs(_stage3_outputs_with_prototype_supplement(), output_root)
     stale_paths = [
-        first_written["tables_dir"] / "prototype_rsa_results__per_date.parquet",
-        first_written["tables_dir"] / "prototype_rdm__pooled__response_window.parquet",
-        first_written["tables_dir"] / "prototype_rdm__pooled__full_trajectory.parquet",
-        first_written["qc_dir"] / "prototype_support__per_date.parquet",
-        first_written["qc_dir"] / "prototype_support__pooled.parquet",
-        first_written["figures_dir"] / "prototype_rsa__per_date__response_window.png",
-        first_written["figures_dir"] / "prototype_rsa__per_date__full_trajectory.png",
-        first_written["figures_dir"] / "prototype_rdm_comparison__per_date__response_window.png",
-        first_written["figures_dir"] / "prototype_rdm_comparison__per_date__full_trajectory.png",
-        first_written["figures_dir"] / "prototype_rdm__pooled__response_window.png",
-        first_written["figures_dir"] / "prototype_rdm__pooled__full_trajectory.png",
+        first_written["tables_dir"] / "aggregated_response_rsa_results__per_date.parquet",
+        first_written["tables_dir"] / "aggregated_response_rdm__pooled__response_window.parquet",
+        first_written["tables_dir"] / "aggregated_response_rdm__pooled__full_trajectory.parquet",
+        first_written["qc_dir"] / "aggregated_response_support__per_date.parquet",
+        first_written["qc_dir"] / "aggregated_response_support__pooled.parquet",
+        first_written["figures_dir"] / "aggregated_response_rsa__per_date__response_window.png",
+        first_written["figures_dir"] / "aggregated_response_rsa__per_date__full_trajectory.png",
+        first_written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__response_window.png",
+        first_written["figures_dir"] / "aggregated_response_rdm_comparison__per_date__full_trajectory.png",
+        first_written["figures_dir"] / "aggregated_response_rdm__pooled__response_window.png",
+        first_written["figures_dir"] / "aggregated_response_rdm__pooled__full_trajectory.png",
     ]
 
     for stale_path in stale_paths:
@@ -1620,12 +2003,12 @@ def test_write_rsa_outputs_removes_stale_prototype_artifacts_when_rerun_without_
 
     for stale_path in stale_paths:
         assert not stale_path.exists()
-    assert summary["prototype_context_enabled"] is False
-    assert summary["prototype_views"] == []
-    assert summary["prototype_dates"] == []
-    assert summary["prototype_table_names"] == []
-    assert summary["prototype_figure_names"] == []
-    assert summary["prototype_descriptive_outputs"] == []
+    assert summary["aggregated_response_context_enabled"] is False
+    assert summary["aggregated_response_views"] == []
+    assert summary["aggregated_response_dates"] == []
+    assert summary["aggregated_response_table_names"] == []
+    assert summary["aggregated_response_figure_names"] == []
+    assert summary["aggregated_response_descriptive_outputs"] == []
 
 
 def test_run_biochemical_rsa_marks_tiny_primary_models_excluded_from_primary_ranking():
@@ -1713,31 +2096,31 @@ def test_run_biochemical_rsa_adds_prototype_tables_when_prototype_inputs_are_pre
     results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_stage3_prototype_inputs(),
+        aggregated_response_inputs=_stage3_prototype_inputs(),
         permutations=10,
         seed=0,
     )
 
-    assert "prototype_rsa_results__per_date" in results
-    assert "prototype_support__per_date" in results
-    assert "prototype_support__pooled" in results
-    assert "prototype_rdm__pooled__response_window" in results
-    assert "prototype_rdm__pooled__full_trajectory" in results
+    assert "aggregated_response_rsa_results__per_date" in results
+    assert "aggregated_response_support__per_date" in results
+    assert "aggregated_response_support__pooled" in results
+    assert "aggregated_response_rdm__pooled__response_window" in results
+    assert "aggregated_response_rdm__pooled__full_trajectory" in results
     assert {
-        "internal__prototype_rdm__per_date__response_window__2026-03-11",
-        "internal__prototype_rdm__per_date__response_window__2026-03-13",
-        "internal__prototype_rdm__per_date__full_trajectory__2026-03-11",
-        "internal__prototype_rdm__per_date__full_trajectory__2026-03-13",
+        "internal__aggregated_response_rdm__per_date__response_window__2026-03-11",
+        "internal__aggregated_response_rdm__per_date__response_window__2026-03-13",
+        "internal__aggregated_response_rdm__per_date__full_trajectory__2026-03-11",
+        "internal__aggregated_response_rdm__per_date__full_trajectory__2026-03-13",
     }.issubset(results)
-    assert "internal__prototype_aggregation" in results
-    assert results["internal__prototype_aggregation"]["prototype_aggregation"].iloc[0] == "mean"
-    assert results["internal__prototype_rdm__per_date__response_window__2026-03-11"].columns.tolist() == [
+    assert "internal__response_aggregation" in results
+    assert results["internal__response_aggregation"]["response_aggregation"].iloc[0] == "mean"
+    assert results["internal__aggregated_response_rdm__per_date__response_window__2026-03-11"].columns.tolist() == [
         "stimulus_row",
         "A001",
         "A002",
         "A003",
     ]
-    assert "n_dates_contributed" in results["prototype_support__pooled"].columns
+    assert "n_dates_contributed" in results["aggregated_response_support__pooled"].columns
     assert {
         "date",
         "view_name",
@@ -1758,20 +2141,20 @@ def test_run_biochemical_rsa_adds_prototype_tables_when_prototype_inputs_are_pre
         "p_value_raw",
         "p_value_fdr",
         "is_top_model",
-    }.issubset(results["prototype_rsa_results__per_date"].columns)
+    }.issubset(results["aggregated_response_rsa_results__per_date"].columns)
 
 
 def test_run_biochemical_rsa_returns_empty_prototype_outputs_with_expected_schema_for_empty_views():
     results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_empty_stage3_prototype_inputs(),
+        aggregated_response_inputs=_empty_stage3_prototype_inputs(),
         permutations=10,
         seed=0,
     )
 
-    assert results["prototype_rsa_results__per_date"].empty
-    assert results["prototype_rsa_results__per_date"].columns.tolist() == [
+    assert results["aggregated_response_rsa_results__per_date"].empty
+    assert results["aggregated_response_rsa_results__per_date"].columns.tolist() == [
         "date",
         "view_name",
         "reference_view_name",
@@ -1792,8 +2175,8 @@ def test_run_biochemical_rsa_returns_empty_prototype_outputs_with_expected_schem
         "p_value_fdr",
         "is_top_model",
     ]
-    assert results["prototype_support__per_date"].empty
-    assert results["prototype_support__per_date"].columns.tolist() == [
+    assert results["aggregated_response_support__per_date"].empty
+    assert results["aggregated_response_support__per_date"].columns.tolist() == [
         "date",
         "view_name",
         "stimulus",
@@ -1803,8 +2186,8 @@ def test_run_biochemical_rsa_returns_empty_prototype_outputs_with_expected_schem
         "n_supported_features",
         "n_all_nan_features",
     ]
-    assert results["prototype_support__pooled"].empty
-    assert results["prototype_support__pooled"].columns.tolist() == [
+    assert results["aggregated_response_support__pooled"].empty
+    assert results["aggregated_response_support__pooled"].columns.tolist() == [
         "view_name",
         "stimulus",
         "stim_name",
@@ -1814,11 +2197,11 @@ def test_run_biochemical_rsa_returns_empty_prototype_outputs_with_expected_schem
         "n_supported_features",
         "n_all_nan_features",
     ]
-    assert results["prototype_rdm__pooled__response_window"].columns.tolist() == ["stimulus_row"]
-    assert results["prototype_rdm__pooled__full_trajectory"].columns.tolist() == ["stimulus_row"]
+    assert results["aggregated_response_rdm__pooled__response_window"].columns.tolist() == ["stimulus_row"]
+    assert results["aggregated_response_rdm__pooled__full_trajectory"].columns.tolist() == ["stimulus_row"]
 
 
-def test_run_biochemical_rsa_keeps_primary_rsa_results_unchanged_when_prototype_inputs_are_present():
+def test_run_biochemical_rsa_uses_aggregated_response_rdms_as_primary_neural_matrices_when_inputs_are_present():
     baseline = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
@@ -1828,26 +2211,34 @@ def test_run_biochemical_rsa_keeps_primary_rsa_results_unchanged_when_prototype_
     supplemented = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_stage3_prototype_inputs(),
+        aggregated_response_inputs=_stage3_prototype_inputs(),
         permutations=10,
         seed=0,
     )
 
-    pd.testing.assert_frame_equal(baseline["rsa_results"], supplemented["rsa_results"])
-    pd.testing.assert_frame_equal(baseline["rsa_view_comparison"], supplemented["rsa_view_comparison"])
-    pd.testing.assert_frame_equal(baseline["rsa_leave_one_stimulus_out"], supplemented["rsa_leave_one_stimulus_out"])
+    pd.testing.assert_frame_equal(
+        supplemented["neural_rdm__response_window"],
+        supplemented["aggregated_response_rdm__pooled__response_window"],
+    )
+    pd.testing.assert_frame_equal(
+        supplemented["neural_rdm__full_trajectory"],
+        supplemented["aggregated_response_rdm__pooled__full_trajectory"],
+    )
+    assert not baseline["rsa_results"].equals(supplemented["rsa_results"])
+    assert not baseline["rsa_view_comparison"].equals(supplemented["rsa_view_comparison"])
+    assert not baseline["rsa_leave_one_stimulus_out"].equals(supplemented["rsa_leave_one_stimulus_out"])
 
 
 def test_run_biochemical_rsa_corrects_prototype_fdr_across_full_table_and_ignores_excluded_rows_for_top_model():
     results = run_biochemical_rsa(
         _stage3_prototype_resolved_inputs(),
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=_stage3_prototype_inputs(),
+        aggregated_response_inputs=_stage3_prototype_inputs(),
         permutations=10,
         seed=0,
     )
 
-    prototype = results["prototype_rsa_results__per_date"]
+    prototype = results["aggregated_response_rsa_results__per_date"]
     finite = prototype.loc[prototype["p_value_raw"].notna()].reset_index(drop=True)
     expected_fdr = benjamini_hochberg(finite["p_value_raw"].to_numpy(dtype=float))
 
@@ -1871,12 +2262,12 @@ def test_run_biochemical_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks
     results = run_biochemical_rsa(
         resolved_inputs,
         neural_matrices=_stage3_neural_rdms(),
-        prototype_inputs=prototype_inputs,
+        aggregated_response_inputs=prototype_inputs,
         permutations=10,
         seed=0,
     )
 
-    prototype = results["prototype_rsa_results__per_date"]
+    prototype = results["aggregated_response_rsa_results__per_date"]
     restricted_row = prototype.loc[
         prototype["date"].eq("2026-03-11")
         & prototype["view_name"].eq("response_window")
@@ -1924,5 +2315,6 @@ def test_run_biochemical_rsa_restricts_model_rdms_by_date_stimulus_set_and_marks
     assert sparse_rows["n_stimuli"].eq(2).all()
     assert sparse_rows["score_status"].eq("invalid").all()
     assert sparse_rows["n_shared_entries"].fillna(0).astype(int).max() < 2
+
 
 
