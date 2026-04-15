@@ -172,6 +172,21 @@ def resolve_model_inputs(model_input_root: str | Path, matrix_path: str | Path) 
     return _resolve_stage3_inputs(mapping, annotation, registry, membership, matrix_path)
 
 
+def resolve_direct_global_profile_inputs(
+    *,
+    preprocess_root: str | Path,
+    matrix_path: str | Path,
+) -> dict[str, pd.DataFrame]:
+    preprocess_root = Path(preprocess_root)
+    metadata = pd.read_parquet(preprocess_root / "trial_level" / "trial_metadata.parquet")
+    matrix = read_metabolite_matrix(matrix_path)
+    mapping = build_stimulus_sample_map(metadata, matrix_sample_ids=matrix.index)
+    annotation = _build_minimal_metabolite_annotation(matrix)
+    registry = _build_minimal_global_profile_registry()
+    membership = _build_minimal_global_profile_membership(matrix)
+    return _resolve_stage3_inputs(mapping, annotation, registry, membership, matrix_path)
+
+
 def build_model_feature_matrix(
     resolved_inputs: dict[str, pd.DataFrame],
     model_id: str,
@@ -465,6 +480,54 @@ def _validate_annotation_against_matrix(annotation: pd.DataFrame, matrix: pd.Dat
     extra = sorted(annotation_metabolites.difference(matrix_metabolites))
     if extra:
         raise ValueError(f"annotation metabolites must exist in the matrix: {', '.join(extra)}")
+
+
+def _build_minimal_metabolite_annotation(matrix: pd.DataFrame) -> pd.DataFrame:
+    metabolite_names = matrix.columns.astype(str).tolist()
+    return pd.DataFrame(
+        {
+            "metabolite_name": metabolite_names,
+            "superclass": [""] * len(metabolite_names),
+            "subclass": [""] * len(metabolite_names),
+            "pathway_tag": [""] * len(metabolite_names),
+            "annotation_source": ["runtime_direct_global_profile"] * len(metabolite_names),
+            "review_status": [""] * len(metabolite_names),
+            "ambiguous_flag": [False] * len(metabolite_names),
+            "notes": [""] * len(metabolite_names),
+        }
+    )
+
+
+def _build_minimal_global_profile_registry() -> pd.DataFrame:
+    return pd.DataFrame.from_records(
+        [
+            {
+                "model_id": GLOBAL_PROFILE_MODEL_ID,
+                "model_label": "Global Metabolite Profile",
+                "model_tier": PRIMARY_TIER_VALUE,
+                "model_status": PRIMARY_TIER_VALUE,
+                "feature_kind": "continuous_abundance",
+                "distance_kind": "correlation",
+                "description": "All matrix metabolites",
+                "authority": "runtime_direct_mode",
+                "notes": "",
+            }
+        ]
+    )
+
+
+def _build_minimal_global_profile_membership(matrix: pd.DataFrame) -> pd.DataFrame:
+    metabolite_names = matrix.columns.astype(str).tolist()
+    return pd.DataFrame(
+        {
+            "model_id": [GLOBAL_PROFILE_MODEL_ID] * len(metabolite_names),
+            "metabolite_name": metabolite_names,
+            "membership_source": ["runtime_direct_global_profile"] * len(metabolite_names),
+            "review_status": [""] * len(metabolite_names),
+            "ambiguous_flag": [False] * len(metabolite_names),
+            "notes": [""] * len(metabolite_names),
+        }
+    )
 
 
 def _seed_global_profile_membership(membership: pd.DataFrame, matrix: pd.DataFrame) -> pd.DataFrame:

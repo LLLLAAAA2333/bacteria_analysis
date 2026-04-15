@@ -11,6 +11,7 @@ from bacteria_analysis.model_space import (
     load_stimulus_sample_map,
     load_model_registry,
     read_metabolite_matrix,
+    resolve_direct_global_profile_inputs,
     resolve_model_inputs,
     _validate_correlation_distance_inputs,
 )
@@ -112,6 +113,25 @@ def _write_stage3_model_space_files(root, *, registry_rows, membership_rows, ann
     )
 
 
+def _write_tiny_matrix_xlsx(tmp_path):
+    matrix_path = tmp_path / "matrix.xlsx"
+    pd.DataFrame.from_records(
+        [
+            {"sample_id": "A001", "feature_1": 0.1, "feature_2": 1.0},
+            {"sample_id": "A002", "feature_1": 0.2, "feature_2": 0.8},
+        ]
+    ).to_excel(matrix_path, index=False, engine="openpyxl")
+    return matrix_path
+
+
+def _write_tiny_preprocess_root(tmp_path, *, records):
+    preprocess_root = tmp_path / "preprocess"
+    trial_level_dir = preprocess_root / "trial_level"
+    trial_level_dir.mkdir(parents=True)
+    pd.DataFrame.from_records(records).to_parquet(trial_level_dir / "trial_metadata.parquet", index=False)
+    return preprocess_root
+
+
 def test_load_stimulus_sample_map_requires_unique_sample_ids(tmp_path):
     root = tmp_path / "model_space"
     root.mkdir()
@@ -199,6 +219,40 @@ def test_build_stimulus_sample_map_rejects_conflicting_stim_name():
 
     with pytest.raises(ValueError, match="exactly one stim_name"):
         build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A227"]))
+
+
+def test_resolve_direct_global_profile_inputs_builds_minimal_stage3_bundle(tmp_path):
+    matrix_path = _write_tiny_matrix_xlsx(tmp_path)
+    preprocess_root = _write_tiny_preprocess_root(
+        tmp_path,
+        records=[
+            {"stimulus": "b1_1", "stim_name": "A001 stationary"},
+            {"stimulus": "b2_1", "stim_name": "A002 stationary"},
+        ],
+    )
+
+    resolved = resolve_direct_global_profile_inputs(
+        preprocess_root=preprocess_root,
+        matrix_path=matrix_path,
+    )
+
+    assert resolved["model_registry_resolved"]["model_id"].tolist() == ["global_profile"]
+    assert set(resolved["model_membership_resolved"]["metabolite_name"]) == {"feature_1", "feature_2"}
+    assert resolved["stimulus_sample_map"]["sample_id"].tolist() == ["A001", "A002"]
+
+
+def test_resolve_direct_global_profile_inputs_rejects_missing_matrix_sample_ids(tmp_path):
+    matrix_path = _write_tiny_matrix_xlsx(tmp_path)
+    preprocess_root = _write_tiny_preprocess_root(
+        tmp_path,
+        records=[
+            {"stimulus": "b1_1", "stim_name": "A001 stationary"},
+            {"stimulus": "b2_1", "stim_name": "A999 stationary"},
+        ],
+    )
+
+    with pytest.raises(ValueError, match="must exist in the matrix"):
+        resolve_direct_global_profile_inputs(preprocess_root=preprocess_root, matrix_path=matrix_path)
 
 
 def test_read_metabolite_matrix_loads_expected_sample_ids(tmp_path):
