@@ -8,7 +8,10 @@ import pytest
 from openpyxl import Workbook
 
 import bacteria_analysis.model_space_seed as model_space_seed_module
-from bacteria_analysis.model_space import resolve_model_inputs
+from bacteria_analysis.model_space import (
+    build_stimulus_sample_map as shared_build_stimulus_sample_map,
+    resolve_model_inputs,
+)
 from bacteria_analysis.model_space_seed import (
     IDENTITY_EVIDENCE_COLUMNS,
     TAXONOMY_ENRICHMENT_COLUMNS,
@@ -16,7 +19,6 @@ from bacteria_analysis.model_space_seed import (
     build_model_membership_from_rules,
     build_model_space,
     build_normalized_header_table,
-    build_stimulus_sample_map,
     load_taxonomy_enrichment_cache,
     merge_identity_and_taxonomy_evidence,
     normalize_metabolite_header,
@@ -139,6 +141,8 @@ def test_normalize_metabolite_header_normalizes_prime_characters():
 
 
 def test_build_stimulus_sample_map_extracts_sample_id_from_stationary_labels():
+    assert model_space_seed_module.build_stimulus_sample_map is shared_build_stimulus_sample_map
+
     metadata = pd.DataFrame.from_records(
         [
             {"stimulus": "b34_0", "stim_name": "A226 stationary"},
@@ -147,7 +151,10 @@ def test_build_stimulus_sample_map_extracts_sample_id_from_stationary_labels():
         ]
     )
 
-    mapping = build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A228"]))
+    mapping = model_space_seed_module.build_stimulus_sample_map(
+        metadata,
+        matrix_sample_ids=pd.Index(["A226", "A228"]),
+    )
 
     assert mapping.to_dict(orient="records") == [
         {"stimulus": "b34_0", "stim_name": "A226 stationary", "sample_id": "A226"},
@@ -164,7 +171,7 @@ def test_build_stimulus_sample_map_rejects_conflicting_stim_name():
     )
 
     with pytest.raises(ValueError, match="exactly one stim_name"):
-        build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A227"]))
+        model_space_seed_module.build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A227"]))
 
 
 def test_build_stimulus_sample_map_rejects_blank_or_missing_values():
@@ -176,7 +183,10 @@ def test_build_stimulus_sample_map_rejects_blank_or_missing_values():
     )
 
     with pytest.raises(ValueError, match="must be non-empty"):
-        build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A228"]))
+        model_space_seed_module.build_stimulus_sample_map(
+            metadata,
+            matrix_sample_ids=pd.Index(["A226", "A228"]),
+        )
 
 
 def test_build_stimulus_sample_map_rejects_duplicate_derived_sample_ids():
@@ -188,14 +198,14 @@ def test_build_stimulus_sample_map_rejects_duplicate_derived_sample_ids():
     )
 
     with pytest.raises(ValueError, match="must be unique"):
-        build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226"]))
+        model_space_seed_module.build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226"]))
 
 
 def test_build_stimulus_sample_map_rejects_sample_ids_absent_from_matrix():
     metadata = pd.DataFrame.from_records([{"stimulus": "b34_0", "stim_name": "A999 stationary"}])
 
     with pytest.raises(ValueError, match="must exist in the matrix"):
-        build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226"]))
+        model_space_seed_module.build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226"]))
 
 
 def test_resolve_identity_marks_exact_pubchem_match_high_confidence(fixture_path):
