@@ -13,7 +13,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from bacteria_analysis.model_space import resolve_model_inputs
+from bacteria_analysis.model_space import resolve_direct_global_profile_inputs, resolve_model_inputs
 from bacteria_analysis.rsa import load_geometry_pooled_neural_rdms, run_biochemical_rsa
 from bacteria_analysis.rsa_outputs import write_rsa_outputs
 from bacteria_analysis.rsa_aggregated_responses import load_aggregated_response_context_inputs
@@ -26,25 +26,28 @@ DEFAULT_MODEL_INPUT_ROOT = Path("data/model_space")
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run biochemical RSA from aggregated neural responses, with geometry pooled RDMs as fallback."
+        description=(
+            "Run biochemical RSA directly from preprocess outputs and matrix.xlsx by default, "
+            "with curated model-space and geometry fallback modes available for compatibility."
+        )
     )
     parser.add_argument(
         "--geometry-root",
         dest="geometry_root",
         default=str(DEFAULT_GEOMETRY_ROOT),
-        help="Geometry output root containing pooled RDM parquet files for legacy fallback runs.",
+        help="Geometry output root containing pooled RDM parquet files for legacy curated fallback runs.",
     )
     parser.add_argument("--stage2-root", dest="geometry_root", help=argparse.SUPPRESS)
     parser.add_argument("--matrix", default=str(DEFAULT_MATRIX_PATH), help="Path to the metabolite matrix workbook.")
     parser.add_argument(
         "--model-input-root",
-        default=str(DEFAULT_MODEL_INPUT_ROOT),
-        help="Directory containing biochemical RSA model input CSVs.",
+        default=None,
+        help="Optional curated model-space directory; omit this to run the default direct RSA path.",
     )
     parser.add_argument(
         "--preprocess-root",
         default=None,
-        help="Optional preprocessing output root containing trial-level inputs for aggregated-response Stage 3.",
+        help="Preprocessing output root for the primary direct RSA workflow and preprocess-backed curated runs.",
     )
     parser.add_argument(
         "--response-aggregation",
@@ -123,31 +126,43 @@ def _included_ranked_models(model_registry: pd.DataFrame) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    try:
-        geometry_root = resolve_geometry_root(args.geometry_root)
-        matrix_path = resolve_matrix_path(args.matrix)
-        model_input_root = resolve_model_input_root(args.model_input_root)
-        preprocess_root = resolve_preprocess_root(args.preprocess_root)
+    raw_model_input_root = args.model_input_root
+    matrix_path = resolve_matrix_path(args.matrix)
+    preprocess_root = resolve_preprocess_root(args.preprocess_root)
+    run_kwargs: dict[str, object] = {
+        "permutations": args.permutations,
+        "seed": args.seed,
+    }
+
+    if preprocess_root is not None and raw_model_input_root is None:
+        resolved_inputs = resolve_direct_global_profile_inputs(
+            preprocess_root=preprocess_root,
+            matrix_path=matrix_path,
+        )
+        run_kwargs["aggregated_response_inputs"] = load_aggregated_response_context_inputs(
+            preprocess_root,
+            view_names=("response_window", "full_trajectory"),
+        )
+        run_kwargs["response_aggregation"] = args.response_aggregation
+    elif preprocess_root is not None and raw_model_input_root is not None:
+        model_input_root = resolve_model_input_root(raw_model_input_root)
         resolved_inputs = resolve_model_inputs(model_input_root, matrix_path)
-        run_kwargs: dict[str, object] = {
-            "permutations": args.permutations,
-            "seed": args.seed,
-        }
-        if preprocess_root is not None:
-            run_kwargs["aggregated_response_inputs"] = load_aggregated_response_context_inputs(
-                preprocess_root,
-                view_names=("response_window", "full_trajectory"),
-            )
-            run_kwargs["response_aggregation"] = args.response_aggregation
-        else:
-            geometry_root = resolve_geometry_root(args.geometry_root)
-            run_kwargs["neural_matrices"] = load_geometry_pooled_neural_rdms(geometry_root)
-        core_outputs = run_biochemical_rsa(resolved_inputs, **run_kwargs)
-        rsa_output_root = Path(args.output_root) / "rsa"
-        written = write_rsa_outputs(core_outputs, rsa_output_root)
-    except Exception as exc:  # pragma: no cover - exercised in CLI smoke tests
-        print(f"Biochemical RSA failed: {exc}", file=sys.stderr)
-        return 1
+        run_kwargs["aggregated_response_inputs"] = load_aggregated_response_context_inputs(
+            preprocess_root,
+            view_names=("response_window", "full_trajectory"),
+        )
+        run_kwargs["response_aggregation"] = args.response_aggregation
+    elif preprocess_root is None and raw_model_input_root is not None:
+        model_input_root = resolve_model_input_root(raw_model_input_root)
+        resolved_inputs = resolve_model_inputs(model_input_root, matrix_path)
+        geometry_root = resolve_geometry_root(args.geometry_root)
+        run_kwargs["neural_matrices"] = load_geometry_pooled_neural_rdms(geometry_root)
+    else:
+        raise ValueError("Direct RSA requires --preprocess-root when --model-input-root is omitted")
+
+    core_outputs = run_biochemical_rsa(resolved_inputs, **run_kwargs)
+    rsa_output_root = Path(args.output_root) / "rsa"
+    written = write_rsa_outputs(core_outputs, rsa_output_root)
 
     ranked_models = _included_ranked_models(core_outputs["model_registry_resolved"])
     print(f"Included ranked models: {', '.join(ranked_models) if ranked_models else 'None'}")
@@ -161,5 +176,13 @@ DEFAULT_STAGE2_ROOT = LEGACY_STAGE2_ROOT
 resolve_stage2_root = resolve_geometry_root
 
 
+def cli(argv: list[str] | None = None) -> int:
+    try:
+        return main(argv)
+    except Exception as exc:  # pragma: no cover - exercised in CLI smoke tests
+        print(f"Biochemical RSA failed: {exc}", file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(cli())

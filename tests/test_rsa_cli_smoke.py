@@ -81,9 +81,9 @@ def stage3_fixture_root(tmp_path):
 
     pd.DataFrame.from_records(
         [
-            {"stimulus": "A001", "stim_name": "Stimulus A001", "sample_id": "A001"},
-            {"stimulus": "A002", "stim_name": "Stimulus A002", "sample_id": "A002"},
-            {"stimulus": "A003", "stim_name": "Stimulus A003", "sample_id": "A003"},
+            {"stimulus": "A001", "stim_name": "A001", "sample_id": "A001"},
+            {"stimulus": "A002", "stim_name": "A002", "sample_id": "A002"},
+            {"stimulus": "A003", "stim_name": "A003", "sample_id": "A003"},
         ]
     ).to_csv(model_input_root / "stimulus_sample_map.csv", index=False)
 
@@ -259,12 +259,12 @@ def stage3_fixture_root(tmp_path):
         "A003": np.sin(np.linspace(0.0, np.pi, len(EXPECTED_TIMEPOINTS), dtype=float)),
     }
     trial_specs = [
-        ("2026-03-11", "worm_001", 0, "A001", "Stimulus A001", 1.00),
-        ("2026-03-11", "worm_001", 1, "A002", "Stimulus A002", 0.95),
-        ("2026-03-11", "worm_001", 2, "A003", "Stimulus A003", 1.05),
-        ("2026-03-13", "worm_002", 0, "A001", "Stimulus A001", 1.10),
-        ("2026-03-13", "worm_002", 1, "A002", "Stimulus A002", 1.00),
-        ("2026-03-13", "worm_002", 2, "A003", "Stimulus A003", 0.90),
+        ("2026-03-11", "worm_001", 0, "A001", "A001", 1.00),
+        ("2026-03-11", "worm_001", 1, "A002", "A002", 0.95),
+        ("2026-03-11", "worm_001", 2, "A003", "A003", 1.05),
+        ("2026-03-13", "worm_002", 0, "A001", "A001", 1.10),
+        ("2026-03-13", "worm_002", 1, "A002", "A002", 1.00),
+        ("2026-03-13", "worm_002", 2, "A003", "A003", 0.90),
     ]
     for trial_index, (date, worm_key, segment_index, stimulus, stim_name, scale) in enumerate(trial_specs):
         trial_id = f"{date.replace('-', '')}__{worm_key}__{segment_index}"
@@ -373,6 +373,90 @@ def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
     assert "## Ranked Model RSA Details" in markdown
     assert "## View Comparison Details" in markdown
     assert "Included ranked models: global_profile, bile_acid" in result.stdout
+
+
+def test_parse_args_defaults_model_input_root_to_none():
+    args = RUN_RSA.parse_args([])
+
+    assert args.model_input_root is None
+    assert args.preprocess_root is None
+
+
+def test_cli_direct_mode_runs_without_model_input_root(tmp_path, stage3_fixture_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_rsa.py",
+            "--preprocess-root",
+            str(stage3_fixture_root / "preprocess"),
+            "--matrix",
+            str(stage3_fixture_root / "matrix.xlsx"),
+            "--output-root",
+            str(output_root),
+            "--permutations",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+    summary = json.loads((output_root / "rsa" / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["ranked_models"] == ["global_profile"]
+    assert summary["aggregated_response_context_enabled"] is True
+    assert "Included ranked models: global_profile" in result.stdout
+
+
+def test_cli_requires_preprocess_root_when_model_input_root_is_omitted(tmp_path, capsys):
+    exit_code = RUN_RSA.cli(
+        [
+            "--matrix",
+            str(tmp_path / "matrix.xlsx"),
+            "--output-root",
+            str(tmp_path / "results"),
+            "--permutations",
+            "0",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "Direct RSA requires --preprocess-root when --model-input-root is omitted" in captured.err
+
+
+def test_direct_mode_does_not_resolve_default_model_input_root(tmp_path, monkeypatch):
+    preprocess_root = tmp_path / "preprocess"
+    preprocess_root.mkdir()
+    matrix_path = tmp_path / "matrix.xlsx"
+    matrix_path.write_bytes(b"matrix")
+
+    def _unexpected_model_root_resolution(*args, **kwargs):
+        raise AssertionError("resolve_model_input_root should not be called in direct mode")
+
+    def _direct_mode_reached(*args, **kwargs):
+        raise RuntimeError("direct mode reached")
+
+    monkeypatch.setattr(RUN_RSA, "resolve_model_input_root", _unexpected_model_root_resolution)
+    monkeypatch.setattr(RUN_RSA, "resolve_direct_global_profile_inputs", _direct_mode_reached)
+
+    with pytest.raises(RuntimeError, match="direct mode reached"):
+        RUN_RSA.main(
+            [
+                "--preprocess-root",
+                str(preprocess_root),
+                "--matrix",
+                str(matrix_path),
+                "--output-root",
+                str(tmp_path / "results"),
+                "--permutations",
+                "0",
+            ]
+        )
 
 
 def test_cli_runs_and_writes_rsa_prototype_context_outputs(tmp_path, stage3_fixture_root):
