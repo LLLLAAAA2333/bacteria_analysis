@@ -129,6 +129,40 @@ def build_metabolite_annotation_skeleton(matrix_path: str | Path) -> pd.DataFram
     )
 
 
+def build_stimulus_sample_map(metadata: pd.DataFrame, *, matrix_sample_ids: pd.Index) -> pd.DataFrame:
+    _require_columns(metadata, ("stimulus", "stim_name"), "trial metadata")
+    rows = metadata.loc[:, ["stimulus", "stim_name"]].copy()
+    rows["stimulus"] = rows["stimulus"].fillna("").astype(str).str.strip()
+    rows["stim_name"] = rows["stim_name"].fillna("").astype(str).str.strip()
+    if (rows["stimulus"] == "").any():
+        raise ValueError("stimulus values must be non-empty")
+    if (rows["stim_name"] == "").any():
+        raise ValueError("stim_name values must be non-empty")
+
+    stimulus_name_counts = rows.groupby("stimulus", sort=False)["stim_name"].nunique(dropna=False)
+    conflicting = stimulus_name_counts.loc[stimulus_name_counts > 1]
+    if not conflicting.empty:
+        raise ValueError(
+            "stimulus values must map to exactly one stim_name: "
+            + ", ".join(conflicting.index.astype(str).tolist())
+        )
+
+    collapsed = rows.drop_duplicates(subset=["stimulus"], keep="first").copy()
+    collapsed["sample_id"] = collapsed["stim_name"].map(_sample_id_from_stim_name)
+    if (collapsed["sample_id"] == "").any():
+        raise ValueError("sample_id values derived from stim_name must be non-empty")
+    if collapsed["sample_id"].duplicated().any():
+        duplicates = collapsed.loc[collapsed["sample_id"].duplicated(keep=False), "sample_id"].tolist()
+        raise ValueError(f"derived sample_id values must be unique: {', '.join(dict.fromkeys(duplicates))}")
+
+    matrix_sample_set = set(matrix_sample_ids.astype(str))
+    missing = sorted(set(collapsed["sample_id"]).difference(matrix_sample_set))
+    if missing:
+        raise ValueError(f"derived sample_id values must exist in the matrix: {', '.join(missing)}")
+
+    return collapsed.loc[:, ["stimulus", "stim_name", "sample_id"]].reset_index(drop=True)
+
+
 def resolve_model_inputs(model_input_root: str | Path, matrix_path: str | Path) -> dict[str, pd.DataFrame]:
     model_input_root = Path(model_input_root)
     mapping = load_stimulus_sample_map(model_input_root / "stimulus_sample_map.csv")
@@ -353,6 +387,13 @@ def _normalize_matrix_frame(frame: pd.DataFrame) -> pd.DataFrame:
     normalized = normalized.set_index(sample_column)
     normalized.index.name = "sample_id"
     return normalized
+
+
+def _sample_id_from_stim_name(stim_name: str) -> str:
+    parts = str(stim_name).strip().split()
+    if not parts:
+        return ""
+    return parts[0].strip()
 
 
 def _canonicalize_metabolite_name(value: object) -> str:

@@ -4,6 +4,7 @@ import pytest
 from openpyxl import Workbook
 
 from bacteria_analysis.model_space import (
+    build_stimulus_sample_map,
     build_model_feature_matrix,
     build_model_rdm,
     build_metabolite_annotation_skeleton,
@@ -169,6 +170,35 @@ def test_load_stimulus_sample_map_rejects_blank_stim_name_values(tmp_path):
 
     with pytest.raises(ValueError, match="stim_name values must be non-empty"):
         load_stimulus_sample_map(root / "blank_stim_name_map.csv")
+
+
+def test_build_stimulus_sample_map_extracts_sample_id_from_stim_name():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b34_0", "stim_name": "A226 stationary"},
+            {"stimulus": "b35_0", "stim_name": "A228 stationary"},
+            {"stimulus": "b34_0", "stim_name": "A226 stationary"},
+        ]
+    )
+
+    mapping = build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A228"]))
+
+    assert mapping.to_dict(orient="records") == [
+        {"stimulus": "b34_0", "stim_name": "A226 stationary", "sample_id": "A226"},
+        {"stimulus": "b35_0", "stim_name": "A228 stationary", "sample_id": "A228"},
+    ]
+
+
+def test_build_stimulus_sample_map_rejects_conflicting_stim_name():
+    metadata = pd.DataFrame.from_records(
+        [
+            {"stimulus": "b34_0", "stim_name": "A226 stationary"},
+            {"stimulus": "b34_0", "stim_name": "A227 stationary"},
+        ]
+    )
+
+    with pytest.raises(ValueError, match="exactly one stim_name"):
+        build_stimulus_sample_map(metadata, matrix_sample_ids=pd.Index(["A226", "A227"]))
 
 
 def test_read_metabolite_matrix_loads_expected_sample_ids(tmp_path):
