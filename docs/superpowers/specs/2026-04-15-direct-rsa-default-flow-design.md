@@ -104,6 +104,23 @@ The user should not need to generate a `model_space` directory just to ask wheth
 
 ## CLI Contract
 
+### Argument defaults
+
+- `--matrix`
+  - default: `data/matrix.xlsx`
+  - always optional if the default path exists
+- `--preprocess-root`
+  - default: `None`
+  - required for the recommended direct path
+- `--model-input-root`
+  - default: `None`
+  - optional advanced override
+- `--geometry-root`
+  - default: existing geometry-root resolution behavior
+  - compatibility-only fallback input
+
+Direct mode is selected by omitting `--model-input-root` entirely. The implementation does not need to support an explicit empty string sentinel for direct mode selection.
+
 ### Recommended default usage
 
 ```text
@@ -116,24 +133,89 @@ pixi run rsa --preprocess-root <preprocess_root> --matrix data/matrix.xlsx --out
 pixi run rsa --preprocess-root <preprocess_root> --matrix data/matrix.xlsx --model-input-root <model_space_root> --output-root <results_root>
 ```
 
+### Legacy fallback usage
+
+```text
+pixi run rsa --geometry-root <geometry_root> --matrix data/matrix.xlsx --model-input-root <model_space_root> --output-root <results_root>
+```
+
 ## CLI Rules
 
 - `--preprocess-root` is the primary default input root for Stage 3 RSA.
 - `--matrix` remains the metabolite-side input.
+- `--model-input-root` must change from a default path-based argument to a `None`-default optional argument.
 - `--model-input-root` remains supported, but is no longer the primary default workflow.
 - If `--model-input-root` is omitted, RSA must enter direct mode automatically.
 - If `--model-input-root` is provided, RSA must load curated model inputs from that directory.
 - If both `--preprocess-root` and `--model-input-root` are provided:
   - neural-side construction still comes from `--preprocess-root`
   - model-side inputs come from `--model-input-root`
-- Existing fallback support for geometry-root based neural inputs may remain temporarily for compatibility, but help text and default workflow should no longer position it as the recommended path.
+
+## CLI Precedence Table
+
+The implementation should use these exact mode rules:
+
+| Inputs | Mode | Neural Side | Model Side | Status |
+|--------|------|-------------|------------|--------|
+| `--preprocess-root` and no `--model-input-root` | direct mode | build neural RDMs from preprocess outputs | synthesize `global_profile` in memory | recommended default |
+| `--preprocess-root` and `--model-input-root` | curated mode | build neural RDMs from preprocess outputs | load curated model inputs | supported advanced path |
+| no `--preprocess-root`, but `--model-input-root` | legacy curated fallback | load pooled neural RDMs from `--geometry-root` or its legacy default | load curated model inputs | temporary compatibility path only |
+| no `--preprocess-root` and no `--model-input-root` | invalid | none | none | fail fast |
+
+Additional precedence rules:
+
+- If `--preprocess-root` is provided, RSA must not require `--geometry-root` to run.
+- If `--preprocess-root` is provided, any geometry-root path is ignored for core RSA execution.
+- Geometry-root based pooled neural inputs remain available only to preserve older curated workflows while the new direct path is adopted.
+- Help text and docs should no longer position geometry-root fallback as the recommended path.
+
+## Neural Input Contract
+
+Direct mode must define its neural-side input contract explicitly.
+
+### Required direct-mode neural inputs
+
+`--preprocess-root` must contain:
+
+- `trial_level/trial_metadata.parquet`
+- `trial_level/trial_tensor_baseline_centered.npz`
+
+Optional:
+
+- `trial_level/trial_wide_baseline_centered.parquet`
+
+These are the same preprocess artifacts already used by the aggregated-response Stage 3 path.
+
+### Direct-mode neural behavior
+
+When `--preprocess-root` is provided, RSA must:
+
+- load aggregated-response context inputs from preprocess outputs
+- build pooled neural RDMs at runtime for:
+  - `response_window`
+  - `full_trajectory`
+- use those pooled neural RDMs as the neural-side Stage 3 inputs
+
+Direct mode must not depend on Stage 2 geometry parquet outputs.
+
+### Legacy fallback neural behavior
+
+Only when `--preprocess-root` is absent and `--model-input-root` is present may RSA fall back to pooled neural RDMs loaded from:
+
+- `--geometry-root`
+- or the existing legacy default geometry root
+
+This fallback exists for temporary compatibility and should not define the new default workflow.
 
 ## Runtime Data Flow
 
 ### Direct mode
 
 1. read preprocess outputs from `--preprocess-root`
-2. load `trial_level/trial_metadata.parquet`
+2. load aggregated-response context inputs from:
+   - `trial_level/trial_metadata.parquet`
+   - `trial_level/trial_tensor_baseline_centered.npz`
+   - optional `trial_level/trial_wide_baseline_centered.parquet`
 3. derive a unique `stimulus x stim_name x sample_id` mapping
 4. read `matrix.xlsx`
 5. validate that all mapped `sample_id` values exist in the matrix
@@ -144,12 +226,22 @@ pixi run rsa --preprocess-root <preprocess_root> --matrix data/matrix.xlsx --mod
    - minimal model membership containing all matrix metabolites for `global_profile`
 7. resolve model inputs
 8. construct the `global_profile` model RDM
-9. build neural RDMs from preprocess-derived aggregated responses
+9. build pooled neural RDMs at runtime from preprocess-derived aggregated responses
 10. run RSA and write the usual outputs
 
 ### Curated mode
 
+If `--preprocess-root` is provided:
+
 1. read preprocess outputs from `--preprocess-root` for the neural side
+2. read `matrix.xlsx`
+3. load `--model-input-root`
+4. resolve curated model inputs as today
+5. run RSA using preprocess-derived pooled neural RDMs
+
+If `--preprocess-root` is absent:
+
+1. read pooled neural RDMs from `--geometry-root` or the legacy default geometry root
 2. read `matrix.xlsx`
 3. load `--model-input-root`
 4. resolve curated model inputs as today
