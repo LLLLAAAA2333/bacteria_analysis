@@ -375,33 +375,82 @@ def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
     assert "Included ranked models: global_profile, bile_acid" in result.stdout
 
 
-def test_cli_legacy_curated_fallback_still_uses_geometry_root(tmp_path, stage3_fixture_root):
+def test_cli_legacy_curated_fallback_uses_geometry_root_without_preprocess(tmp_path, monkeypatch):
+    geometry_root = tmp_path / "geometry"
+    model_input_root = tmp_path / "model_space"
+    matrix_path = tmp_path / "matrix.xlsx"
     output_root = tmp_path / "results"
-    result = subprocess.run(
+    geometry_root.mkdir()
+    model_input_root.mkdir()
+    matrix_path.write_bytes(b"matrix")
+
+    resolved_inputs = object()
+    neural_matrices = object()
+    model_registry_resolved = pd.DataFrame.from_records(
         [
-            "pixi",
-            "run",
-            "python",
-            "scripts/run_rsa.py",
-            "--geometry-root",
-            str(stage3_fixture_root / "geometry"),
-            "--matrix",
-            str(stage3_fixture_root / "matrix.xlsx"),
-            "--model-input-root",
-            str(stage3_fixture_root / "model_space"),
-            "--output-root",
-            str(output_root),
-            "--permutations",
-            "0",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+            {
+                "model_id": "global_profile",
+                "model_tier": "primary",
+                "excluded_from_primary_ranking": False,
+            }
+        ]
     )
 
-    assert result.returncode == 0, result.stderr
-    summary = json.loads((output_root / "rsa" / "run_summary.json").read_text(encoding="utf-8"))
-    assert summary["aggregated_response_context_enabled"] is False
+    def _resolve_model_inputs(actual_model_input_root, actual_matrix_path):
+        assert actual_model_input_root == model_input_root
+        assert actual_matrix_path == matrix_path
+        return resolved_inputs
+
+    def _load_geometry_pooled_neural_rdms(actual_geometry_root):
+        assert actual_geometry_root == geometry_root
+        return neural_matrices
+
+    def _unexpected_direct_mode(*args, **kwargs):
+        raise AssertionError("direct-mode preprocessing path should not be used for legacy curated fallback")
+
+    def _unexpected_aggregated_context(*args, **kwargs):
+        raise AssertionError("preprocess-backed aggregation should not be used for legacy curated fallback")
+
+    def _run_biochemical_rsa(actual_inputs, **kwargs):
+        assert actual_inputs is resolved_inputs
+        assert kwargs["neural_matrices"] is neural_matrices
+        assert "aggregated_response_inputs" not in kwargs
+        assert "response_aggregation" not in kwargs
+        return {"model_registry_resolved": model_registry_resolved}
+
+    def _write_rsa_outputs(core_outputs, rsa_output_root):
+        assert core_outputs["model_registry_resolved"].equals(model_registry_resolved)
+        assert rsa_output_root == output_root / "rsa"
+        return {
+            "tables_dir": rsa_output_root / "tables",
+            "figures_dir": rsa_output_root / "figures",
+            "run_summary_json": rsa_output_root / "run_summary.json",
+        }
+
+    monkeypatch.setattr(RUN_RSA, "resolve_model_inputs", _resolve_model_inputs)
+    monkeypatch.setattr(RUN_RSA, "load_geometry_pooled_neural_rdms", _load_geometry_pooled_neural_rdms)
+    monkeypatch.setattr(RUN_RSA, "resolve_direct_global_profile_inputs", _unexpected_direct_mode)
+    monkeypatch.setattr(RUN_RSA, "load_aggregated_response_context_inputs", _unexpected_aggregated_context)
+    monkeypatch.setattr(RUN_RSA, "run_biochemical_rsa", _run_biochemical_rsa)
+    monkeypatch.setattr(RUN_RSA, "write_rsa_outputs", _write_rsa_outputs)
+
+    assert (
+        RUN_RSA.main(
+            [
+                "--geometry-root",
+                str(geometry_root),
+                "--matrix",
+                str(matrix_path),
+                "--model-input-root",
+                str(model_input_root),
+                "--output-root",
+                str(output_root),
+                "--permutations",
+                "0",
+            ]
+        )
+        == 0
+    )
 
 
 def test_parse_args_defaults_model_input_root_to_none():
