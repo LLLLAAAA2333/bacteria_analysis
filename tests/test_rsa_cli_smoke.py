@@ -375,6 +375,35 @@ def test_cli_runs_and_writes_rsa_outputs(tmp_path, stage3_fixture_root):
     assert "Included ranked models: global_profile, bile_acid" in result.stdout
 
 
+def test_cli_legacy_curated_fallback_still_uses_geometry_root(tmp_path, stage3_fixture_root):
+    output_root = tmp_path / "results"
+    result = subprocess.run(
+        [
+            "pixi",
+            "run",
+            "python",
+            "scripts/run_rsa.py",
+            "--geometry-root",
+            str(stage3_fixture_root / "geometry"),
+            "--matrix",
+            str(stage3_fixture_root / "matrix.xlsx"),
+            "--model-input-root",
+            str(stage3_fixture_root / "model_space"),
+            "--output-root",
+            str(output_root),
+            "--permutations",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    summary = json.loads((output_root / "rsa" / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["aggregated_response_context_enabled"] is False
+
+
 def test_parse_args_defaults_model_input_root_to_none():
     args = RUN_RSA.parse_args([])
 
