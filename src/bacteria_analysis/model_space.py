@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+import re
 
 import numpy as np
 import pandas as pd
@@ -66,6 +67,7 @@ METABOLITE_NAME_CANONICAL_OVERRIDES = {
     "Tauro-\u03b1-muricholic acid (\u03b1-TMCA)": "Tauro-alpha-muricholic acid (alpha-TMCA)",
     "Tauro-\u03b2-muricholic acid (\u03b2-TMCA)": "Tauro-beta-muricholic acid (beta-TMCA)",
     "Tauro-\u03b1-muricholic acid (\u03c9-TMCA)": "Tauro-omega-muricholic acid (omega-TMCA)",
+    "Tauro-alpha-muricholic acid (omega-TMCA)": "Tauro-omega-muricholic acid (omega-TMCA)",
     "Omega-muricholic acid (\u03c9-MCA)": "Omega-muricholic acid (omega-MCA)",
     "\u03b1-Ketoglutaric acid": "Alpha-Ketoglutaric acid",
     "Riboflavin-5\u2032-monophosphate": "Riboflavin-5'-monophosphate",
@@ -73,6 +75,29 @@ METABOLITE_NAME_CANONICAL_OVERRIDES = {
     "Adenosine-5\u2032-diphosphate(ADP)": "Adenosine-5'-diphosphate(ADP)",
     "Adenosine-3\u2032,5\u2032-cyclic monophosphate(cAMP)": "Adenosine-3',5'-cyclic monophosphate(cAMP)",
 }
+METABOLITE_TEXT_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("（", "("),
+    ("）", ")"),
+    ("α", "alpha"),
+    ("β", "beta"),
+    ("γ", "gamma"),
+    ("δ", "delta"),
+    ("ω", "omega"),
+    ("¦Á", "alpha"),
+    ("¦Â", "beta"),
+    ("¦Ã", "gamma"),
+    ("¦Ä", "delta"),
+    ("¦Ø", "omega"),
+    ("′", "'"),
+    ("’", "'"),
+    ("‘", "'"),
+    ("ʼ", "'"),
+    ("ʹ", "'"),
+    ("ˈ", "'"),
+    ("´", "'"),
+    ("`", "'"),
+    ("¡ä", "'"),
+)
 
 
 def load_stimulus_sample_map(path: str | Path) -> pd.DataFrame:
@@ -415,6 +440,13 @@ def _canonicalize_metabolite_name(value: object) -> str:
     if value is None:
         return ""
     normalized = str(value).strip()
+    direct_override = METABOLITE_NAME_CANONICAL_OVERRIDES.get(normalized)
+    if direct_override is not None:
+        return direct_override
+    for original, replacement in METABOLITE_TEXT_REPLACEMENTS:
+        if original in normalized:
+            normalized = normalized.replace(original, replacement)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     return METABOLITE_NAME_CANONICAL_OVERRIDES.get(normalized, normalized)
 
 

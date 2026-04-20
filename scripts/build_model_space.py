@@ -22,6 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--preprocess-root", required=True)
     parser.add_argument("--registry", required=True)
     parser.add_argument("--output-root", required=True)
+    parser.add_argument("--raw-metadata", default=None)
     parser.add_argument("--identity-evidence-cache", default=None)
     parser.add_argument("--taxonomy-enrichment-cache", default=None)
     parser.add_argument("--cache-version", default="manual-cache-v1")
@@ -61,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
         preprocess_root = resolve_repo_path(args.preprocess_root)
         registry_path = resolve_repo_path(args.registry)
         output_root = resolve_repo_path(args.output_root)
+        raw_metadata_path = None
+        if args.raw_metadata:
+            raw_metadata_path = resolve_repo_path(args.raw_metadata)
         identity_evidence_path = None
         if args.identity_evidence_cache:
             identity_evidence_path = resolve_repo_path(args.identity_evidence_cache)
@@ -72,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             preprocess_root=preprocess_root,
             registry_path=registry_path,
             output_root=output_root,
+            raw_metadata_path=raw_metadata_path,
             identity_evidence_path=identity_evidence_path,
             taxonomy_enrichment_path=taxonomy_enrichment_path,
             cache_version=args.cache_version,

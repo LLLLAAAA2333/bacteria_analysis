@@ -53,6 +53,10 @@ def _write_matrix(path: Path, *, headers: list[str], rows: list[list[object]]) -
     workbook.save(path)
 
 
+def _write_raw_metadata_workbook(path: Path, *, rows: list[dict[str, object]]) -> None:
+    pd.DataFrame.from_records(rows).to_excel(path, sheet_name="all", index=False, engine="openpyxl")
+
+
 def _write_registry(path: Path) -> None:
     pd.DataFrame.from_records(
         [
@@ -138,6 +142,14 @@ def test_normalize_metabolite_header_normalizes_prime_characters():
     record = normalize_metabolite_header("Riboflavin-5′-monophosphate")
 
     assert record["normalized_name"] == "Riboflavin-5'-monophosphate"
+
+
+def test_normalize_metabolite_header_normalizes_fullwidth_and_mojibake_text():
+    record = normalize_metabolite_header("Glycocholic acid （GCA）")
+    encoded = normalize_metabolite_header("2'-Deoxyguanosine 5'-diphosphate（dGDP）")
+
+    assert record["normalized_name"] == "Glycocholic acid (GCA)"
+    assert encoded["normalized_name"] == "2'-Deoxyguanosine 5'-diphosphate(dGDP)"
 
 
 def test_build_stimulus_sample_map_extracts_sample_id_from_stationary_labels():
@@ -593,6 +605,54 @@ def test_build_model_space_uses_matrix_canonical_names_for_known_overrides(tmp_p
 
     annotation = pd.read_csv(output_root / "metabolite_annotation.csv").fillna("")
     assert annotation.loc[0, "metabolite_name"] == "Tauro-omega-muricholic acid (omega-TMCA)"
+
+
+def test_build_model_space_prefers_inferred_raw_metadata_workbook(tmp_path):
+    matrix_path, preprocess_root, registry_path = _write_tiny_builder_inputs(tmp_path)
+    output_root = tmp_path / "model_space_auto"
+    raw_metadata_path = tmp_path / "metabolism_raw_data.xlsx"
+    _write_raw_metadata_workbook(
+        raw_metadata_path,
+        rows=[
+            {
+                "name": "Cholic acid (CA)",
+                "KEGG": "C00695",
+                "HMDB": "HMDB0000619",
+                "SuperClass": "Lipids and lipid-like molecules",
+                "Class": "Steroids and steroid derivatives",
+                "SubClass": "Bile acids, alcohols and derivatives",
+                "DirectParent": "Trihydroxy bile acids, alcohols and derivatives",
+            }
+        ],
+    )
+
+    build_model_space(
+        matrix_path=matrix_path,
+        preprocess_root=preprocess_root,
+        registry_path=registry_path,
+        output_root=output_root,
+        raw_metadata_path=None,
+        identity_evidence_path=None,
+        taxonomy_enrichment_path=None,
+        cache_version="raw-workbook-v1",
+        refresh_pubchem_cache=False,
+    )
+
+    annotation = pd.read_csv(output_root / "metabolite_annotation.csv").fillna("")
+    cholic_row = annotation.loc[annotation["metabolite_name"] == "Cholic acid (CA)"].iloc[0]
+    mystery_row = annotation.loc[annotation["metabolite_name"] == "Mystery metabolite"].iloc[0]
+    assert cholic_row["annotation_source"] == "raw_workbook_annotation"
+    assert cholic_row["review_status"] == "auto_high_confidence"
+    assert cholic_row["superclass"] == "Lipids and lipid-like molecules"
+    assert mystery_row["annotation_source"] == "unresolved_identity"
+
+    identity_output = pd.read_csv(output_root / "cache" / "identity_resolution_evidence.csv").fillna("")
+    cholic_identity = identity_output.loc[identity_output["normalized_name"] == "Cholic acid (CA)"].iloc[0]
+    assert cholic_identity["source"] == "raw_workbook"
+
+    manifest = json.loads((output_root / "model_space_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["raw_metadata_path"] == str(raw_metadata_path)
+    assert manifest["annotation_source_mode"] == "raw_workbook_preferred"
 
 
 def test_generated_model_space_resolves_with_existing_stage3_loader(tmp_path, fixture_path):

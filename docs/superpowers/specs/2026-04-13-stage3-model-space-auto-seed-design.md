@@ -4,6 +4,13 @@ Date: 2026-04-13
 Status: Draft for user review
 Topic: Make Stage 3 biochemical model-space inputs reproducible while preserving review boundaries
 
+> Update 2026-04-18: local verification showed that
+> `data/metabolism_raw_data.xlsx` already contains metabolite identity and
+> taxonomy fields aligned to `data/matrix.xlsx` on a 380-to-380 panel after
+> small local name normalization. For the current project data, external
+> identity resolution should be treated as a legacy fallback for missing
+> metadata rather than the default design path.
+
 ## Goal
 
 Stage 3 currently consumes a `model_space` directory containing four CSV files:

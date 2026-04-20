@@ -15,7 +15,7 @@ from openpyxl import load_workbook
 
 from bacteria_analysis.io import write_json
 from bacteria_analysis.model_space import (
-    METABOLITE_NAME_CANONICAL_OVERRIDES,
+    _canonicalize_metabolite_name as shared_canonicalize_metabolite_name,
     build_stimulus_sample_map,
     load_model_registry,
     read_metabolite_matrix,
@@ -113,6 +113,16 @@ GREEK_REPLACEMENTS = {
 }
 PRIME_CHARACTERS = {"′", "’", "‘", "ʼ", "ʹ", "ˈ", "´", "`"}
 FINAL_PARENTHESES_RE = re.compile(r"\(([^()]+)\)\s*$")
+RAW_METADATA_SHEET_NAME = "all"
+RAW_METADATA_COLUMNS = (
+    "name",
+    "KEGG",
+    "HMDB",
+    "SuperClass",
+    "Class",
+    "SubClass",
+    "DirectParent",
+)
 
 
 @dataclass(frozen=True)
@@ -181,6 +191,59 @@ def build_normalized_header_table(headers: list[object]) -> pd.DataFrame:
         ].tolist()
         raise ValueError(f"canonical Stage 3 metabolite names must be unique: {', '.join(dict.fromkeys(duplicates))}")
     return frame
+
+
+def load_raw_metabolite_metadata(path: str | Path | None) -> pd.DataFrame:
+    """Load raw workbook metabolite annotations or return an empty normalized table."""
+
+    columns = (
+        "raw_name",
+        "normalized_name",
+        "canonical_compound_name",
+        "kegg_id",
+        "hmdb_id",
+        "super_class",
+        "class",
+        "sub_class",
+        "direct_parent",
+    )
+    if path is None:
+        return _empty_frame(columns)
+
+    frame = pd.read_excel(
+        Path(path),
+        sheet_name=RAW_METADATA_SHEET_NAME,
+        usecols=list(RAW_METADATA_COLUMNS),
+        dtype=str,
+    ).fillna("")
+    _require_columns(frame, RAW_METADATA_COLUMNS, "raw metabolite metadata workbook")
+    frame = frame.loc[:, list(RAW_METADATA_COLUMNS)].copy()
+    frame["name"] = frame["name"].astype(str).str.strip()
+    frame = frame.loc[frame["name"] != ""].copy()
+    frame["normalized_name"] = frame["name"].map(lambda value: _normalize_header_text(str(value))[0])
+    if frame["normalized_name"].duplicated().any():
+        duplicates = frame.loc[frame["normalized_name"].duplicated(keep=False), "normalized_name"].tolist()
+        raise ValueError(
+            "raw metabolite metadata normalized_name values must be unique: "
+            + ", ".join(dict.fromkeys(duplicates))
+        )
+    return pd.DataFrame.from_records(
+        [
+            {
+                "raw_name": str(row["name"]).strip(),
+                "normalized_name": str(row["normalized_name"]).strip(),
+                "canonical_compound_name": _canonicalize_metabolite_name(row["name"]),
+                "kegg_id": str(row["KEGG"]).strip(),
+                "hmdb_id": str(row["HMDB"]).strip(),
+                "super_class": str(row["SuperClass"]).strip(),
+                "class": str(row["Class"]).strip(),
+                "sub_class": str(row["SubClass"]).strip(),
+                "direct_parent": str(row["DirectParent"]).strip(),
+            }
+            for _, row in frame.iterrows()
+        ],
+        columns=columns,
+    )
 
 
 def load_identity_evidence_cache(path: str | Path | None) -> pd.DataFrame:
@@ -337,6 +400,174 @@ def load_taxonomy_enrichment_cache(path: str | Path | None) -> pd.DataFrame:
     return frame
 
 
+def _resolve_raw_metadata_path(matrix_path: str | Path, raw_metadata_path: str | Path | None) -> Path | None:
+    if raw_metadata_path is not None:
+        resolved = Path(raw_metadata_path)
+        if not resolved.exists():
+            raise FileNotFoundError(f"raw metabolite metadata workbook not found: {resolved}")
+        return resolved
+
+    inferred = Path(matrix_path).with_name("metabolism_raw_data.xlsx")
+    if inferred.exists():
+        return inferred
+    return None
+
+
+def _build_identity_evidence_from_raw_metadata(
+    normalized_headers: pd.DataFrame,
+    *,
+    raw_metadata: pd.DataFrame,
+) -> pd.DataFrame:
+    if raw_metadata.empty:
+        return _empty_frame(IDENTITY_EVIDENCE_COLUMNS)
+
+    raw_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in raw_metadata.iterrows()
+    }
+    rows: list[dict[str, object]] = []
+    for _, header_row in normalized_headers.iterrows():
+        header_record = header_row.to_dict()
+        normalized_name = str(header_record["normalized_name"]).strip()
+        raw_row = raw_by_name.get(normalized_name)
+        if raw_row is None:
+            continue
+        evidence = {
+            "source_sheet": RAW_METADATA_SHEET_NAME,
+            "raw_name": str(raw_row["raw_name"]).strip(),
+            "match_kind": "normalized_name_exact_match",
+        }
+        rows.append(
+            {
+                "original_header": str(header_record["original_header"]).strip(),
+                "normalized_name": normalized_name,
+                "stage3_metabolite_name": str(header_record["stage3_metabolite_name"]).strip(),
+                "canonical_compound_name": str(raw_row["canonical_compound_name"]).strip(),
+                "resolution_status": "resolved_high_confidence",
+                "source": "raw_workbook",
+                "pubchem_cid": "",
+                "chebi_id": "",
+                "hmdb_id": str(raw_row["hmdb_id"]).strip(),
+                "inchikey": "",
+                "smiles": "",
+                "synonyms": str(raw_row["raw_name"]).strip(),
+                "match_score": 100.0,
+                "match_reason": "raw_workbook_exact_match",
+                "evidence_json": json.dumps(evidence, sort_keys=True, ensure_ascii=False),
+            }
+        )
+    return pd.DataFrame.from_records(rows, columns=IDENTITY_EVIDENCE_COLUMNS)
+
+
+def _build_taxonomy_enrichment_from_raw_metadata(
+    normalized_headers: pd.DataFrame,
+    *,
+    raw_metadata: pd.DataFrame,
+) -> pd.DataFrame:
+    if raw_metadata.empty:
+        return _empty_frame(TAXONOMY_ENRICHMENT_COLUMNS)
+
+    raw_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in raw_metadata.iterrows()
+    }
+    rows: list[dict[str, object]] = []
+    for normalized_name in normalized_headers["normalized_name"].astype(str).tolist():
+        raw_row = raw_by_name.get(normalized_name)
+        if raw_row is None:
+            continue
+        rows.append(
+            {
+                "normalized_name": normalized_name,
+                "pubchem_cid": "",
+                "chebi_id": "",
+                "hmdb_id": str(raw_row["hmdb_id"]).strip(),
+                "inchikey": "",
+                "chebi_parent_terms": str(raw_row["direct_parent"]).strip(),
+                "hmdb_super_class": str(raw_row["super_class"]).strip(),
+                "hmdb_class": str(raw_row["class"]).strip(),
+                "hmdb_sub_class": str(raw_row["sub_class"]).strip(),
+                "classyfire_kingdom": "",
+                "classyfire_superclass": "",
+                "classyfire_class": "",
+                "classyfire_subclass": "",
+                "pathway_tags": "",
+                "annotation_confidence": "high",
+                "annotation_status": "resolved_high_confidence",
+                "annotation_evidence": f"raw_workbook:{RAW_METADATA_SHEET_NAME}",
+            }
+        )
+    return pd.DataFrame.from_records(rows, columns=TAXONOMY_ENRICHMENT_COLUMNS)
+
+
+def _combine_identity_evidence(
+    normalized_headers: pd.DataFrame,
+    *,
+    primary_identity: pd.DataFrame,
+    fallback_identity: pd.DataFrame,
+) -> pd.DataFrame:
+    primary_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in primary_identity.iterrows()
+    }
+    fallback_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in fallback_identity.iterrows()
+    }
+    rows: list[dict[str, object]] = []
+    for _, header_row in normalized_headers.iterrows():
+        header_record = header_row.to_dict()
+        normalized_name = str(header_record["normalized_name"]).strip()
+        if normalized_name in primary_by_name:
+            row = primary_by_name[normalized_name].copy()
+        elif normalized_name in fallback_by_name:
+            row = fallback_by_name[normalized_name].copy()
+        else:
+            row = _default_identity_row(header_record, match_reason="no_identity_candidates")
+        row["original_header"] = str(header_record["original_header"])
+        row["normalized_name"] = normalized_name
+        row["stage3_metabolite_name"] = str(header_record["stage3_metabolite_name"])
+        rows.append({column: row.get(column, "") for column in IDENTITY_EVIDENCE_COLUMNS})
+
+    frame = pd.DataFrame.from_records(rows, columns=IDENTITY_EVIDENCE_COLUMNS)
+    frame["match_score"] = pd.to_numeric(frame["match_score"], errors="coerce").fillna(0.0)
+    return frame
+
+
+def _combine_taxonomy_enrichment(
+    normalized_headers: pd.DataFrame,
+    *,
+    primary_taxonomy: pd.DataFrame,
+    fallback_taxonomy: pd.DataFrame,
+) -> pd.DataFrame:
+    primary_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in primary_taxonomy.iterrows()
+    }
+    fallback_by_name = {
+        str(row["normalized_name"]).strip(): row.to_dict()
+        for _, row in fallback_taxonomy.iterrows()
+    }
+    rows: list[dict[str, object]] = []
+    for normalized_name in normalized_headers["normalized_name"].astype(str).tolist():
+        row = {column: "" for column in TAXONOMY_ENRICHMENT_COLUMNS}
+        row["normalized_name"] = normalized_name
+        fallback_row = fallback_by_name.get(normalized_name)
+        if fallback_row is not None:
+            for column in TAXONOMY_ENRICHMENT_COLUMNS:
+                row[column] = fallback_row.get(column, "")
+        primary_row = primary_by_name.get(normalized_name)
+        if primary_row is not None:
+            for column in TAXONOMY_ENRICHMENT_COLUMNS:
+                if column == "normalized_name":
+                    continue
+                primary_value = str(primary_row.get(column, "")).strip()
+                if primary_value:
+                    row[column] = primary_value
+        rows.append(row)
+    return pd.DataFrame.from_records(rows, columns=TAXONOMY_ENRICHMENT_COLUMNS)
+
+
 def merge_identity_and_taxonomy_evidence(
     identity_evidence: pd.DataFrame,
     taxonomy_enrichment: pd.DataFrame,
@@ -378,6 +609,7 @@ def build_metabolite_annotation_from_evidence(
     rows: list[dict[str, object]] = []
     for _, row in merged.iterrows():
         resolution_status = str(row.get("resolution_status", "")).strip()
+        source = str(row.get("source", "")).strip()
         if resolution_status == "resolved_high_confidence":
             review_status = "auto_high_confidence"
             ambiguous_flag = False
@@ -404,7 +636,11 @@ def build_metabolite_annotation_from_evidence(
                     row.get("chebi_parent_terms", ""),
                 ),
                 "pathway_tag": _derive_pathway_tag(row),
-                "annotation_source": "auto_identity_resolution"
+                "annotation_source": (
+                    "raw_workbook_annotation"
+                    if source == "raw_workbook"
+                    else "auto_identity_resolution"
+                )
                 if resolution_status != "unresolved"
                 else "unresolved_identity",
                 "review_status": review_status,
@@ -531,6 +767,7 @@ def build_model_space_manifest(
     trial_metadata_path: str | Path,
     registry_path: str | Path,
     output_root: str | Path,
+    raw_metadata_path: str | Path | None,
     identity_evidence_path: str | Path | None,
     taxonomy_enrichment_path: str | Path | None,
     cache_version: str,
@@ -567,6 +804,8 @@ def build_model_space_manifest(
         "trial_metadata_sha256": _sha256_file(trial_metadata_path),
         "registry_path": str(registry_path),
         "registry_sha256": _sha256_file(registry_path),
+        "raw_metadata_path": None if raw_metadata_path is None else str(Path(raw_metadata_path)),
+        "raw_metadata_sha256": None if raw_metadata_path is None else _sha256_file(Path(raw_metadata_path)),
         "identity_evidence_cache_path": None if identity_evidence_path is None else str(Path(identity_evidence_path)),
         "identity_evidence_cache_sha256": None
         if identity_evidence_path is None
@@ -581,6 +820,7 @@ def build_model_space_manifest(
         "chebi_mode": "cache_only",
         "hmdb_mode": "cache_only",
         "classyfire_mode": "cache_only",
+        "annotation_source_mode": "raw_workbook_preferred" if raw_metadata_path is not None else "legacy_cache_fallback",
         "output_root": str(output_root),
         "outputs": output_files,
     }
@@ -592,6 +832,7 @@ def build_model_space(
     preprocess_root: str | Path,
     registry_path: str | Path,
     output_root: str | Path,
+    raw_metadata_path: str | Path | None = None,
     identity_evidence_path: str | Path | None = None,
     taxonomy_enrichment_path: str | Path | None = None,
     cache_version: str = "manual-cache-v1",
@@ -605,6 +846,7 @@ def build_model_space(
     output_root = Path(output_root)
     cache_dir = output_root / "cache"
     trial_metadata_path = preprocess_root / "trial_level" / "trial_metadata.parquet"
+    resolved_raw_metadata_path = _resolve_raw_metadata_path(matrix_path, raw_metadata_path)
 
     matrix = read_metabolite_matrix(matrix_path)
     raw_headers = read_raw_metabolite_headers(matrix_path)
@@ -625,13 +867,32 @@ def build_model_space(
     stimulus_sample_map = build_stimulus_sample_map(trial_metadata, matrix_sample_ids=matrix.index)
     model_registry = load_model_registry(registry_path)
 
-    identity_evidence = load_identity_evidence_cache(identity_evidence_path)
-    identity_evidence = _align_identity_evidence(
+    raw_metadata = load_raw_metabolite_metadata(resolved_raw_metadata_path)
+    raw_identity_evidence = _build_identity_evidence_from_raw_metadata(
         normalized_headers,
-        identity_evidence=identity_evidence,
+        raw_metadata=raw_metadata,
+    )
+    fallback_identity_evidence = load_identity_evidence_cache(identity_evidence_path)
+    fallback_identity_evidence = _align_identity_evidence(
+        normalized_headers,
+        identity_evidence=fallback_identity_evidence,
         refresh_pubchem_cache=refresh_pubchem_cache,
     )
-    taxonomy_enrichment = load_taxonomy_enrichment_cache(taxonomy_enrichment_path)
+    identity_evidence = _combine_identity_evidence(
+        normalized_headers,
+        primary_identity=raw_identity_evidence,
+        fallback_identity=fallback_identity_evidence,
+    )
+    raw_taxonomy_enrichment = _build_taxonomy_enrichment_from_raw_metadata(
+        normalized_headers,
+        raw_metadata=raw_metadata,
+    )
+    fallback_taxonomy_enrichment = load_taxonomy_enrichment_cache(taxonomy_enrichment_path)
+    taxonomy_enrichment = _combine_taxonomy_enrichment(
+        normalized_headers,
+        primary_taxonomy=raw_taxonomy_enrichment,
+        fallback_taxonomy=fallback_taxonomy_enrichment,
+    )
     merged_evidence = merge_identity_and_taxonomy_evidence(identity_evidence, taxonomy_enrichment)
     metabolite_annotation = build_metabolite_annotation_from_evidence(normalized_headers, merged_evidence)
     model_membership, review_queue, membership_rule_evidence = build_model_membership_from_rules(
@@ -672,6 +933,7 @@ def build_model_space(
         trial_metadata_path=trial_metadata_path,
         registry_path=registry_path,
         output_root=output_root,
+        raw_metadata_path=resolved_raw_metadata_path,
         identity_evidence_path=identity_evidence_path,
         taxonomy_enrichment_path=taxonomy_enrichment_path,
         cache_version=cache_version,
@@ -696,6 +958,14 @@ def build_model_space(
 def _normalize_header_text(value: str) -> tuple[str, list[str]]:
     text = value
     notes: list[str] = []
+    for original, replacement in (("（", "("), ("）", ")")):
+        if original in text:
+            text = text.replace(original, replacement)
+            notes.append("paren:normalized")
+    for original, replacement in (("¦Á", "alpha"), ("¦Â", "beta"), ("¦Ã", "gamma"), ("¦Ä", "delta"), ("¦Ø", "omega"), ("¡ä", "'")):
+        if original in text:
+            text = text.replace(original, replacement)
+            notes.append("encoding:normalized")
     for original, replacement in GREEK_REPLACEMENTS.items():
         if original in text:
             text = text.replace(original, replacement)
@@ -705,7 +975,10 @@ def _normalize_header_text(value: str) -> tuple[str, list[str]]:
             text = text.replace(original, "'")
             notes.append("prime:normalized")
     text = re.sub(r"\s+", " ", text).strip()
-    return text, notes
+    canonicalized = shared_canonicalize_metabolite_name(text)
+    if canonicalized != text:
+        notes.append("canonicalized")
+    return canonicalized, notes
 
 
 def _extract_final_alias(value: str) -> str:
@@ -919,10 +1192,7 @@ def _collect_rule_matches(annotation_row: pd.Series, registry: pd.DataFrame) -> 
 
 
 def _canonicalize_metabolite_name(value: object) -> str:
-    if value is None:
-        return ""
-    normalized = str(value).strip()
-    return METABOLITE_NAME_CANONICAL_OVERRIDES.get(normalized, normalized)
+    return shared_canonicalize_metabolite_name(value)
 
 
 def _first_non_empty(*values: object) -> str:
