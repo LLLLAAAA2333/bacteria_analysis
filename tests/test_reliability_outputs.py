@@ -53,6 +53,60 @@ def test_build_focus_view_same_vs_different_plot_frame_filters_and_labels():
     assert plot_frame["distance"].tolist() == [0.20, 0.80]
 
 
+def test_build_focus_view_same_vs_different_plot_frame_for_date_filters_to_within_date_pairs():
+    comparisons = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": True,
+                "same_date": True,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-27",
+                "distance": 0.20,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": False,
+                "same_date": True,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-27",
+                "distance": 0.80,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": False,
+                "same_date": False,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-28",
+                "distance": 0.95,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": True,
+                "same_date": True,
+                "date_a": "2026-03-28",
+                "date_b": "2026-03-28",
+                "distance": 0.15,
+            },
+        ]
+    )
+
+    plot_frame = reliability_outputs._build_focus_view_same_vs_different_plot_frame_for_date(
+        comparisons,
+        focus_view="response_window",
+        date_value="2026-03-27",
+    )
+
+    assert plot_frame["distance"].tolist() == [0.20, 0.80]
+    assert plot_frame["date_a"].astype(str).tolist() == ["2026-03-27", "2026-03-27"]
+    assert plot_frame["date_b"].astype(str).tolist() == ["2026-03-27", "2026-03-27"]
+    assert list(plot_frame["comparison_label"].astype(str)) == ["same", "different"]
+
+
 def test_sample_same_vs_different_points_caps_each_group():
     plot_frame = pd.DataFrame.from_records(
         [
@@ -175,6 +229,79 @@ def test_build_focus_view_stimulus_gap_summary_aggregates_same_and_different_mea
     assert pd.isna(summary.loc["b3_1", "same_mean_distance"])
     assert summary.loc["b3_1", "different_count"] == 2
     assert summary.loc["b3_1", "different_mean_distance"] == pytest.approx(0.80)
+
+
+def test_build_focus_view_stimulus_gap_summary_for_date_filters_to_within_date_pairs():
+    comparisons = pd.DataFrame.from_records(
+        [
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": True,
+                "same_date": True,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-27",
+                "stimulus_a": "b1_1",
+                "stimulus_b": "b1_1",
+                "distance": 0.20,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": False,
+                "same_date": True,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-27",
+                "stimulus_a": "b1_1",
+                "stimulus_b": "b2_1",
+                "distance": 0.80,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": False,
+                "same_date": False,
+                "date_a": "2026-03-27",
+                "date_b": "2026-03-28",
+                "stimulus_a": "b1_1",
+                "stimulus_b": "b3_1",
+                "distance": 0.95,
+            },
+            {
+                "view_name": "response_window",
+                "comparison_status": "ok",
+                "same_stimulus": True,
+                "same_date": True,
+                "date_a": "2026-03-28",
+                "date_b": "2026-03-28",
+                "stimulus_a": "b3_1",
+                "stimulus_b": "b3_1",
+                "distance": 0.30,
+            },
+        ]
+    )
+    metadata = pd.DataFrame.from_records(
+        [
+            {"date": "2026-03-27", "stimulus": "b1_1", "stim_name": "Stim 1", "stim_color": "#111111"},
+            {"date": "2026-03-27", "stimulus": "b2_1", "stim_name": "Stim 2", "stim_color": "#222222"},
+            {"date": "2026-03-28", "stimulus": "b3_1", "stim_name": "Stim 3", "stim_color": "#333333"},
+        ]
+    )
+
+    summary = reliability_outputs._build_focus_view_stimulus_gap_summary(
+        comparisons,
+        metadata,
+        focus_view="response_window",
+        date_value="2026-03-27",
+    ).set_index("stimulus")
+
+    assert list(summary.index) == ["b1_1", "b2_1"]
+    assert summary.loc["b1_1", "same_count"] == 1
+    assert summary.loc["b1_1", "same_mean_distance"] == pytest.approx(0.20)
+    assert summary.loc["b1_1", "different_count"] == 1
+    assert summary.loc["b1_1", "different_mean_distance"] == pytest.approx(0.80)
+    assert summary.loc["b2_1", "same_count"] == 0
+    assert summary.loc["b2_1", "different_count"] == 1
 
 
 def test_build_stimulus_availability_matrix_counts_unique_trials():

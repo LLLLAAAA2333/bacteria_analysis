@@ -83,6 +83,16 @@ def _write_markdown_summary(summary: dict[str, Any], path: str | Path) -> Path:
             f"- QC directory: {summary['qc_dir']}",
         ]
     )
+    per_date_figure_names = summary.get("per_date_same_vs_different_figure_names", [])
+    if per_date_figure_names:
+        lines.extend(["", "## Per-Date Same vs Different Figures"])
+        lines.extend(f"- {figure_name}" for figure_name in per_date_figure_names)
+    pooled_per_stimulus_figure_name = summary.get("pooled_per_stimulus_same_vs_different_figure_name")
+    if pooled_per_stimulus_figure_name:
+        lines.extend(["", "## Per-Stimulus Same vs Different Figures", f"- {pooled_per_stimulus_figure_name}"])
+    per_date_per_stimulus_figure_names = summary.get("per_date_per_stimulus_same_vs_different_figure_names", [])
+    if per_date_per_stimulus_figure_names:
+        lines.extend(f"- {figure_name}" for figure_name in per_date_per_stimulus_figure_names)
 
     output_path = Path(path)
     output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
@@ -114,6 +124,10 @@ def _remove_retired_reliability_figures(figures_dir: Path) -> None:
 
     for stale_matrix_figure in figures_dir.glob("stimulus_distance_matrix__*.png"):
         stale_matrix_figure.unlink()
+    for stale_per_date_figure in figures_dir.glob("same_vs_different_by_date__*.png"):
+        stale_per_date_figure.unlink()
+    for stale_per_stimulus_figure in figures_dir.glob("per_stimulus_same_vs_different__*.png"):
+        stale_per_stimulus_figure.unlink()
 
 
 def _format_plot_value(value: object, fmt: str = ".4f") -> str:
@@ -179,6 +193,24 @@ def _build_focus_view_same_vs_different_plot_frame(
         ordered=True,
     )
     return valid
+
+
+def _build_focus_view_same_vs_different_plot_frame_for_date(
+    comparisons: pd.DataFrame,
+    focus_view: str,
+    date_value: object,
+) -> pd.DataFrame:
+    valid = _build_focus_view_same_vs_different_plot_frame(comparisons, focus_view)
+    if valid.empty or not {"date_a", "date_b"}.issubset(valid.columns):
+        return valid.iloc[0:0].copy()
+
+    date_text = str(date_value)
+    if "same_date" in valid.columns:
+        valid = valid.loc[valid["same_date"].astype(bool)].copy()
+
+    return valid.loc[
+        valid["date_a"].astype(str).eq(date_text) & valid["date_b"].astype(str).eq(date_text)
+    ].copy()
 
 
 def _summarize_same_vs_different_plot_frame(valid: pd.DataFrame) -> pd.DataFrame:
@@ -376,6 +408,7 @@ def _style_same_vs_different_axis(
     upper_quantile: float = SAME_VS_DIFFERENT_UPPER_QUANTILE,
     title_text: str | None = None,
     subtitle_metric: str = "gap",
+    subtitle_text: str | None = None,
 ) -> None:
     axis_limits = _compute_quantile_axis_limits(
         valid["distance"],
@@ -393,11 +426,14 @@ def _style_same_vs_different_axis(
     ax.set_ylabel("Distance")
     if title_text is None:
         title_text = f"Same vs Different Trial Distances ({focus_view})"
+    resolved_subtitle = subtitle_text
+    if resolved_subtitle is None:
+        resolved_subtitle = _build_same_vs_different_subtitle(focus_row, summary, metric=subtitle_metric)
     ax.set_title(title_text, pad=16)
     ax.text(
         0.5,
         1.02,
-        _build_same_vs_different_subtitle(focus_row, summary, metric=subtitle_metric),
+        resolved_subtitle,
         transform=ax.transAxes,
         ha="center",
         va="bottom",
@@ -455,12 +491,24 @@ def _build_focus_view_stimulus_gap_summary(
     comparisons: pd.DataFrame,
     metadata: pd.DataFrame,
     focus_view: str,
+    date_value: object | None = None,
 ) -> pd.DataFrame:
     focus_comparisons = comparisons[
         (comparisons["comparison_status"].astype(str) == "ok")
         & (comparisons["view_name"].astype(str) == str(focus_view))
     ].copy()
-    stimulus_metadata = _pick_stimulus_metadata(metadata)
+    metadata_source = metadata.copy()
+    if date_value is not None:
+        date_text = str(date_value)
+        if "same_date" in focus_comparisons.columns:
+            focus_comparisons = focus_comparisons.loc[focus_comparisons["same_date"].astype(bool)].copy()
+        focus_comparisons = focus_comparisons.loc[
+            focus_comparisons["date_a"].astype(str).eq(date_text) & focus_comparisons["date_b"].astype(str).eq(date_text)
+        ].copy()
+        if "date" in metadata_source.columns:
+            metadata_source = metadata_source.loc[metadata_source["date"].astype(str).eq(date_text)].copy()
+
+    stimulus_metadata = _pick_stimulus_metadata(metadata_source)
     if focus_comparisons.empty:
         return stimulus_metadata.assign(
             same_count=0,
@@ -793,6 +841,120 @@ def _write_same_vs_different_variant_figures(
     }
 
 
+def _sanitize_path_token(value: object) -> str:
+    text = str(value).strip()
+    if not text:
+        return "blank"
+    invalid_chars = '<>:"/\\|?*'
+    sanitized = text.translate(str.maketrans({char: "_" for char in invalid_chars}))
+    sanitized = sanitized.replace(" ", "_")
+    return sanitized
+
+
+def _build_same_vs_different_date_subtitle(summary: pd.DataFrame) -> str:
+    same_count = summary.loc["same", "count"] if "same" in summary.index else 0
+    different_count = summary.loc["different", "count"] if "different" in summary.index else 0
+    median_gap = _compute_same_vs_different_center_gap(summary, metric="median")
+    same_count_value = int(same_count) if pd.notna(same_count) else 0
+    different_count_value = int(different_count) if pd.notna(different_count) else 0
+    return (
+        "Within-date pairs only"
+        f" | same n = {same_count_value:,}"
+        f" | different n = {different_count_value:,}"
+        f" | Delta median = {_format_plot_value(median_gap, '.3f')}"
+    )
+
+
+def _plot_same_vs_different_boxen_points_for_date(
+    comparisons: pd.DataFrame,
+    focus_view: str,
+    date_value: object,
+    path: Path,
+) -> Path:
+    valid = _build_focus_view_same_vs_different_plot_frame_for_date(comparisons, focus_view, date_value)
+    summary = _summarize_same_vs_different_plot_frame(valid)
+    sampled = _sample_same_vs_different_points(valid, max_points_per_group=1000, random_state=0)
+    date_text = str(date_value)
+
+    plt.figure(figsize=(6.9, 4.9))
+    ax = plt.gca()
+    if valid.empty:
+        ax.text(
+            0.5,
+            0.5,
+            f"No valid within-date comparisons for {date_text} ({focus_view})",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+        return _save_figure(path)
+
+    sns.boxenplot(
+        data=valid,
+        x="comparison_label",
+        hue="comparison_label",
+        y="distance",
+        order=SAME_VS_DIFFERENT_ORDER,
+        palette=SAME_VS_DIFFERENT_PALETTE,
+        dodge=False,
+        width=0.56,
+        linewidth=0.8,
+        ax=ax,
+    )
+    for patch in ax.patches:
+        patch.set_edgecolor("#5B5B5B")
+        patch.set_linewidth(0.8)
+        patch.set_alpha(0.72)
+    sns.stripplot(
+        data=sampled,
+        x="comparison_label",
+        y="distance",
+        hue="comparison_label",
+        order=SAME_VS_DIFFERENT_ORDER,
+        palette=SAME_VS_DIFFERENT_POINT_PALETTE,
+        dodge=False,
+        jitter=0.14,
+        alpha=0.09,
+        size=1.7,
+        linewidth=0,
+        ax=ax,
+    )
+    _remove_plot_legend(ax)
+    _style_same_vs_different_axis(
+        ax,
+        valid,
+        pd.Series(dtype=object),
+        summary,
+        focus_view,
+        title_text=f"Same vs Different Trial Distances ({date_text})",
+        subtitle_text=_build_same_vs_different_date_subtitle(summary),
+    )
+    return _save_figure(path)
+
+
+def _write_same_vs_different_per_date_figures(
+    comparisons: pd.DataFrame,
+    metadata: pd.DataFrame,
+    focus_view: str,
+    figures_dir: Path,
+) -> dict[str, Path]:
+    if "date" not in metadata.columns:
+        return {}
+
+    written: dict[str, Path] = {}
+    date_values = sorted(metadata["date"].dropna().astype(str).unique().tolist())
+    for date_value in date_values:
+        safe_date = _sanitize_path_token(date_value)
+        written[f"same_vs_different_by_date_{safe_date}"] = _plot_same_vs_different_boxen_points_for_date(
+            comparisons,
+            focus_view,
+            date_value,
+            figures_dir / f"same_vs_different_by_date__{safe_date}.png",
+        )
+    return written
+
+
 def _plot_holdout_summary(
     summary: pd.DataFrame,
     path: Path,
@@ -820,14 +982,21 @@ def _plot_focus_view_stimulus_gap(
     metadata: pd.DataFrame,
     focus_view: str,
     path: Path,
+    date_value: object | None = None,
 ) -> Path:
-    summary = _build_focus_view_stimulus_gap_summary(comparisons, metadata, focus_view)
+    summary = _build_focus_view_stimulus_gap_summary(comparisons, metadata, focus_view, date_value=date_value)
     plot_data = summary.dropna(subset=["same_mean_distance", "different_mean_distance"]).copy()
+    date_text = str(date_value) if date_value is not None else None
 
     plt.figure(figsize=(5.8, 5.6))
     ax = plt.gca()
     if plot_data.empty:
-        ax.text(0.5, 0.5, f"No scorable per-stimulus gaps for {focus_view}", ha="center", va="center", transform=ax.transAxes)
+        empty_label = (
+            f"No scorable per-stimulus gaps for {date_text} ({focus_view})"
+            if date_text is not None
+            else f"No scorable per-stimulus gaps for {focus_view}"
+        )
+        ax.text(0.5, 0.5, empty_label, ha="center", va="center", transform=ax.transAxes)
         ax.set_axis_off()
         return _save_figure(path)
 
@@ -902,12 +1071,18 @@ def _plot_focus_view_stimulus_gap(
     ax.spines["bottom"].set_color("#666666")
     ax.set_xlabel("")
     ax.set_ylabel("Mean Distance")
-    ax.set_title(f"Per-Stimulus Same vs Different Distances ({focus_view})", pad=24)
+    if date_text is None:
+        title_text = f"Per-Stimulus Same vs Different Distances ({focus_view})"
+        prefix_text = None
+    else:
+        title_text = f"Per-Stimulus Same vs Different Distances ({date_text})"
+        prefix_text = f"focus view = {focus_view} | "
+    ax.set_title(title_text, pad=24)
     ax.text(
         0.5,
         1.01,
         (
-            f"{num_increasing}/{total_pairs} paired stimuli show same < different"
+            f"{prefix_text or ''}{num_increasing}/{total_pairs} paired stimuli show same < different"
             f" | Delta median = {_format_plot_value(median_gap, '.3f')}"
         ),
         transform=ax.transAxes,
@@ -927,6 +1102,36 @@ def _plot_focus_view_stimulus_gap(
             va="top",
         )
     return _save_figure(path)
+
+
+def _write_per_stimulus_same_vs_different_figures(
+    comparisons: pd.DataFrame,
+    metadata: pd.DataFrame,
+    focus_view: str,
+    figures_dir: Path,
+) -> dict[str, Path]:
+    written = {
+        "per_stimulus_same_vs_different_pooled": _plot_focus_view_stimulus_gap(
+            comparisons,
+            metadata,
+            focus_view,
+            figures_dir / "per_stimulus_same_vs_different__pooled.png",
+        )
+    }
+    if "date" not in metadata.columns:
+        return written
+
+    date_values = sorted(metadata["date"].dropna().astype(str).unique().tolist())
+    for date_value in date_values:
+        safe_date = _sanitize_path_token(date_value)
+        written[f"per_stimulus_same_vs_different_{safe_date}"] = _plot_focus_view_stimulus_gap(
+            comparisons,
+            metadata,
+            focus_view,
+            figures_dir / f"per_stimulus_same_vs_different__{safe_date}.png",
+            date_value=date_value,
+        )
+    return written
 
 
 def _plot_within_date_cross_individual_same_vs_different(comparisons: pd.DataFrame, path: Path) -> Path:
@@ -1026,6 +1231,17 @@ def build_run_summary(
     final_summary = stats_outputs["final_summary"].sort_values("distance_gap", ascending=False, kind="stable")
     strongest = final_summary[["view_name", "distance_gap"]].head(2).to_dict(orient="records")
     focus_view_row = final_summary.loc[final_summary["view_name"] == focus_view].iloc[0]
+    per_date_same_vs_different_figure_names = sorted(
+        path.name for key, path in written_paths.items() if key.startswith("same_vs_different_by_date_")
+    )
+    pooled_per_stimulus_same_vs_different_figure_name = (
+        written_paths["per_stimulus_same_vs_different_pooled"].name
+        if "per_stimulus_same_vs_different_pooled" in written_paths
+        else None
+    )
+    per_date_per_stimulus_same_vs_different_figure_names = sorted(
+        path.name for key, path in written_paths.items() if key.startswith("per_stimulus_same_vs_different_") and key != "per_stimulus_same_vs_different_pooled"
+    )
     return {
         "n_trials": int(metadata_summary["n_trials"]),
         "n_individuals": int(metadata_summary["n_individuals"]),
@@ -1039,6 +1255,9 @@ def build_run_summary(
         "final_summary_path": str(written_paths["final_summary"]),
         "figures_dir": str(written_paths["figures_dir"]),
         "qc_dir": str(written_paths["qc_dir"]),
+        "per_date_same_vs_different_figure_names": per_date_same_vs_different_figure_names,
+        "pooled_per_stimulus_same_vs_different_figure_name": pooled_per_stimulus_same_vs_different_figure_name,
+        "per_date_per_stimulus_same_vs_different_figure_names": per_date_per_stimulus_same_vs_different_figure_names,
     }
 
 
@@ -1183,6 +1402,22 @@ def write_reliability_outputs(
         _write_same_vs_different_variant_figures(
             core_outputs["comparisons"],
             final_summary_with_focus,
+            focus_view,
+            dirs["figures_dir"],
+        )
+    )
+    written.update(
+        _write_same_vs_different_per_date_figures(
+            core_outputs["comparisons"],
+            core_outputs["metadata"],
+            focus_view,
+            dirs["figures_dir"],
+        )
+    )
+    written.update(
+        _write_per_stimulus_same_vs_different_figures(
+            core_outputs["comparisons"],
+            core_outputs["metadata"],
             focus_view,
             dirs["figures_dir"],
         )

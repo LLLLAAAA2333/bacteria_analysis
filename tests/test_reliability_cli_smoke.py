@@ -54,6 +54,11 @@ def test_cli_runs_and_writes_reliability_outputs(tmp_path, tiny_preprocess_root)
         reliability_root / "run_summary.md",
         reliability_root / "figures" / "same_vs_different_distributions__boxen_points.png",
         reliability_root / "figures" / "same_vs_different_distributions__ecdf.png",
+        reliability_root / "figures" / "same_vs_different_by_date__2026-03-27.png",
+        reliability_root / "figures" / "same_vs_different_by_date__2026-03-28.png",
+        reliability_root / "figures" / "per_stimulus_same_vs_different__pooled.png",
+        reliability_root / "figures" / "per_stimulus_same_vs_different__2026-03-27.png",
+        reliability_root / "figures" / "per_stimulus_same_vs_different__2026-03-28.png",
         reliability_root / "figures" / "overlap_neuron_qc_summary.png",
         reliability_root / "figures" / "within_date_cross_individual_same_vs_different.png",
         reliability_root / "figures" / "per_date_loio_overview.png",
@@ -64,6 +69,15 @@ def test_cli_runs_and_writes_reliability_outputs(tmp_path, tiny_preprocess_root)
 
     run_summary = json.loads((reliability_root / "run_summary.json").read_text(encoding="utf-8"))
     assert run_summary["focus_view"] == "response_window"
+    assert run_summary["per_date_same_vs_different_figure_names"] == [
+        "same_vs_different_by_date__2026-03-27.png",
+        "same_vs_different_by_date__2026-03-28.png",
+    ]
+    assert run_summary["pooled_per_stimulus_same_vs_different_figure_name"] == "per_stimulus_same_vs_different__pooled.png"
+    assert run_summary["per_date_per_stimulus_same_vs_different_figure_names"] == [
+        "per_stimulus_same_vs_different__2026-03-27.png",
+        "per_stimulus_same_vs_different__2026-03-28.png",
+    ]
     assert not (reliability_root / "figures" / "same_vs_different_distributions.png").exists()
     assert not (reliability_root / "figures" / "same_vs_different_distributions__raincloud.png").exists()
     assert not (reliability_root / "figures" / "same_vs_different_distributions__violin_clean.png").exists()
