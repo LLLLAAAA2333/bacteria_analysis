@@ -1,0 +1,218 @@
+# Memory Index
+
+> index_schema_version: 1
+> updated_at: 2026-04-22T14:28:00+08:00
+
+<!--
+This file stores retrieval metadata only.
+Do not duplicate full durable memory summaries here.
+If a tag grows too large, keep the most recent active IDs and point to a topic file.
+-->
+
+## Topics
+
+- facts: file=MEMORY.md section="Facts"
+- decisions: file=MEMORY.md section="Decisions"
+- preferences: file=MEMORY.md section="Preferences"
+- lessons: file=MEMORY.md section="Lessons"
+- active-threads: file=MEMORY.md section="Active Threads"
+- key-references: file=MEMORY.md section="Key References"
+
+## Tag Map
+
+- #communication-style: MEM-20260409-001
+- #engineering-style: MEM-20260409-002
+- #project-layout: MEM-20260409-010
+- #legacy-batch: MEM-20260409-011
+- #202603-batch: MEM-20260409-012
+- #202604-batch: MEM-20260418-009, MEM-20260418-006
+- #filtered-batch: MEM-20260421-001, MEM-20260419-008, MEM-20260419-007, MEM-20260419-004, MEM-20260419-001, MEM-20260418-009
+- #reliability: MEM-20260418-009, MEM-20260418-008, MEM-20260418-007
+- #interpretation: MEM-20260422-002, MEM-20260422-001, MEM-20260421-001, MEM-20260420-002, MEM-20260420-001, MEM-20260419-011, MEM-20260419-010, MEM-20260419-009, MEM-20260419-008
+- #matrix-input: MEM-20260419-003, MEM-20260419-001, MEM-20260418-001, MEM-20260409-013, MEM-20260416-001, MEM-20260418-003
+- #metabolism-analysis: MEM-20260419-003, MEM-20260418-001, MEM-20260418-003
+- #distance-method: MEM-20260419-006, MEM-20260419-004, MEM-20260419-003, MEM-20260419-002
+- #model-mismatch: MEM-20260420-002, MEM-20260419-006, MEM-20260419-002
+- #neural-ceiling: MEM-20260421-001, MEM-20260420-003, MEM-20260419-002
+- #shared-structure: MEM-20260421-001, MEM-20260420-004
+- #localization: MEM-20260421-001, MEM-20260420-004
+- #neural-geometry: MEM-20260419-011, MEM-20260419-010, MEM-20260419-009, MEM-20260419-008
+- #qcrsd: MEM-20260419-004, MEM-20260419-003
+- #raw-annotation: MEM-20260418-003, MEM-20260418-004
+- #model-space: MEM-20260416-001, MEM-20260418-003, MEM-20260418-004, MEM-20260418-005
+- #relative-signal: MEM-20260419-003, MEM-20260418-001
+- #compositionality: MEM-20260418-001
+- #trial-identifier: MEM-20260409-004
+- #trial-level-structure: MEM-20260409-005
+- #rsa: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003, MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003, MEM-20260420-002, MEM-20260420-001
+- #symmetry: MEM-20260419-008
+- #crossnobis: MEM-20260419-009
+- #workflow: MEM-20260418-008, MEM-20260418-007, MEM-20260418-006, MEM-20260416-001, MEM-20260418-004
+- #implementation: MEM-20260418-004
+- #direct-mode: MEM-20260416-001
+- #neuron-coverage: MEM-20260409-006
+- #date-generalization: MEM-20260418-008, MEM-20260418-007, MEM-20260409-007
+- #date-control: MEM-20260421-003, MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003, MEM-20260420-002, MEM-20260420-001
+- #base-odor: MEM-20260420-001
+- #anchor-stimuli: MEM-20260420-001
+- #global-profile: MEM-20260420-003, MEM-20260420-002
+- #model-diagnosis: MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003
+- #supervised-alignment: MEM-20260421-003, MEM-20260421-002
+- #neural-aligned-model: MEM-20260421-002
+- #validation: MEM-20260421-003, MEM-20260421-002
+- #subspace-search: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
+- #metabolite-selection: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
+- #figure-contract: MEM-20260422-001
+- #taxonomy-rsa: MEM-20260419-007, MEM-20260419-006, MEM-20260419-005
+- #subspace-fusion: MEM-20260419-007
+- #prototype-rdm: MEM-20260409-008, MEM-20260409-009
+- #writer-contract: MEM-20260409-009
+- #stage3-prototype-supplement: MEM-20260409-003
+- #review-merge: MEM-20260409-003
+- #memory: MEM-20260413-001
+- #timestamp: MEM-20260413-001
+- #process-quality: MEM-20260413-001
+- #worktree: MEM-20260413-002
+- #data-paths: MEM-20260418-009, MEM-20260418-008, MEM-20260418-007, MEM-20260418-006, MEM-20260413-002
+- #execution: MEM-20260413-002
+- #local-tools: MEM-20260418-002
+- #ignored-data: MEM-20260418-002
+- #review-workflow: MEM-20260419-001, MEM-20260418-002
+
+## Aliases
+
+- concise guidance -> MEM-20260409-001
+- direct execution-focused guidance -> MEM-20260409-001
+- simple maintainable solutions -> MEM-20260409-002
+- versioned datasets -> MEM-20260409-010
+- legacy data layout -> MEM-20260409-011
+- 202603 batch -> MEM-20260409-012
+- 202604 batch -> MEM-20260418-006
+- 202604 preprocess outputs -> MEM-20260418-006
+- 202604 rsa outputs -> MEM-20260418-006
+- 20260331 filtered rerun -> MEM-20260418-009
+- without 20260331 batch -> MEM-20260418-009
+- filtered pooled distance-method comparison -> MEM-20260419-001
+- Aitchison highest pooled RSA -> MEM-20260419-001
+- feature-median-centered matrix -> MEM-20260419-003
+- qcrsd uses fractional scale -> MEM-20260419-003
+- low RSA triage -> MEM-20260419-002
+- do not jump to model mismatch -> MEM-20260419-002
+- log2 euclidean best pooled filtered batch -> MEM-20260419-004
+- qc alone does not rescue current control -> MEM-20260419-004
+- top taxonomy categories are date-sensitive -> MEM-20260419-005
+- per-date taxonomy drift -> MEM-20260419-005
+- partial mismatch ceiling -> MEM-20260419-006
+- distance helps but not enough -> MEM-20260419-006
+- partial overlap subspace fusion -> MEM-20260419-007
+- weighted taxonomy fusion -> MEM-20260419-007
+- lr neuron merge -> MEM-20260419-008
+- symmetric neuron merge -> MEM-20260419-008
+- neural crossnobis review -> MEM-20260419-009
+- worm-split crossnobis -> MEM-20260419-009
+- trial median neural prototype -> MEM-20260419-010
+- peak absolute neural summary -> MEM-20260419-010
+- signed peak neural summary -> MEM-20260419-011
+- sign-preserving peak -> MEM-20260419-011
+- per-date same vs different figures -> MEM-20260418-007
+- date-level reliability figures -> MEM-20260418-007
+- per-stimulus same vs different figures -> MEM-20260418-008
+- pooled stimulus gap figure -> MEM-20260418-008
+- metabolite matrix -> MEM-20260409-013
+- matrix semantics -> MEM-20260418-001
+- not total-sum normalized -> MEM-20260418-001
+- derived metabolite signal -> MEM-20260418-001
+- raw metabolite metadata -> MEM-20260418-003
+- preannotated metabolite identities -> MEM-20260418-003
+- raw workbook first -> MEM-20260418-004
+- cache fallback builder -> MEM-20260418-004
+- stable model registry -> MEM-20260418-005
+- reusable registry path -> MEM-20260418-005
+- trial-level identifier -> MEM-20260409-004
+- preserve trial structure -> MEM-20260409-005
+- direct RSA default flow -> MEM-20260416-001
+- preprocess reliability rsa -> MEM-20260416-001
+- matrix-first RSA -> MEM-20260416-001
+- incomplete neuron coverage -> MEM-20260409-006
+- limited LODO -> MEM-20260409-007
+- descriptive pooled prototype view -> MEM-20260409-008
+- per-date neural payloads -> MEM-20260409-009
+- paired prototype RDM supplement -> MEM-20260409-003
+- no placeholder memory timestamps -> MEM-20260413-001
+- observed timestamp for daily logs -> MEM-20260413-001
+- worktree data roots -> MEM-20260413-002
+- repo-root data paths -> MEM-20260413-002
+- local rsa comparison scripts -> MEM-20260418-002
+- ignored comparison folder -> MEM-20260418-002
+- base odor date effect -> MEM-20260420-001
+- localized date drift -> MEM-20260420-001
+- date effects not dominant -> MEM-20260420-001
+- global profile weak baseline -> MEM-20260420-002
+- global profile partial explanation -> MEM-20260420-002
+- pair composition sensitivity -> MEM-20260420-002
+- new RSA task -> MEM-20260420-003
+- model diagnosis handoff -> MEM-20260420-003
+- beyond global profile -> MEM-20260420-003
+- shared structure localization -> MEM-20260420-004
+- anchor-local diagnostics -> MEM-20260420-004
+- local neighborhood overlap -> MEM-20260420-004
+- current model diagnosis interpretation -> MEM-20260421-001
+- within-date stronger cross-date mixed -> MEM-20260421-001
+- partial date-sensitive overlap -> MEM-20260421-001
+- supervised neural-aligned model -> MEM-20260421-002
+- chemical to neural mapping -> MEM-20260421-002
+- neural-like RDM -> MEM-20260421-002
+- supervised chemical subspace search -> MEM-20260421-003
+- metabolite subset search -> MEM-20260421-003
+- neural-aligned candidate chemical subspace -> MEM-20260421-003
+- single chemical diagnostic -> MEM-20260422-001
+- single marker is not chemical model -> MEM-20260422-001
+- multi-chemical figure contract -> MEM-20260422-001
+- final selected chemical heatmap -> MEM-20260422-001
+- joint consensus boxed heatmap -> MEM-20260422-001
+- supervised subspace archived -> MEM-20260422-002
+- negative result subspace search -> MEM-20260422-002
+- do not continue supervised subspace search -> MEM-20260422-002
+
+## Active Threads
+
+- MEM-20260421-003: Supervised chemical subspace search branch is ready for review/merge
+
+## Recent Changes
+
+- 2026-04-09: bootstrapped index from MEMORY.md top-level sections and Active Threads
+- 2026-04-09: migrated Preferences and Active Threads to durable memory entries MEM-20260409-001 through MEM-20260409-003
+- 2026-04-09: migrated Decisions and durable Lessons to MEM-20260409-004 through MEM-20260409-009; left one stale legacy lesson unmigrated
+- 2026-04-09: migrated Project Context to Facts as MEM-20260409-010 through MEM-20260409-013
+- 2026-04-13: added MEM-20260413-001 to require observed local timestamps for daily memory logs
+- 2026-04-13: added MEM-20260413-002 for repo-root data path handling from Git worktrees
+- 2026-04-13: marked MEM-20260409-003 completed after user confirmed all worktrees had been merged and cleaned
+- 2026-04-16: added MEM-20260416-001 to default the visible analysis flow to direct RSA from preprocess outputs plus matrix.xlsx
+- 2026-04-18: added MEM-20260418-001 for the current semantic interpretation of data/matrix.xlsx after raw-vs-matrix investigation
+- 2026-04-18: added MEM-20260418-002 to keep exploratory RSA distance-method comparison tooling in data/local_rsa_distance_method_comparison
+- 2026-04-18: added MEM-20260418-003 to record that metabolism_raw_data.xlsx already provides matrix-aligned metabolite annotation for the current panel
+- 2026-04-18: added MEM-20260418-004 to prefer raw-workbook annotation and keep identity caches as fallback in model-space generation
+- 2026-04-18: added MEM-20260418-005 to keep a stable reusable model registry at data/model_space/model_registry.csv
+- 2026-04-18: added MEM-20260418-006 to anchor the 202604 batch data and output roots after running preprocess, reliability, and direct RSA
+- 2026-04-18: added MEM-20260418-007 for per-date same-vs-different reliability figures
+- 2026-04-18: added MEM-20260418-008 for pooled and per-date per-stimulus same-vs-different reliability figures
+- 2026-04-18: added MEM-20260418-009 for the filtered 202604 rerun without 20260331 and its improved pooled metrics
+- 2026-04-19: added MEM-20260419-001 for the filtered 202604 pooled distance-method comparison where Aitchison ranked highest
+- 2026-04-19: added MEM-20260419-002 for interpreting low RSA via ceiling, distance choice, and batch quality before concluding model mismatch
+- 2026-04-19: added MEM-20260419-003 for the ratio-like matrix interpretation and fractional QCRSD thresholds
+- 2026-04-19: added MEM-20260419-004 for the filtered-batch QC plus log2 Euclidean pooled RSA result and marked MEM-20260419-001 superseded
+- 2026-04-19: added MEM-20260419-005 for per-date sensitivity in the top taxonomy-defined chemistry subspaces
+- 2026-04-19: added MEM-20260419-006 for the conclusion that distance changes help pooled RSA but do not remove the remaining neural-chemical mismatch ceiling
+- 2026-04-19: added MEM-20260419-007 for the weighted subspace-fusion result that exceeds the best prior taxonomy feature union
+- 2026-04-19: added MEM-20260419-008 for the finding that non-ASE L/R neuron merging barely changes pooled neural geometry and only slightly improves RSA
+- 2026-04-19: added MEM-20260419-009 for the worm-split diagonal crossnobis result that sharply reduces pooled RSA after L/R merging
+- 2026-04-19: added MEM-20260419-010 for the result that trial-median neural prototypes help modestly while peak-absolute summaries hurt pooled RSA
+- 2026-04-19: added MEM-20260419-011 for the result that signed-peak neural summaries recover much of the signal lost by unsigned peak collapse
+- 2026-04-20: added MEM-20260420-001 through MEM-20260420-003 for base-odor date-effect interpretation, global-profile-as-baseline conclusion, and the next RSA model-diagnosis handoff
+- 2026-04-20: superseded MEM-20260420-003 with MEM-20260420-004 to move the active RSA thread from global diagnosis to shared-structure localization
+- 2026-04-21: added MEM-20260421-001 for current model-diagnosis interpretation and MEM-20260421-002 for the supervised neural-aligned model workstream; superseded MEM-20260420-004
+- 2026-04-21: added MEM-20260421-003 for the supervised chemical subspace and metabolite subset search plan; superseded MEM-20260421-002 as the immediate active thread
+- 2026-04-21: updated MEM-20260421-003 after implementing branch codex/supervised-subspace-search at commit f3ea2a4
+- 2026-04-22: added MEM-20260422-001 to keep single-chemical hits diagnostic-only and redesign formal subspace figures around multi-chemical models
+- 2026-04-22: updated MEM-20260422-001 so final selected-chemical heatmaps use joint-consensus rank-normalized magma boxed RDM pairs
+- 2026-04-22: added MEM-20260422-002 to archive supervised subspace search as a negative route

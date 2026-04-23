@@ -1,0 +1,532 @@
+{
+  "project_name": "C. elegans bacteria metabolite neural analysis",
+  "current_phase": "The filtered 202604 review has completed model-diagnosis interpretation through shared-structure localization. Current conclusion: QC20 log2 Euclidean is the best accepted broad fixed baseline, within-date RSA is stronger on average, cross-date is mixed rather than uniformly bad, base odors argue against a dominant global date artifact, and reliable-pair/localization results support partial date-sensitive chemical-neural overlap. The supervised chemical subspace and metabolite subset search is now archived as a negative route: selected models collapse to 1-2 chemicals, final all-sample RSA is only moderate, and validation-scope complexity makes the line hard to interpret. Preserve its outputs for audit, but do not continue extending this route.",
+  "last_updated": "2026-04-22T14:28:00+08:00",
+  "active_tasks": [
+    "Decide whether non-ASE L/R merge plus trial-median neural correlation should replace the older trial-mean neural reference for filtered-batch exploratory reporting",
+    "Compare QC-filtered log2 Euclidean, direct correlation, and the current control on the filtered 202604 batch across per-date, pooled all-pairs, and within-date-only pooled RSA summaries",
+    "If biology-driven subspace reporting continues, rerank and render the shortlist under the same current neural reference rather than reusing the older mean-based taxonomy ranking",
+    "Decide whether the filtered 202604_without_20260331 batch should replace the original 202604 batch for downstream reporting and geometry",
+    "Confirm the raw-to-matrix preprocessing pipeline with the collaborator before changing the default metabolite distance interpretation beyond exploratory review"
+  ],
+  "completed_tasks": [
+    "Stage 0 preprocessing and trial-level standardization",
+    "Stage 1 reliability analysis on the real dataset",
+    "Stage 1 supplementary diagnostics: within-date cross-individual same-vs-different, per-date LOIO, and stimulus distance matrices",
+    "Stage 1 explanation document",
+    "Stage 2 neural geometry implementation and merge to master",
+    "Stage 2 exploration summary and overlap QC figures",
+    "Stage 3 biochemical RSA spec",
+    "Stage 3 biochemical RSA implementation plan",
+    "Stage 3 implementation Tasks 2-7 including CLI, outputs, real-data model-space seeding, and real-data dry run",
+    "Merged the Stage 3 RSA framework into master at commit f5f87ba",
+    "Versioned the legacy 202601 dataset layout and added the new 20260313 batch preprocess plus Stage 1 outputs",
+    "Created data/model_space_202603 and reran 202603 Stage 3 RSA with 1000 permutations",
+    "Implemented and validated Stage 3 prototype supplementary outputs in codex/stage3-prototype-supplement",
+    "Wrote the paired prototype RDM spec at commit 9adc337",
+    "Wrote the paired prototype RDM implementation plan at commit bb13570",
+    "Implemented and validated paired prototype RDM visuals in codex/stage3-prototype-supplement through commit 919b10d",
+    "Merged codex/neutral-analysis-contract to master at commit cf60d31",
+    "Neutralized outward analysis naming and output directories across reliability, geometry, and RSA",
+    "Pruned the reliability figure contract to the final concise subset with boxen_points/ecdf same-vs-different figures",
+    "Committed the Stage 3 model-space auto-seed design and implementation plan at commit c3467d2",
+    "Cleaned all registered auxiliary worktrees after user confirmation that they had been merged to master",
+    "Implemented the Stage 3 model-space auto-seed builder in codex/stage3-model-space-auto-seed",
+    "Validated the auto-seed builder with 240 passing tests, resolve_model_inputs, and a 202603 Stage 3 dry run with permutations=0",
+    "Confirmed that master already contains the direct-RSA default-flow change set",
+    "Re-ran 202603 preprocessing from data/202603_data.parquet into data/202603/202603_preprocess",
+    "Re-ran 202603 reliability outputs under results/202603/reliability",
+    "Re-ran 202603 geometry outputs under results/202603/geometry and refreshed the response_window pooled RDM heatmap",
+    "Built a one-off 202603 RSA distance-method comparison package covering raw Euclidean, log1p+robust Euclidean, current correlation, and Aitchison CLR Euclidean",
+    "Generated pooled and per-date response_window neural-order global_profile review figures under results/202603/rsa_distance_method_comparison",
+    "Investigated data/metabolism_raw_data.xlsx versus data/matrix.xlsx and wrote per-metabolite affine-fit summaries to data/matrix_from_raw_affine_fit.xlsx",
+    "Stored local rerunnable copies of the RSA distance-method comparison scripts under data/local_rsa_distance_method_comparison",
+    "Ran 202604 preprocessing from data/202604/202604_data.parquet into data/202604/202604_preprocess",
+    "Ran 202604 reliability outputs under results/202604/reliability",
+    "Ran 202604 direct RSA outputs under results/202604/rsa using data/matrix.xlsx",
+    "Restored per-date focus-view same-vs-different reliability figures and reran 202604 reliability",
+    "Restored pooled and per-date per-stimulus same-vs-different reliability figures and reran 202604 reliability",
+    "Created a filtered 202604 comparison batch without 20260331 and reran preprocess, reliability, and direct RSA under versioned outputs",
+    "Ran the local pooled RSA distance-method comparison on the filtered 202604 batch and wrote results under results/202604_without_20260331/rsa_distance_method_comparison",
+    "Rechecked raw-vs-matrix semantics and confirmed that matrix.xlsx is closest to a feature-centered ratio-like transform while raw-workbook QCRSD uses a fractional 0.2/0.3 scale for 20%/30% thresholds",
+    "Temporarily evaluated QC-filtered non-Aitchison metabolite distance methods on the filtered 202604 batch and found that pooled log2(matrix)+Euclidean outperforms the current control while QC alone does not",
+    "Reviewed neural-side filtered-batch variants including non-ASE L/R merge, trial median, signed peak, and worm-split crossnobis against the leading chemistry candidates",
+    "Generated neural-order RDM comparison figures for the current acceptable neural/chemical combinations on the filtered 202604 batch",
+    "Rendered biological subspace individual panels and reran the previously highlighted taxonomy triple union under the current L/R-merged trial-median neural reference",
+    "Reran all 27 taxonomy single/pair/triple unions under L/R-merged trial mean versus trial median and confirmed the older highlighted triple is not optimal under the current median reference",
+    "Implemented and ran the filtered-batch model diagnosis review under results/202604_without_20260331/model_diagnosis",
+    "Wrote the shared-structure localization extension into the model-diagnosis spec and implementation plan",
+    "Implemented and validated anchor-local neighborhood and triplet diagnostics for global_profile_default_correlation, global_qc20_log2_euclidean, and best_weighted_fusion_fixed_weights on the filtered 202604 batch",
+    "Interpreted model diagnosis, localization, date-control, base-odor, reliability filtering, PCA, and neural ceiling results with the user; next thread is supervised neural-aligned modeling",
+    "Wrote docs/superpowers/plans/2026-04-21-subspace-search.md for supervised chemical subspace and metabolite subset search",
+    "Implemented supervised chemical subspace and metabolite subset search on codex/supervised-subspace-search at commit f3ea2a4, including module, CLI, tests, and a small real-data smoke run",
+    "Fixed supervised subspace figure generation on codex/supervised-subspace-search at commit 3d84f8c so held-out, scope, null, final-candidate, and selection charts plot readable aggregated summaries",
+    "Corrected candidate_vs_matched_null.png on codex/supervised-subspace-search at commit f22314f so the figure plots one point per validation candidate/null comparison rather than treating a median across different candidates as the primary result",
+    "Improved candidate_vs_matched_null.png readability on codex/supervised-subspace-search at commit 9598e7e by using split half-violin distributions, simpler x-axis labels, and plain-language validation-source legend text",
+    "Simplified candidate_vs_matched_null.png labels on codex/supervised-subspace-search at commit 785389f and changed black median ticks from a combined median to separate held-out-date and held-out-stimulus medians",
+    "Replaced shorthand candidate_vs_matched_null.png x-axis labels on codex/supervised-subspace-search at commit afa185f with full wording such as Selected categories versus random metabolites",
+    "Split final_candidate_subspace_summary and final_subspace_rdm_comparison.png by validation scope on codex/supervised-subspace-search at commit b0bde5e so LODO and held-out-stimulus evidence are not mixed in one median ranking",
+    "Ran the full 500-null supervised subspace formal analysis and copied outputs to results/202604_without_20260331/supervised_subspace_search_formal_20260421",
+    "Archived supervised chemical subspace search as a negative route after final selected models collapsed to 1-2 chemicals with only moderate all-sample RSA and excessive validation-scope complexity"
+  ],
+  "blockers": [
+    "The raw-to-matrix preprocessing pipeline is still not confirmed by the collaborator, which weakens the theoretical case for CLR/Aitchison on matrix.xlsx",
+    "Neither the original 202604 batch nor the filtered 202604_without_20260331 comparison batch has a matching geometry rerun yet for pooled Stage 2-style diagnostics",
+    "The filtered rerun without 20260331 improves pooled reliability and RSA, but its LODO metric is unavailable, so date-level generalization cannot be reported from that comparison run",
+    "Supervised neural-aligned modeling is not yet implemented; training-set predicted RDMs would be leakage, so main evidence must come from held-out date and held-out-stimulus predictions",
+    "The earlier taxonomy shortlist was selected under an older mean-based neural reference, so those subspace rankings cannot be mixed directly with current trial-median figures",
+    "The 202603 date panels remain disjoint, so within-date geometry stability is overlap-limited and pooled prototype interpretations remain descriptive only"
+  ],
+  "notes": "Use docs/stage1-reliability-explained.md and docs/stage2-geometry-exploration-summary.md as the human-readable explainers. Versioned data layout archives the prior batch under data/202601 and results/202601. The original 202604 run uses data/202604/202604_data.parquet, with preprocess outputs at data/202604/202604_preprocess, reliability outputs at results/202604/reliability, and direct RSA outputs at results/202604/rsa. A comparison rerun that excludes the problematic 20260331 date is also preserved at data/202604/202604_data_without_20260331.parquet, with preprocess outputs at data/202604/202604_preprocess_without_20260331 and analysis outputs under results/202604_without_20260331. The full 202604 batch contains 1397 trials, 64 stimuli, 23 individuals, and 5 dates; the filtered rerun contains 1081 trials, 52 stimuli, 19 individuals, and 4 dates. Removing 20260331 improves pooled response_window reliability and direct RSA, but removes usable LODO support. A 2026-04-19 raw-vs-matrix recheck found that matrix.xlsx is better interpreted as a feature-centered ratio-like signal than as raw abundance, and that the raw workbook QCRSD column uses fractional thresholds where 0.2 and 0.3 mean 20% and 30% RSD. The earlier pooled review package under results/202604_without_20260331/rsa_distance_method_comparison still shows Aitchison above the current production correlation contract, but a later temporary non-Aitchison recheck found that pooled log2(matrix)+Euclidean with QCRSD<=0.2 is stronger than the current control in both response_window and full_trajectory, while QC alone leaves the current control essentially unchanged and per-date means remain mixed. Current low pooled RSA should be interpreted as partial, local, date-sensitive chemical-neural overlap rather than complete global RDM alignment. The next process should design a supervised neural-aligned model that predicts neural responses from chemical features and evaluates predicted neural-like RDMs only on held-out dates or held-out stimuli. Reliability now also writes one per-date focus-view same-vs-different figure per available date under results/<run>/reliability/figures/same_vs_different_by_date__*.png and pooled/per-date per-stimulus same-vs-different figures under results/<run>/reliability/figures/per_stimulus_same_vs_different__*.png to make weak dates and weak stimuli easier to spot. Geometry has not been rerun for either 202604 variant yet, so pooled Stage 2-style diagnostics still point to the earlier 202603 geometry package. The filtered-batch model-diagnosis package now also writes anchor_localization, anchor_localization_summary, and anchor_triplet_summary tables plus anchor_rank_alignment, anchor_neighborhood_overlap, localization_hotspots figures, and a Shared Structure section in run_summary.md for the three target models. The neutral analysis contract is merged to master, so public APIs and default output roots use reliability/geometry/rsa naming rather than stage labels.",
+  "current_outputs": {
+    "raw_input": "data/202604/202604_data.parquet",
+    "preprocess_root": "data/202604/202604_preprocess",
+    "reliability_root": "results/202604/reliability",
+    "geometry_root": null,
+    "rsa_root": "results/202604/rsa",
+    "reliability_run_summary": {
+      "n_trials": 1397,
+      "n_individuals": 23,
+      "n_dates": 5,
+      "n_stimuli": 64,
+      "focus_view": "response_window",
+      "focus_view_distance_gap": 0.23635632551211383,
+      "focus_view_loio_accuracy_mean": 0.22518497513229252,
+      "focus_view_lodo_accuracy_mean": 0.08794466403162055,
+      "strongest_views": [
+        "on_window",
+        "response_window"
+      ],
+      "per_date_same_vs_different_figure_names": [
+        "same_vs_different_by_date__20260311.png",
+        "same_vs_different_by_date__20260313.png",
+        "same_vs_different_by_date__20260331.png",
+        "same_vs_different_by_date__20260410.png",
+        "same_vs_different_by_date__20260414.png"
+      ],
+      "pooled_per_stimulus_same_vs_different_figure_name": "per_stimulus_same_vs_different__pooled.png",
+      "per_date_per_stimulus_same_vs_different_figure_names": [
+        "per_stimulus_same_vs_different__20260311.png",
+        "per_stimulus_same_vs_different__20260313.png",
+        "per_stimulus_same_vs_different__20260331.png",
+        "per_stimulus_same_vs_different__20260410.png",
+        "per_stimulus_same_vs_different__20260414.png"
+      ]
+    },
+    "rsa_run_summary": {
+      "views": [
+        "response_window",
+        "full_trajectory"
+      ],
+      "focus_view": "response_window",
+      "response_aggregation": "mean",
+      "ranked_models": [
+        "global_profile"
+      ],
+      "top_models_by_view": {
+        "response_window": "global_profile",
+        "full_trajectory": "global_profile"
+      },
+      "response_window_rsa_similarity": 0.10485019482572538,
+      "response_window_p_value_raw": 0.000999000999000999,
+      "full_trajectory_rsa_similarity": 0.10465908471130214,
+      "full_trajectory_p_value_raw": 0.001998001998001998,
+      "aggregated_response_dates": [
+        "20260311",
+        "20260313",
+        "20260331",
+        "20260410",
+        "20260414"
+      ]
+    },
+    "filtered_without_20260331": {
+      "raw_input": "data/202604/202604_data_without_20260331.parquet",
+      "preprocess_root": "data/202604/202604_preprocess_without_20260331",
+      "reliability_root": "results/202604_without_20260331/reliability",
+      "geometry_root": null,
+      "rsa_root": "results/202604_without_20260331/rsa",
+      "model_diagnosis_root": "results/202604_without_20260331/model_diagnosis",
+      "preprocess_summary": {
+        "n_trials": 1081,
+        "n_stimuli": 52,
+        "n_neurons": 22
+      },
+      "reliability_run_summary": {
+        "n_trials": 1081,
+        "n_individuals": 19,
+        "n_dates": 4,
+        "n_stimuli": 52,
+        "focus_view": "response_window",
+        "focus_view_distance_gap": 0.2850177921381324,
+        "focus_view_loio_accuracy_mean": 0.2653230114861935,
+        "focus_view_lodo_accuracy_mean": null,
+        "strongest_views": [
+          "on_window",
+          "response_window"
+        ],
+        "per_date_same_vs_different_figure_names": [
+          "same_vs_different_by_date__20260311.png",
+          "same_vs_different_by_date__20260313.png",
+          "same_vs_different_by_date__20260410.png",
+          "same_vs_different_by_date__20260414.png"
+        ],
+        "pooled_per_stimulus_same_vs_different_figure_name": "per_stimulus_same_vs_different__pooled.png",
+        "per_date_per_stimulus_same_vs_different_figure_names": [
+          "per_stimulus_same_vs_different__20260311.png",
+          "per_stimulus_same_vs_different__20260313.png",
+          "per_stimulus_same_vs_different__20260410.png",
+          "per_stimulus_same_vs_different__20260414.png"
+        ]
+      },
+      "rsa_run_summary": {
+        "views": [
+          "response_window",
+          "full_trajectory"
+        ],
+        "focus_view": "response_window",
+        "response_aggregation": "mean",
+        "ranked_models": [
+          "global_profile"
+        ],
+        "top_models_by_view": {
+          "response_window": "global_profile",
+          "full_trajectory": "global_profile"
+        },
+        "response_window_rsa_similarity": 0.1263552570518037,
+        "response_window_p_value_raw": 0.000999000999000999,
+        "full_trajectory_rsa_similarity": 0.13377613072149913,
+        "full_trajectory_p_value_raw": 0.000999000999000999,
+        "aggregated_response_dates": [
+          "20260311",
+          "20260313",
+          "20260410",
+          "20260414"
+        ]
+      },
+      "distance_method_comparison_root": "results/202604_without_20260331/rsa_distance_method_comparison",
+      "pooled_distance_method_summary": {
+        "response_window": {
+          "top_method": "aitchison_clr_euclidean",
+          "top_rsa_similarity": 0.15052910508045795,
+          "current_production_method": "current_correlation",
+          "current_production_rsa_similarity": 0.1263552570518037
+        },
+        "full_trajectory": {
+          "top_method": "aitchison_clr_euclidean",
+          "top_rsa_similarity": 0.16878241843912906,
+          "current_production_method": "current_correlation",
+          "current_production_rsa_similarity": 0.13377613072149913
+        }
+      },
+      "current_neural_reference_review": {
+        "reference": "non-ASE L/R merge + trial median + correlation distance",
+        "global_profile_review": {
+          "trial_mean_current_control": {
+            "response_window_rsa_similarity": 0.12611121901858893,
+            "full_trajectory_rsa_similarity": 0.14702432215964445
+          },
+          "trial_median_current_control": {
+            "response_window_rsa_similarity": 0.13399704086235884,
+            "full_trajectory_rsa_similarity": 0.16482380930687167
+          },
+          "trial_mean_qc20_log2_euclidean": {
+            "response_window_rsa_similarity": 0.18331271696453313,
+            "full_trajectory_rsa_similarity": 0.2014815271369364
+          },
+          "trial_median_qc20_log2_euclidean": {
+            "response_window_rsa_similarity": 0.19500376210718146,
+            "full_trajectory_rsa_similarity": 0.22213054997664244
+          }
+        },
+        "best_non_mined_global_benchmark": {
+          "chemical_contract": "QCRSD<=0.2 + log2(matrix) + Euclidean",
+          "response_window_rsa_similarity": 0.19500376210718146,
+          "full_trajectory_rsa_similarity": 0.22213054997664244
+        },
+        "signed_peak_reference_check": {
+          "response_window_rsa_similarity": 0.2192569822587687,
+          "full_trajectory_rsa_similarity": 0.21080644814287928
+        },
+        "crossnobis_reference_check": {
+          "response_window_rsa_similarity": 0.052362392453565015,
+          "full_trajectory_rsa_similarity": 0.0409557876934214
+        }
+      },
+      "distance_method_review": {
+        "review_reference": "older pooled chemistry-method scan with the default mean-based neural reference",
+        "qc_threshold": 0.2,
+        "retained_features": 267,
+        "methods_ranked_by_response_window": [
+          {
+            "method": "log2 + Euclidean",
+            "response_window_rsa_similarity": 0.180855,
+            "full_trajectory_rsa_similarity": 0.197252
+          },
+          {
+            "method": "current log1p + correlation control",
+            "response_window_rsa_similarity": 0.126071,
+            "full_trajectory_rsa_similarity": 0.128876
+          },
+          {
+            "method": "direct correlation",
+            "response_window_rsa_similarity": 0.120387,
+            "full_trajectory_rsa_similarity": 0.090475
+          },
+          {
+            "method": "log2 + correlation",
+            "response_window_rsa_similarity": 0.104047,
+            "full_trajectory_rsa_similarity": 0.121279
+          },
+          {
+            "method": "raw Euclidean",
+            "response_window_rsa_similarity": -0.012397,
+            "full_trajectory_rsa_similarity": 0.003424
+          }
+        ],
+        "legacy_response_window_only_package": {
+          "top_method": "aitchison_clr_euclidean",
+          "top_rsa_similarity": 0.15052910508045795,
+          "current_production_method": "current_correlation",
+          "current_production_rsa_similarity": 0.1263552570518037
+        }
+      },
+      "taxonomy_current_reference_review": {
+        "individual_subspace_root": "results/202604_without_20260331/biological_subspace_individual_rdms_neural_order",
+        "triple_union_root": "results/202604_without_20260331/biological_triple_union_rdm_neural_order",
+        "mean_vs_median_rerank_root": "results/202604_without_20260331/taxonomy_union_mean_vs_median_rerank_review",
+        "highlighted_triple_union": {
+          "combo": "Class::Indoles and derivatives + SubClass::Pyridinecarboxylic acids and derivatives + SuperClass::Organic oxygen compounds",
+          "response_window_rsa_similarity": 0.21129473940000967,
+          "full_trajectory_rsa_similarity": 0.24486099890556293
+        },
+        "best_trial_median_single": {
+          "combo": "Class::Pyridines and derivatives",
+          "response_window_rsa_similarity": 0.196071,
+          "full_trajectory_rsa_similarity": 0.245664
+        },
+        "best_trial_median_pair": {
+          "combo": "Class::Indoles and derivatives + Class::Purine nucleosides",
+          "response_window_rsa_similarity": 0.241437,
+          "full_trajectory_rsa_similarity": 0.254687
+        },
+        "best_trial_median_triple": {
+          "combo": "Class::Indoles and derivatives + SuperClass::Organic oxygen compounds + Class::Purine nucleosides",
+          "response_window_rsa_similarity": 0.252598,
+          "full_trajectory_rsa_similarity": 0.270183
+        },
+        "highlighted_triple_trial_median_rank": "122/2925"
+      },
+      "status_note": "The filtered comparison rerun without 20260331 improves pooled reliability and RSA versus the full 202604 batch. The current strongest non-mined exploratory pairing is non-ASE L/R-merged trial-median neural correlation against QCRSD<=0.2 log2 Euclidean chemistry, with the broad global benchmark at 0.195004 / 0.222131 versus 0.133997 / 0.164824 for the current chemical control under the same neural reference. Earlier taxonomy shortlist results are now known to be neural-reference-dependent: the old highlighted triple union drops under the current median reference and is no longer near-optimal. LODO is unavailable and geometry has not been rerun."
+    },
+    "status_note": "The full 202604 outputs remain intact, and a filtered comparison rerun without 20260331 is now recorded alongside them. Reliability includes per-date same-vs-different figures plus pooled/per-date per-stimulus same-vs-different figures; geometry has not been rerun for either variant yet."
+  },
+  "stage_handoff": {
+    "stage1_status": "completed_cautious_pass",
+    "stage1_interpretation": "Stimulus identity structure is real and reproducible, but date-level generalization is weaker than individual-level generalization.",
+    "stage1_canonical_explainer_doc": "docs/stage1-reliability-explained.md",
+    "stage1_outputs_root": "results/202601/stage1_reliability",
+    "stage1_formal_reporting": {
+      "primary_view": "response_window",
+      "primary_distance_metric": "correlation",
+      "formal_evidence_chain": [
+        "same_vs_different distance gap",
+        "LOIO accuracy",
+        "LODO accuracy",
+        "permutation p_value",
+        "grouped bootstrap LOIO confidence interval"
+      ],
+      "supplementary_only": [
+        "split-half reliability",
+        "within-date cross-individual same-vs-different",
+        "per-date LOIO",
+        "stimulus-by-stimulus distance matrices",
+        "cross-view comparison figures"
+      ]
+    },
+    "stage1_real_data_summary": {
+      "n_trials": 678,
+      "n_individuals": 37,
+      "n_dates": 6,
+      "n_stimuli": 19,
+      "strongest_views_by_distance_gap": [
+        "response_window",
+        "on_window"
+      ],
+      "view_metrics": {
+        "full_trajectory": {
+          "distance_gap": 0.123408,
+          "loio_accuracy_mean": 0.388686,
+          "lodo_accuracy_mean": 0.154031,
+          "p_value": 0.009901,
+          "bootstrap_loio_ci": [
+            0.305546,
+            0.474441
+          ]
+        },
+        "on_window": {
+          "distance_gap": 0.143607,
+          "loio_accuracy_mean": 0.279384,
+          "lodo_accuracy_mean": 0.133681,
+          "p_value": 0.009901,
+          "bootstrap_loio_ci": [
+            0.212488,
+            0.35301
+          ]
+        },
+        "response_window": {
+          "distance_gap": 0.147783,
+          "loio_accuracy_mean": 0.303058,
+          "lodo_accuracy_mean": 0.110847,
+          "p_value": 0.009901,
+          "bootstrap_loio_ci": [
+            0.233907,
+            0.377997
+          ]
+        },
+        "post_window": {
+          "distance_gap": 0.113312,
+          "loio_accuracy_mean": 0.354643,
+          "lodo_accuracy_mean": 0.118479,
+          "p_value": 0.009901,
+          "bootstrap_loio_ci": [
+            0.272315,
+            0.43956
+          ]
+        }
+      }
+    },
+    "stage2_status": "completed_exploratory_pass",
+    "stage2_interpretation": "Pooled neural geometry is real and highly consistent across response_window and full_trajectory, but group-level stability remains overlap-limited and should be treated as supplementary rather than primary evidence.",
+    "stage2_canonical_explainer_doc": "docs/stage2-geometry-exploration-summary.md",
+    "stage2_reviewed_outputs_root": "results/202601/stage2_geometry",
+    "stage2_formal_reporting": {
+      "primary_view": "response_window",
+      "sensitivity_view": "full_trajectory",
+      "primary_evidence_chain": [
+        "pooled RDM structure",
+        "pooled cross-view RDM similarity",
+        "pooled-vs-group RDM similarity",
+        "date-by-stimulus and individual-by-stimulus overlap QC"
+      ],
+      "supplementary_only": [
+        "within-individual RDM similarity",
+        "within-date RDM similarity",
+        "clustered pooled heatmaps"
+      ]
+    },
+    "stage2_real_data_summary": {
+      "n_trials": 678,
+      "n_individuals": 37,
+      "n_dates": 6,
+      "n_stimuli": 19,
+      "pooled_cross_view_similarity": 0.919574,
+      "within_individual_similarity_median": {
+        "response_window": 0.5,
+        "full_trajectory": 0.5
+      },
+      "pooled_vs_individual_similarity_median": {
+        "response_window": 0.671429,
+        "full_trajectory": 0.714286
+      },
+      "within_date_similarity_median": {
+        "response_window": 0.0,
+        "full_trajectory": 0.75
+      },
+      "pooled_vs_date_similarity_median": {
+        "response_window": 0.903571,
+        "full_trajectory": 0.746429
+      },
+      "group_support": {
+        "individual_median_distinct_stimuli": 4,
+        "date_median_distinct_stimuli": 3.5,
+        "valid_individual_pairwise_rdm_comparisons_per_view": 119,
+        "invalid_individual_pairwise_rdm_comparisons_per_view": 547,
+        "valid_date_pairwise_rdm_comparisons_per_view": 2,
+        "invalid_date_pairwise_rdm_comparisons_per_view": 13
+      }
+    },
+    "stage3_default_inputs": {
+      "primary_neural_rdm_view": "response_window",
+      "sensitivity_views": [
+        "full_trajectory"
+      ],
+      "metabolite_distance_status": "under_review_after_distance-method comparison; current log1p-plus-correlation remains the tentative default",
+      "required_artifacts": [
+        "rdm_matrix__response_window__pooled",
+        "rdm_matrix__full_trajectory__pooled",
+        "rdm_stability_by_individual",
+        "rdm_stability_by_date",
+        "rdm_view_comparison",
+        "stimulus_overlap__date",
+        "stimulus_overlap__individual"
+      ]
+    },
+    "stage3_focus": [
+      "Define the Stage 3 model space from data/matrix.xlsx or a curated feature table",
+      "Run pooled RSA first rather than starting from group-level RSA",
+      "Use response_window as the formal neural RDM and full_trajectory as sensitivity analysis"
+    ],
+    "stage3_status": "202603_outputs_valid_paired_prototype_rdm_implemented",
+    "stage3_bootstrap_summary": {
+      "real_data_model_space_seed": {
+        "n_stimuli_mapped": 19,
+        "n_matrix_rows": 299,
+        "n_metabolites": 380,
+        "primary_models_with_membership": [
+          "global_profile",
+          "bile_acid"
+        ],
+        "draft_models_without_membership": [
+          "indole_tryptophan",
+          "phenyl_phenol",
+          "tca_organic_acid",
+          "nucleotide_energy"
+        ],
+        "supplementary_models_seeded": [
+          "broad_aromatic_union"
+        ]
+      },
+      "real_data_dry_run": {
+        "primary_view": "response_window",
+        "top_primary_models_by_view": {
+          "response_window": "global_profile",
+          "full_trajectory": "global_profile"
+        },
+        "excluded_primary_draft_models": [
+          "indole_tryptophan",
+          "phenyl_phenol",
+          "tca_organic_acid",
+          "nucleotide_energy"
+        ],
+        "default_runtime_note": "The 202603 Stage 3 pipeline now runs successfully with data/model_space_202603 and 1000 permutations; prototype supplementary outputs were validated before the feature worktree was cleaned.",
+        "interpretation_status": "current_result_available_with_panel_caveats",
+        "interpretation_note": "For the 202603 batch, global_profile remains the top primary model in both response_window and full_trajectory. Interpretation should still note that only global_profile and bile_acid have populated primary-model inputs and that the two dates use disjoint stimulus panels, which limits pooled prototype figures to descriptive use."
+      }
+    },
+    "stage3_202603_current": {
+      "outputs_root": "results/202603/stage3_rsa",
+      "model_input_root": "data/model_space_202603",
+      "permutations": 1000,
+      "top_primary_models_by_view": {
+        "response_window": "global_profile",
+        "full_trajectory": "global_profile"
+      },
+      "prototype_supplement_branch": {
+        "worktree": null,
+        "branch": "codex/stage3-prototype-supplement",
+        "latest_spec_commit": "9adc337",
+        "latest_plan_commit": "bb13570",
+        "latest_implementation_commit": "919b10d",
+        "status": "merged_and_worktree_removed",
+        "next_action": "No worktree action remains; continue follow-up work from master"
+      }
+    },
+    "stage3_risks": [
+      "A strong pooled neural-model match could still overstate biological stability if group-level overlap limitations are ignored",
+      "Model RDM conclusions will only be as good as the stimulus-to-metabolite mapping quality",
+      "Stage 3 should avoid treating grouped RSA as primary evidence unless overlap support is materially improved",
+      "Pooled prototype paired RDM figures for 202603 must remain clearly marked as descriptive because the two dates share no stimuli",
+      "matrix.xlsx is not yet confirmed to be compositional relative abundance, so CLR/Aitchison-based interpretation should remain cautious until the collaborator clarifies the upstream preprocessing"
+    ]
+  }
+}

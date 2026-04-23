@@ -16,10 +16,14 @@ docs/figures/*
 .agents/*
 .claude/*
 
-# local planning and memory artifacts
-MEMORY.md
-memory/
+# project memory synced across workstations
 state/
+!MEMORY.md
+!memory/
+!memory/**
+!state/
+!state/project-status.json
+state/heartbeat-state.json
 
 # local git worktrees
 .worktrees/
