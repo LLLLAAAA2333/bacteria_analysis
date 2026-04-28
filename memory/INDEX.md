@@ -1,7 +1,7 @@
 # Memory Index
 
 > index_schema_version: 1
-> updated_at: 2026-04-22T14:28:00+08:00
+> updated_at: 2026-04-25T19:47:56+08:00
 
 <!--
 This file stores retrieval metadata only.
@@ -21,14 +21,20 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 ## Tag Map
 
 - #communication-style: MEM-20260409-001
-- #engineering-style: MEM-20260409-002
+- #engineering-style: MEM-20260425-001, MEM-20260409-002
+- #scientific-plotting: MEM-20260425-001
+- #figure-style: MEM-20260425-001
+- #api-design: MEM-20260425-001
+- #module-first: MEM-20260425-001
+- #cli: MEM-20260425-001
 - #project-layout: MEM-20260409-010
 - #legacy-batch: MEM-20260409-011
 - #202603-batch: MEM-20260409-012
 - #202604-batch: MEM-20260418-009, MEM-20260418-006
 - #filtered-batch: MEM-20260421-001, MEM-20260419-008, MEM-20260419-007, MEM-20260419-004, MEM-20260419-001, MEM-20260418-009
 - #reliability: MEM-20260418-009, MEM-20260418-008, MEM-20260418-007
-- #interpretation: MEM-20260422-002, MEM-20260422-001, MEM-20260421-001, MEM-20260420-002, MEM-20260420-001, MEM-20260419-011, MEM-20260419-010, MEM-20260419-009, MEM-20260419-008
+- #interpretation: MEM-20260423-002, MEM-20260423-001, MEM-20260422-002, MEM-20260422-001, MEM-20260421-001, MEM-20260420-002, MEM-20260420-001, MEM-20260419-011, MEM-20260419-010, MEM-20260419-009, MEM-20260419-008
+- #permutation: MEM-20260423-002, MEM-20260423-001
 - #matrix-input: MEM-20260419-003, MEM-20260419-001, MEM-20260418-001, MEM-20260409-013, MEM-20260416-001, MEM-20260418-003
 - #metabolism-analysis: MEM-20260419-003, MEM-20260418-001, MEM-20260418-003
 - #distance-method: MEM-20260419-006, MEM-20260419-004, MEM-20260419-003, MEM-20260419-002
@@ -44,7 +50,7 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #compositionality: MEM-20260418-001
 - #trial-identifier: MEM-20260409-004
 - #trial-level-structure: MEM-20260409-005
-- #rsa: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003, MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003, MEM-20260420-002, MEM-20260420-001
+- #rsa: MEM-20260423-002, MEM-20260423-001, MEM-20260422-002, MEM-20260422-001, MEM-20260421-003, MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003, MEM-20260420-002, MEM-20260420-001
 - #symmetry: MEM-20260419-008
 - #crossnobis: MEM-20260419-009
 - #workflow: MEM-20260418-008, MEM-20260418-007, MEM-20260418-006, MEM-20260416-001, MEM-20260418-004
@@ -59,11 +65,11 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #model-diagnosis: MEM-20260421-002, MEM-20260421-001, MEM-20260420-004, MEM-20260420-003
 - #supervised-alignment: MEM-20260421-003, MEM-20260421-002
 - #neural-aligned-model: MEM-20260421-002
-- #validation: MEM-20260421-003, MEM-20260421-002
-- #subspace-search: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
+- #validation: MEM-20260423-002, MEM-20260421-003, MEM-20260421-002
+- #subspace-search: MEM-20260423-001, MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
 - #metabolite-selection: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
 - #figure-contract: MEM-20260422-001
-- #taxonomy-rsa: MEM-20260419-007, MEM-20260419-006, MEM-20260419-005
+- #taxonomy-rsa: MEM-20260423-002, MEM-20260423-001, MEM-20260419-007, MEM-20260419-006, MEM-20260419-005
 - #subspace-fusion: MEM-20260419-007
 - #prototype-rdm: MEM-20260409-008, MEM-20260409-009
 - #writer-contract: MEM-20260409-009
@@ -85,6 +91,11 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - direct execution-focused guidance -> MEM-20260409-001
 - simple maintainable solutions -> MEM-20260409-002
 - versioned datasets -> MEM-20260409-010
+- concise scientific plotting -> MEM-20260425-001
+- simple figure labels -> MEM-20260425-001
+- module-first functions -> MEM-20260425-001
+- callable Python APIs -> MEM-20260425-001
+- thin CLI wrappers -> MEM-20260425-001
 - legacy data layout -> MEM-20260409-011
 - 202603 batch -> MEM-20260409-012
 - 202604 batch -> MEM-20260418-006
@@ -173,10 +184,19 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - supervised subspace archived -> MEM-20260422-002
 - negative result subspace search -> MEM-20260422-002
 - do not continue supervised subspace search -> MEM-20260422-002
+- subset chemical narrative -> MEM-20260423-001
+- full-space permutation foundation -> MEM-20260423-001
+- stimulus-subset robustness is not chemical-subset null -> MEM-20260423-001
+- fixed subset significance is conditional on selection -> MEM-20260423-001
+- reselection stability -> MEM-20260423-001
+- stable taxonomy classes -> MEM-20260423-002
+- taxonomy-first stable classes -> MEM-20260423-002
+- class-neural association -> MEM-20260423-002
+- class-to-class chemical RDM matrix -> MEM-20260423-002
 
 ## Active Threads
 
-- MEM-20260421-003: Supervised chemical subspace search branch is ready for review/merge
+- MEM-20260423-002 | status=active | topic=rsa-workflow | next=review generated taxonomy stability figures and decide class candidates
 
 ## Recent Changes
 
@@ -209,6 +229,13 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - 2026-04-19: added MEM-20260419-010 for the result that trial-median neural prototypes help modestly while peak-absolute summaries hurt pooled RSA
 - 2026-04-19: added MEM-20260419-011 for the result that signed-peak neural summaries recover much of the signal lost by unsigned peak collapse
 - 2026-04-20: added MEM-20260420-001 through MEM-20260420-003 for base-odor date-effect interpretation, global-profile-as-baseline conclusion, and the next RSA model-diagnosis handoff
+- 2026-04-23: updated MEM-20260423-002 after generating taxonomy class stability figures
+- 2026-04-23: demoted the full-search permutation histogram from main figure to diagnostic-only output
+- 2026-04-23: added top-class neural-vs-chemical RDM comparison as a main taxonomy stability figure
+- 2026-04-23: corrected the top-class RDM figure to use full-stimulus `magma` heatmaps without pairwise-rank panels
+- 2026-04-23: added full-chemical raw-value RDM heatmap to the taxonomy class comparison figure
+- 2026-04-23: mirrored the taxonomy class RDM comparison into date_controlled_rsa_review and clarified weighted-fusion RSA scopes
+- 2026-04-23: reorganized class-to-class chemical RDM similarity into a clustered RSA matrix with Purine nucleosides highlighted
 - 2026-04-20: superseded MEM-20260420-003 with MEM-20260420-004 to move the active RSA thread from global diagnosis to shared-structure localization
 - 2026-04-21: added MEM-20260421-001 for current model-diagnosis interpretation and MEM-20260421-002 for the supervised neural-aligned model workstream; superseded MEM-20260420-004
 - 2026-04-21: added MEM-20260421-003 for the supervised chemical subspace and metabolite subset search plan; superseded MEM-20260421-002 as the immediate active thread
@@ -216,3 +243,7 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - 2026-04-22: added MEM-20260422-001 to keep single-chemical hits diagnostic-only and redesign formal subspace figures around multi-chemical models
 - 2026-04-22: updated MEM-20260422-001 so final selected-chemical heatmaps use joint-consensus rank-normalized magma boxed RDM pairs
 - 2026-04-22: added MEM-20260422-002 to archive supervised subspace search as a negative route
+- 2026-04-23: added MEM-20260423-001 to anchor subset-RSA reporting to full-space permutation evidence and marked MEM-20260421-003 completed
+- 2026-04-23: updated MEM-20260423-001 to distinguish conditional fixed-subset significance from selection stability and search-corrected nulls
+- 2026-04-23: added MEM-20260423-002 to set the next taxonomy thread around stable class-neural association rather than paper-ready reporting
+- 2026-04-25: added MEM-20260425-001 for concise scientific plotting and module-first callable API preferences

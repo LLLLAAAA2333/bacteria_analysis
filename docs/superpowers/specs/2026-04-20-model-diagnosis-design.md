@@ -53,7 +53,7 @@ cross-date generalization.
 
 ## Design Summary
 
-The diagnostic package has two sections.
+The diagnostic package has three sections.
 
 Section 1 estimates neural RDM reliability and builds a reliable-pair map. Its
 main output is a table that identifies which stimulus pairs have stable neural
@@ -64,6 +64,12 @@ Section 2 uses the reliable-pair map to diagnose model residuals. It identifies
 neural-far/model-near and neural-near/model-far stimulus pairs, summarizes
 whether residuals concentrate by date pair or annotation group, and compares
 fixed chemical models and a small unsupervised chemical embedding scan.
+
+Section 3 localizes the stable, nonrandom overlap that remains after Sections 1
+and 2. It asks where shared structure is concentrated across anchor stimuli,
+whether that local agreement survives cross-date restriction, and whether the
+current stronger chemistry comparators improve broad overlap or only selected
+local neighborhoods.
 
 ## Section 1: Neural Reliability Ceiling and Reliable-Pair Selection
 
@@ -300,6 +306,125 @@ This section should answer:
 - whether residuals concentrate by annotation group
 - whether top residual pairs are reliable enough to interpret
 
+## Section 3: Shared Structure Localization
+
+### Purpose
+
+Localize where the stable, nonrandom neural-chemical overlap actually lives.
+
+This section should not produce another global score that repeats the pooled RSA
+story. Its role is to identify which anchor stimuli retain local neighborhood
+or order agreement between neural and chemical spaces, and whether that
+agreement survives `cross_date` restriction.
+
+### Scope
+
+Use the same filtered batch and neural reference as Sections 1 and 2.
+
+The main analysis pool should be:
+
+- primary pool: `high + medium`
+- high-confidence supplement: `high`
+
+The first-pass model set should stay narrow:
+
+- `global_profile_default_correlation`
+- `global_qc20_log2_euclidean`
+- `best_weighted_fusion_fixed_weights`
+
+This covers the weak baseline, the broad chemical baseline, and the current
+strongest mixed comparator without creating another large per-model figure
+panel.
+
+### Analysis Unit
+
+Use `anchor stimulus` rather than trying to recover a complete reliable-pair
+sub-RDM.
+
+For one anchor stimulus `A`, collect all available reliable pairs `(A, B)`.
+This avoids requiring a complete square matrix after reliability masking and
+matches the fact that `high_reliability_pairs` is a pair subset rather than a
+standalone RDM.
+
+### Anchor-Local Metrics
+
+For each `view x model x anchor`, calculate:
+
+- `anchor_rank_spearman`: Spearman agreement between neural and model distances
+  from `A` to all supported neighbors
+- `topk_overlap_k3`: overlap between the three nearest neural neighbors and
+  the three nearest model neighbors
+- `topk_overlap_k5`: overlap between the five nearest neural neighbors and the
+  five nearest model neighbors
+- `triplet_consistency`: proportion of supported triplets `(A, B, C)` for which
+  the model preserves the neural order relation `d(A, B) < d(A, C)`
+- `within_date` support counts and local metrics where possible
+- `cross_date` support counts and local metrics where possible
+- validity counts such as `n_neighbors`, `n_triplets`, and the number of
+  reliable pairs available for the anchor
+
+The primary report should emphasize the primary pool. `high`-only results can
+be written as a supplement when support is still adequate.
+
+### Section 3 Outputs
+
+Write:
+
+- `tables/anchor_localization.csv`
+- `tables/anchor_localization_summary.csv`
+- `tables/anchor_triplet_summary.csv`
+- `figures/anchor_rank_alignment__<view>__<model>.png`
+- `figures/anchor_neighborhood_overlap__<view>__<model>.png`
+- `figures/localization_hotspots__<view>__<model>.png`
+- `run_summary.md`
+
+### Section 3 Figure Contract
+
+Keep this layer compact and interpretation-first.
+
+`anchor_rank_alignment__<view>__<model>.png`
+
+- scatter plot
+- each point is one anchor stimulus
+- x-axis: overall `anchor_rank_spearman`
+- y-axis: `cross_date anchor_rank_spearman`
+
+This should show whether good local agreement survives cross-date restriction
+or is mostly driven by within-date structure.
+
+`anchor_neighborhood_overlap__<view>__<model>.png`
+
+- ranked bar plot or lollipop plot
+- one anchor stimulus per bar
+- value is `topk_overlap_k3` or `topk_overlap_k5`
+
+This should show which anchors have the strongest shared nearest-neighbor
+structure.
+
+`localization_hotspots__<view>__<model>.png`
+
+- heatmap
+- rows are anchor stimuli
+- columns are local metrics such as overall rank agreement, cross-date rank
+  agreement, `topk_overlap_k3`, `topk_overlap_k5`, and `triplet_consistency`
+
+This should summarize whether a given anchor is broadly aligned or only aligned
+under a narrow local criterion.
+
+### Section 3 Interpretation
+
+This section should answer:
+
+- whether shared structure is broadly distributed or concentrated in a small
+  set of anchor stimuli
+- whether `global_qc20_log2_euclidean` improves local agreement beyond the weak
+  baseline across many anchors or only a few
+- whether `best_weighted_fusion_fixed_weights` broadens the shared structure or
+  only repairs a small number of local neighborhoods
+- whether the shared structure survives `cross_date` restriction or is largely
+  within-date
+- which anchors are worth following up in residual or annotation-level analysis
+
 ## Embedding Diagnosis Scope
 
 The first pass should include conservative fixed-model comparison and a small
@@ -405,12 +530,15 @@ The diagnostic package is complete when:
 - Section 1 writes neural ceiling and pair reliability outputs for both views
 - Section 2 writes residual outputs for the weak baseline and broad chemical
   baseline
+- Section 3 writes anchor-local localization outputs for the weak baseline, the
+  broad chemical baseline, and the current weighted fusion comparator
 - fixed model comparison reports all-pairs, reliable-pair, high-reliability,
   within-date, cross-date, and date-pair-stratified summaries
 - PCA embedding scan reports whether unsupervised chemical denoising improves
   alignment under the same controls
-- `run_summary.md` states which pairs are reliable, where the models fail, and
-  whether any embedding improvement is robust enough to discuss
+- `run_summary.md` states which pairs are reliable, where the models fail,
+  where shared structure localizes, and whether any embedding improvement is
+  robust enough to discuss
 
 ## Interpretation Contract
 
@@ -426,7 +554,10 @@ It should answer:
 5. Does the QC20 log2 Euclidean chemical baseline reduce those failures?
 6. Are residual mismatches concentrated by date pair, taxonomy, base odor, or
    metabolite group?
-7. Does unsupervised chemical embedding improve alignment robustly, or only in
+7. Where is the stable shared structure localized across anchor stimuli?
+8. Does that shared structure survive `cross_date` restriction, or is it
+   largely within-date?
+9. Does unsupervised chemical embedding improve alignment robustly, or only in
    pooled all-pairs RSA?
 
 ## Recommended First Implementation Slice
@@ -444,3 +575,20 @@ Implement in this order:
 
 This order keeps the work diagnosis-first and prevents embedding search from
 running ahead of the reliability evidence.
+
+## Recommended Section 3 Extension Slice
+
+Implement the shared-structure localization extension in this order:
+
+1. Build anchor-local helper functions that work directly on reliable pair
+   subsets rather than full sub-RDMs.
+2. Add anchor-rank alignment metrics and support counts.
+3. Add top-k neighborhood overlap metrics.
+4. Add triplet consistency metrics.
+5. Split the local metrics into overall, `within_date`, and `cross_date`
+   summaries where support is sufficient.
+6. Write compact anchor-local tables for the three target models only.
+7. Add the three summary figure types and extend `run_summary.md`.
+
+This extension should reuse the existing `model_diagnosis` package and output
+root rather than creating a second standalone review package.

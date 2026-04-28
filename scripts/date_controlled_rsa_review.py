@@ -141,7 +141,15 @@ def main() -> None:
     plot_per_date(per_date, figures / "rsa_per_date.png")
     plot_perm(perm_summary, figures / "date_preserving_permutation_summary.png")
     plot_red(red_summary, figures / "red_box_date_matched_null_summary.png")
-    write_summary(scope_summary, perm_summary, red_summary, date_counts)
+    rdm_figure_paths = plot_rdm_with_permutation_nulls(
+        neural_rdms,
+        model_rdms,
+        date_map,
+        perm_summary,
+        perm_null,
+        figures,
+    )
+    write_summary(scope_summary, perm_summary, red_summary, date_counts, rdm_figure_paths)
 
 
 def load_date_map() -> dict[str, str]:
@@ -612,6 +620,160 @@ def plot_red(summary: pd.DataFrame, path: Path) -> None:
     plt.close(fig)
 
 
+def plot_rdm_with_permutation_nulls(
+    neural_rdms: dict[str, pd.DataFrame],
+    model_rdms: dict[str, pd.DataFrame],
+    date_map: dict[str, str],
+    perm_summary: pd.DataFrame,
+    perm_null: pd.DataFrame,
+    figures_dir: Path,
+) -> list[Path]:
+    written: list[Path] = []
+    for model in MODELS:
+        path = figures_dir / f"neural_chemical_rdm_with_permutation_null__{model.id}.png"
+        plot_rdm_with_permutation_null(
+            neural_rdms=neural_rdms,
+            model_rdm=model_rdms[model.id],
+            model=model,
+            date_map=date_map,
+            perm_summary=perm_summary,
+            perm_null=perm_null,
+            path=path,
+        )
+        written.append(path)
+    return written
+
+
+def plot_rdm_with_permutation_null(
+    *,
+    neural_rdms: dict[str, pd.DataFrame],
+    model_rdm: pd.DataFrame,
+    model: RdmSpec,
+    date_map: dict[str, str],
+    perm_summary: pd.DataFrame,
+    perm_null: pd.DataFrame,
+    path: Path,
+) -> None:
+    fig, axes = plt.subplots(len(NEURAL), 3, figsize=(13.5, 4.2 * len(NEURAL)))
+    if len(NEURAL) == 1:
+        axes = np.array([axes])
+
+    cmap = plt.get_cmap("magma").copy()
+    cmap.set_bad("#F2F2F2")
+
+    for row_index, neural in enumerate(NEURAL):
+        neural_rdm = neural_rdms[neural.id]
+        labels = sorted(
+            [label for label in neural_rdm.index.astype(str) if label in model_rdm.index and label in date_map],
+            key=lambda label: (date_map[label], label),
+        )
+        neural_display = rank_normalized_display(neural_rdm.loc[labels, labels])
+        model_display = rank_normalized_display(model_rdm.loc[labels, labels])
+
+        for col_index, (display, title) in enumerate(
+            [
+                (neural_display, f"Neural RDM\n{neural.label}"),
+                (model_display, f"Chemical RDM\n{model.label}"),
+            ]
+        ):
+            ax = axes[row_index, col_index]
+            image = ax.imshow(display.to_numpy(float), cmap=cmap, vmin=0.0, vmax=1.0, interpolation="nearest")
+            ax.set_title(title, fontsize=10)
+            ax.set_xticks(range(len(labels)))
+            ax.set_yticks(range(len(labels)))
+            ax.set_xticklabels([date_stim_label(label, date_map) for label in labels], rotation=90, fontsize=6)
+            ax.set_yticklabels([date_stim_label(label, date_map) for label in labels], fontsize=6)
+            if col_index == 1:
+                fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+
+        plot_null_distribution_panel(
+            axes[row_index, 2],
+            perm_summary=perm_summary,
+            perm_null=perm_null,
+            neural_id=neural.id,
+            model_id=model.id,
+        )
+
+    fig.suptitle(
+        f"Neural vs chemical RDM with date-preserving permutation null\n"
+        f"{model.label} | heatmaps rank-normalized for display, ordered by date",
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.savefig(path, dpi=220)
+    plt.close(fig)
+
+
+def rank_normalized_display(matrix: pd.DataFrame) -> pd.DataFrame:
+    frame = matrix.apply(pd.to_numeric, errors="coerce")
+    labels = frame.index.tolist()
+    values = frame.to_numpy(float)
+    finite_mask = np.isfinite(values)
+    diagonal_mask = np.eye(len(labels), dtype=bool)
+    finite_mask &= ~diagonal_mask
+
+    display = np.full(values.shape, np.nan, dtype=float)
+    finite_values = values[finite_mask]
+    if finite_values.size:
+        ranks = pd.Series(finite_values).rank(method="average").to_numpy(float)
+        if len(ranks) > 1:
+            ranks = (ranks - 1.0) / (len(ranks) - 1.0)
+        else:
+            ranks = np.zeros_like(ranks)
+        display[finite_mask] = ranks
+    return pd.DataFrame(display, index=labels, columns=labels)
+
+
+def plot_null_distribution_panel(
+    ax: plt.Axes,
+    *,
+    perm_summary: pd.DataFrame,
+    perm_null: pd.DataFrame,
+    neural_id: str,
+    model_id: str,
+) -> None:
+    scope = "all_pairs"
+    summary = perm_summary.loc[
+        perm_summary["neural_rdm"].eq(neural_id)
+        & perm_summary["model_id"].eq(model_id)
+        & perm_summary["scope"].eq(scope)
+    ]
+    null = perm_null.loc[
+        perm_null["neural_rdm"].eq(neural_id)
+        & perm_null["model_id"].eq(model_id)
+        & perm_null["scope"].eq(scope)
+    ]
+    null_values = pd.to_numeric(null["rsa_similarity"], errors="coerce").dropna().to_numpy(float)
+    if summary.empty or null_values.size == 0:
+        ax.text(0.5, 0.5, "Permutation null unavailable", ha="center", va="center", transform=ax.transAxes)
+        ax.set_axis_off()
+        return
+
+    row = summary.iloc[0]
+    observed = float(row["observed_rsa_similarity"])
+    q025 = float(row["null_q025"])
+    q975 = float(row["null_q975"])
+    null_median = float(row["null_q50"])
+    percentile = float((np.sum(null_values <= observed) / len(null_values)) * 100.0)
+
+    ax.hist(null_values, bins=38, color="#BDBDBD", edgecolor="white", linewidth=0.5)
+    ax.axvspan(q025, q975, color="#808080", alpha=0.16, label="null 95%")
+    ax.axvline(null_median, color="#666666", linewidth=1.2, linestyle="--", label="null median")
+    ax.axvline(observed, color="#D55E00", linewidth=2.2, label="observed")
+    ax.axvline(0, color="#777777", linewidth=0.8)
+    ax.set_title(f"Permutation null\nobserved={observed:.3f}, percentile={percentile:.1f}", fontsize=10)
+    ax.set_xlabel("RSA similarity")
+    ax.set_ylabel("permutations")
+    ax.grid(axis="y", color="#DDDDDD", linewidth=0.6)
+    ax.legend(frameon=False, fontsize=7)
+
+
+def date_stim_label(label: str, date_map: dict[str, str]) -> str:
+    date = date_map.get(label, "")
+    short_date = date[-4:] if len(date) >= 4 else date
+    return f"{short_date}\n{label}"
+
+
 def model_colors() -> dict[str, str]:
     return {
         "global_qc20_log2_euclidean": "#0072B2",
@@ -625,6 +787,7 @@ def write_summary(
     perm_summary: pd.DataFrame,
     red_summary: pd.DataFrame,
     date_counts: pd.DataFrame,
+    rdm_figure_paths: list[Path],
 ) -> None:
     scopes = ["all_pairs", "within_date_only", "cross_date_only", "date_pair_stratified_rank_all"]
     key_scope = scope_summary.loc[scope_summary["scope"].isin(scopes)].sort_values(["model_id", "neural_rdm", "scope"])
@@ -719,6 +882,7 @@ def write_summary(
             "- `figures/rsa_per_date.png`",
             "- `figures/date_preserving_permutation_summary.png`",
             "- `figures/red_box_date_matched_null_summary.png`",
+            *[f"- `{path.relative_to(OUT).as_posix()}`" for path in rdm_figure_paths],
         ]
     )
     (OUT / "run_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

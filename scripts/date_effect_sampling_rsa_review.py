@@ -66,7 +66,9 @@ def main() -> None:
     leave_one_out.to_csv(TABLES / "date_pair_leave_one_out_rsa.csv", index=False)
 
     plot_sampling_summary(sampling_summary, FIGURES / "date_effect_sampling_summary.png")
-    plot_date_pair_summary(date_pair_summary, FIGURES / "date_pair_bootstrap_summary.png")
+    plot_date_pair_fixed_summary(date_pair_summary, FIGURES / "date_pair_fixed_rsa_summary.png")
+    plot_leave_one_out_summary(leave_one_out, FIGURES / "leave_one_date_pair_rsa_summary.png")
+    plot_leave_one_out_qc20_summary(leave_one_out, FIGURES / "leave_one_date_pair_rsa_summary__qc20.png")
     write_summary(sampling_summary, heterogeneity, leave_one_out)
 
 
@@ -246,6 +248,36 @@ def summarize_leave_one_date_pair_out(pairs: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def summarize_leave_one_date_out(pairs: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for (neural, model), combo in pairs.groupby(["neural_rdm", "model_id"], sort=False):
+        dates = sorted(set(combo["date_left"].astype(str)) | set(combo["date_right"].astype(str)))
+        for scope, source in [
+            ("all_pairs", combo),
+            ("cross_date_only", combo.loc[combo["date_pair_type"].eq("cross_date")]),
+        ]:
+            baseline = spearman(source["neural_value"], source["model_value"])
+            for date_value in dates:
+                reduced = source.loc[
+                    ~source["date_left"].astype(str).eq(date_value)
+                    & ~source["date_right"].astype(str).eq(date_value)
+                ]
+                rsa = spearman(reduced["neural_value"], reduced["model_value"])
+                rows.append(
+                    {
+                        "neural_rdm": neural,
+                        "model_id": model,
+                        "scope": scope,
+                        "left_out_date": date_value,
+                        "n_pairs_after_drop": int(len(reduced)),
+                        "baseline_rsa_similarity": baseline,
+                        "drop_one_rsa_similarity": rsa,
+                        "delta_vs_baseline": rsa - baseline,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
 def spearman(left: pd.Series | np.ndarray, right: pd.Series | np.ndarray) -> float:
     left = pd.Series(left, dtype="float64")
     right = pd.Series(right, dtype="float64")
@@ -302,7 +334,7 @@ def plot_sampling_summary(summary: pd.DataFrame, path: Path) -> None:
     plt.close(fig)
 
 
-def plot_date_pair_summary(summary: pd.DataFrame, path: Path) -> None:
+def plot_date_pair_fixed_summary(summary: pd.DataFrame, path: Path) -> None:
     qc = summary.loc[summary["model_id"].eq("global_qc20_log2_euclidean")].copy()
     date_pairs = sorted(qc["date_pair"].unique())
     colors = {
@@ -320,14 +352,166 @@ def plot_date_pair_summary(summary: pd.DataFrame, path: Path) -> None:
                 continue
             row = rows.loc[date_pair]
             color = colors[row["date_pair_type"]]
-            ax.hlines(idx, row["bootstrap_q025"], row["bootstrap_q975"], color=color, linewidth=1.8, alpha=0.75)
-            ax.scatter(row["bootstrap_median"], idx, color=color, s=25)
+            ax.scatter(row["source_rsa_similarity"], idx, color=color, s=28)
         ax.axvline(0, color="#777777", linewidth=0.8)
         ax.set_yticks(y)
         ax.set_yticklabels(date_pairs)
         ax.set_xlabel(neural.replace("_median_flattened", ""))
         ax.grid(axis="x", color="#DDDDDD", linewidth=0.6)
     axes[0].set_ylabel("date pair, QC20 log2 Euclidean")
+    fig.tight_layout()
+    fig.savefig(path, dpi=220)
+    plt.close(fig)
+
+
+def plot_leave_one_out_summary(summary: pd.DataFrame, path: Path) -> None:
+    scopes = ["all_pairs", "cross_date_only"]
+    scope_labels = {
+        "all_pairs": "all pairs",
+        "cross_date_only": "cross-date only",
+    }
+    colors = model_colors()
+    fig, axes = plt.subplots(len(scopes), len(NEURAL_ORDER), figsize=(14.5, 8.0), sharex=False, sharey=False)
+    if len(scopes) == 1 and len(NEURAL_ORDER) == 1:
+        axes = np.array([[axes]])
+    elif len(scopes) == 1:
+        axes = np.array([axes])
+    elif len(NEURAL_ORDER) == 1:
+        axes = np.array([[ax] for ax in axes])
+
+    for row_idx, scope in enumerate(scopes):
+        scope_rows = summary.loc[summary["scope"].eq(scope)].copy()
+        date_pairs = sorted(scope_rows["left_out_date_pair"].astype(str).unique())
+        y = np.arange(len(date_pairs))
+        offsets = np.linspace(-0.22, 0.22, len(MODEL_ORDER))
+        for col_idx, neural in enumerate(NEURAL_ORDER):
+            ax = axes[row_idx, col_idx]
+            panel = scope_rows.loc[scope_rows["neural_rdm"].eq(neural)]
+            for offset, model in zip(offsets, MODEL_ORDER):
+                model_rows = panel.loc[panel["model_id"].eq(model)].set_index("left_out_date_pair")
+                baseline = (
+                    float(model_rows["baseline_rsa_similarity"].iloc[0])
+                    if not model_rows.empty
+                    else np.nan
+                )
+                if np.isfinite(baseline):
+                    ax.axvline(baseline, color=colors[model], linewidth=1.1, alpha=0.35)
+                x = [
+                    model_rows.loc[date_pair, "drop_one_rsa_similarity"]
+                    if date_pair in model_rows.index
+                    else np.nan
+                    for date_pair in date_pairs
+                ]
+                ax.scatter(x, y + offset, color=colors[model], s=24, label=model if row_idx == 0 and col_idx == 0 else None)
+            ax.axvline(0, color="#777777", linewidth=0.8)
+            ax.set_yticks(y)
+            ax.set_yticklabels(date_pairs)
+            if row_idx == len(scopes) - 1:
+                ax.set_xlabel(neural.replace("_median_flattened", ""))
+            if col_idx == 0:
+                ax.set_ylabel(f"left-out date pair, {scope_labels[scope]}")
+            ax.grid(axis="x", color="#DDDDDD", linewidth=0.6)
+    axes[0, 0].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=220)
+    plt.close(fig)
+
+
+def plot_leave_one_out_qc20_summary(summary: pd.DataFrame, path: Path) -> None:
+    qc = summary.loc[summary["model_id"].eq("global_qc20_log2_euclidean")].copy()
+    scopes = ["all_pairs", "cross_date_only"]
+    scope_labels = {
+        "all_pairs": "all pairs",
+        "cross_date_only": "cross-date only",
+    }
+    fig, axes = plt.subplots(len(scopes), len(NEURAL_ORDER), figsize=(11.0, 7.2), sharex=False, sharey=False)
+    if len(scopes) == 1 and len(NEURAL_ORDER) == 1:
+        axes = np.array([[axes]])
+    elif len(scopes) == 1:
+        axes = np.array([axes])
+    elif len(NEURAL_ORDER) == 1:
+        axes = np.array([[ax] for ax in axes])
+
+    point_color = "#0072B2"
+    baseline_color = "#404040"
+    for row_idx, scope in enumerate(scopes):
+        scope_rows = qc.loc[qc["scope"].eq(scope)].copy()
+        date_pairs = sorted(scope_rows["left_out_date_pair"].astype(str).unique())
+        y = np.arange(len(date_pairs))
+        for col_idx, neural in enumerate(NEURAL_ORDER):
+            ax = axes[row_idx, col_idx]
+            panel = scope_rows.loc[scope_rows["neural_rdm"].eq(neural)].set_index("left_out_date_pair")
+            baseline = (
+                float(panel["baseline_rsa_similarity"].iloc[0])
+                if not panel.empty
+                else np.nan
+            )
+            if np.isfinite(baseline):
+                ax.axvline(baseline, color=baseline_color, linewidth=1.1, alpha=0.7)
+            x = [
+                panel.loc[date_pair, "drop_one_rsa_similarity"]
+                if date_pair in panel.index
+                else np.nan
+                for date_pair in date_pairs
+            ]
+            ax.scatter(x, y, color=point_color, s=30)
+            ax.axvline(0, color="#777777", linewidth=0.8)
+            ax.set_yticks(y)
+            ax.set_yticklabels(date_pairs)
+            if row_idx == len(scopes) - 1:
+                ax.set_xlabel(neural.replace("_median_flattened", ""))
+            if col_idx == 0:
+                ax.set_ylabel(f"left-out date pair, {scope_labels[scope]}")
+            ax.grid(axis="x", color="#DDDDDD", linewidth=0.6)
+            if np.isfinite(baseline):
+                ax.set_title(f"baseline = {baseline:.3f}", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(path, dpi=220)
+    plt.close(fig)
+
+
+def plot_leave_one_date_summary_qc20(summary: pd.DataFrame, path: Path) -> None:
+    qc = summary.loc[summary["model_id"].eq("global_qc20_log2_euclidean")].copy()
+    scopes = ["all_pairs", "cross_date_only"]
+    scope_labels = {
+        "all_pairs": "all pairs",
+        "cross_date_only": "cross-date only",
+    }
+    scope_colors = {
+        "all_pairs": "#0072B2",
+        "cross_date_only": "#D55E00",
+    }
+    dates = sorted(qc["left_out_date"].astype(str).unique())
+    fig, axes = plt.subplots(1, len(NEURAL_ORDER), figsize=(12.5, 5.4), sharey=True)
+    if len(NEURAL_ORDER) == 1:
+        axes = [axes]
+    y = np.arange(len(dates))
+    offsets = [-0.12, 0.12]
+    for ax, neural in zip(axes, NEURAL_ORDER):
+        rows = qc.loc[qc["neural_rdm"].eq(neural)]
+        for offset, scope in zip(offsets, scopes):
+            scope_rows = rows.loc[rows["scope"].eq(scope)].set_index("left_out_date")
+            baseline = (
+                float(scope_rows["baseline_rsa_similarity"].iloc[0])
+                if not scope_rows.empty
+                else np.nan
+            )
+            if np.isfinite(baseline):
+                ax.axvline(baseline, color=scope_colors[scope], linewidth=1.2, alpha=0.35)
+            x = [
+                scope_rows.loc[date_value, "drop_one_rsa_similarity"]
+                if date_value in scope_rows.index
+                else np.nan
+                for date_value in dates
+            ]
+            ax.scatter(x, y + offset, color=scope_colors[scope], s=30, label=scope_labels[scope])
+        ax.axvline(0, color="#777777", linewidth=0.8)
+        ax.set_yticks(y)
+        ax.set_yticklabels(dates)
+        ax.set_xlabel(neural.replace("_median_flattened", ""))
+        ax.grid(axis="x", color="#DDDDDD", linewidth=0.6)
+    axes[0].set_ylabel("left-out date, QC20 log2 Euclidean")
+    axes[-1].legend(frameon=False, fontsize=8)
     fig.tight_layout()
     fig.savefig(path, dpi=220)
     plt.close(fig)
@@ -429,7 +613,9 @@ def write_summary(summary: pd.DataFrame, heterogeneity: pd.DataFrame, leave_one_
         "- `tables/date_pair_heterogeneity_summary.csv`",
         "- `tables/date_pair_leave_one_out_rsa.csv`",
         "- `figures/date_effect_sampling_summary.png`",
-        "- `figures/date_pair_bootstrap_summary.png`",
+        "- `figures/date_pair_fixed_rsa_summary.png`",
+        "- `figures/leave_one_date_pair_rsa_summary.png`",
+        "- `figures/leave_one_date_pair_rsa_summary__qc20.png`",
     ]
     (REVIEW_ROOT / "date_effect_sampling_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 

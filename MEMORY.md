@@ -1,7 +1,7 @@
 # Agent Memory
 
 > memory_schema_version: 1
-> updated_at: 2026-04-22T14:28:00+08:00
+> updated_at: 2026-04-25T19:47:56+08:00
 > last_consolidated: 2026-03-27
 
 <!-- Partial migration status: `Preferences` and `Active Threads` use durable memory schema v1. Remaining sections stay in legacy form until they are migrated. -->
@@ -624,6 +624,41 @@ Why it matters:
 
 Evidence:
 - prior MEMORY.md
+
+### MEM-20260425-001 | Prefer concise scientific figures and module-first callable APIs
+
+- type: preference
+- source: user instruction on 2026-04-25 and project AGENTS.md config
+- created_at: 2026-04-25T19:47:56+08:00
+- updated_at: 2026-04-25T19:47:56+08:00
+- confidence: 1.0
+- status: active
+- tags: [scientific-plotting, figure-style, api-design, module-first, cli]
+- topic: user-preferences
+- last_seen: 2026-04-25
+- aliases: [concise scientific plotting, simple figure labels, module-first functions, callable Python APIs, thin CLI wrappers]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For scientific plotting in this project, prefer simple, readable figures with
+understandable nouns, brief annotations, and short titles. Avoid unnecessary
+comments, redundant in-figure explanations, decorative complexity, and long
+titles. For future functions, prioritize modular Python-callable APIs. Keep CLI
+entry points available as thin wrappers, but do not optimize primarily for
+command-line ergonomics unless explicitly requested.
+
+Why it matters:
+- Keeps research figures focused on the scientific result rather than visual or
+  textual clutter.
+- Makes analysis code easier for the user to call directly from notebooks,
+  scripts, or follow-up modules.
+- Preserves CLI access without letting CLI concerns dominate internal design.
+
+Evidence:
+- AGENTS.md
+- memory/2026-04-25.md
 
 ## Lessons
 
@@ -1465,6 +1500,53 @@ Evidence:
 - results/202604_without_20260331/supervised_subspace_search/final_results/README.md
 - docs/superpowers/plans/2026-04-21-subspace-search.md
 
+### MEM-20260423-001 | Anchor subset-RSA narrative to full-space permutation evidence
+
+- type: decision
+- source: 2026-04-23 user instruction plus memory review of permutation standards and recent handoff notes
+- created_at: 2026-04-23T15:27:23+08:00
+- updated_at: 2026-04-23T15:35:18+08:00
+- confidence: 1.0
+- status: active
+- tags: [rsa, interpretation, permutation, taxonomy-rsa, subspace-search]
+- topic: rsa-workflow
+- last_seen: 2026-04-23
+- aliases: [subset chemical narrative, full-space permutation foundation, stimulus-subset robustness is not chemical-subset null, fixed subset significance is conditional on selection, reselection stability]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For the current reporting narrative, the full-space neural-vs-chemical RDM
+permutation figure remains the foundation evidence. Taxonomy/class subsets or
+weighted subset-style models may be used to support the weaker claim that some
+chemical subsets raise neural-chemical RSA, but only as descriptive enrichment
+on top of that foundation. The current sampled-permutation robustness figure is
+a stimulus-subset check, not a chemical-subset selection null. If a chemical
+subset is evaluated with its own sampled robustness check and permutation test,
+that can support reliability, but only relative to the exact design: fixing the
+chosen subset and resampling/permuting tests conditional robustness of that
+frozen subset, whereas rerunning subset selection inside each resample or null
+tests selection stability and search-corrected significance.
+
+Why it matters:
+- Keeps the main result anchored to fixed-model evidence that is already part of
+  the current handoff, instead of promoting mined subset outputs as the primary
+  chemical-space conclusion.
+- Preserves the correct validation boundary: fixed or predeclared subset models
+  can reuse fixed-model label-shuffle logic, but mined subset claims still need
+  matched random feature/subspace nulls or held-out validation.
+- Separates three claims that are often conflated:
+  fixed-subset above-chance alignment, subset-selection stability, and
+  out-of-sample generalization.
+- Prevents future sessions from overstating what the existing sampled-permutation
+  figure already proves about subset reliability.
+
+Evidence:
+- memory/2026-04-19.md
+- memory/2026-04-22.md
+- memory/2026-04-23.md
+
 ## Active Threads
 
 <!-- Migrated from legacy Active Threads bullets on 2026-04-09. -->
@@ -1638,12 +1720,12 @@ Evidence:
 - type: active-thread
 - source: user request and implementation plan written on 2026-04-21
 - created_at: 2026-04-21T14:33:49+08:00
-- updated_at: 2026-04-21T15:57:46+08:00
+- updated_at: 2026-04-23T15:27:23+08:00
 - confidence: 1.0
-- status: active
+- status: completed
 - tags: [rsa, supervised-alignment, subspace-search, metabolite-selection, validation, date-control]
 - topic: rsa-workflow
-- last_seen: 2026-04-21
+- last_seen: 2026-04-23
 - aliases: [supervised chemical subspace search, metabolite subset search, neural-aligned candidate chemical subspace]
 - ttl_days: null
 - supersedes: [MEM-20260421-002]
@@ -1657,20 +1739,19 @@ branch `codex/supervised-subspace-search` at commit `f3ea2a4`, based on
 search is the coarse interpretable layer, within-taxonomy greedy metabolite
 refinement is the main fine-grained layer, and global metabolite greedy search
 is exploratory. Main evidence comes from held-out date, held-out stimulus,
-cross-view validation, and matched random nulls.
+cross-view validation, and matched random nulls. On 2026-04-22, the route was
+closed as an audited negative result rather than advanced as the main reporting
+path.
 
 Why it matters:
-- This is more interpretable than a direct ridge neural-aligned model while
-  still allowing individual chemicals to enter the selected feature set.
-- It avoids treating whole taxonomy classes as indivisible when only a subset
-  of metabolites may align with neural geometry.
-- It keeps leakage control central: held-out pairs cannot be used during
-  category or metabolite selection.
+- Preserves the implemented search as a reproducible method-development record.
+- Reminds later sessions that this route no longer drives the main narrative,
+  because final selected models were too collapsed and too hard to explain for
+  the scientific question.
 
 Next step:
-- Review and merge `codex/supervised-subspace-search`, then decide whether to
-  run the full default `500`-null real-data analysis or keep the smaller smoke
-  output as an implementation check only.
+- No further branch action remains; keep the archived outputs for audit and do
+  not reopen this route as the primary chemical-space conclusion.
 
 Evidence:
 - docs/superpowers/plans/2026-04-21-subspace-search.md
@@ -1681,6 +1762,69 @@ Evidence:
 - MEM-20260421-001
 - MEM-20260421-002
 - memory/2026-04-21.md
+
+### MEM-20260423-002 | Start the next taxonomy thread from stable class-neural association rather than paper-ready reporting
+
+- type: active-thread
+- source: user instruction on 2026-04-23 after clarifying robustness and search-corrected significance
+- created_at: 2026-04-23T15:45:04+08:00
+- updated_at: 2026-04-23T21:35:02+08:00
+- confidence: 1.0
+- status: active
+- tags: [rsa, taxonomy-rsa, permutation, validation, interpretation]
+- topic: rsa-workflow
+- last_seen: 2026-04-23
+- aliases: [stable taxonomy classes, taxonomy-first stable classes, class-neural association]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+The next thread should start from the existing taxonomy results and ask which
+chemical classes are stably associated with neural space. Keep the previously
+agreed three-layer evidence split: fixed-subset above-chance alignment,
+reselection stability under resampling, and search-corrected significance under
+full-search permutations. Do not jump to paper-ready wording from the current
+results.
+
+For the RDM comparison figure, keep the display simple: `magma` heatmaps using
+the full stimulus set in the same order and raw RDM values. Include neural,
+full-chemical, and top-class chemical RDMs; do not use within-RDM scaling or add
+pairwise-rank scatter panels.
+
+The RDM comparison figure should also be mirrored into
+`results/202604_without_20260331/date_controlled_rsa_review/figures` as a
+companion to the date-controlled neural-chemical RDM foundation figures.
+
+For class-to-class chemical RDM similarity, prefer a clustered class-by-class
+RSA matrix rather than a histogram. Highlight `Purine nucleosides` directly and
+show its similarities to other classes as a simple bar summary.
+
+Why it matters:
+- Narrows the exploratory space to interpretable taxonomy classes instead of
+  reopening the archived supervised subset route.
+- Makes the goal explicit: not "which class gives the highest one-off RSA",
+  but "which classes recur under repeated reselection and survive a search-
+  corrected null."
+- Keeps future sessions aligned with the user's current threshold for evidence:
+  current results are still below paper-output standard.
+
+Next step:
+- Review the generated taxonomy class stability figures and decide which
+  classes should remain as stable exploratory candidates.
+
+Evidence:
+- memory/2026-04-23.md
+- MEM-20260423-001
+- MEM-20260419-005
+- MEM-20260419-007
+- docs/superpowers/plans/2026-04-23-taxonomy-class-stability-figures-plan.md
+- scripts/taxonomy_class_stability_review.py
+- results/202604_without_20260331/taxonomy_class_stability_review/run_summary.md
+- results/202604_without_20260331/taxonomy_class_stability_review/figures/03_top_class_rdm_comparison.png
+- results/202604_without_20260331/taxonomy_class_stability_review/figures/04_taxonomy_class_stability_summary.png
+- results/202604_without_20260331/taxonomy_class_stability_review/figures/05_class_chemical_rdm_similarity_matrix.png
+- results/202604_without_20260331/date_controlled_rsa_review/figures/neural_chemical_rdm_foundation__response_window_full_vs_top_class_rdms.png
 
 ## Key References
 - `docs/neuron_data_format.md`
