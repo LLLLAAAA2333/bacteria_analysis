@@ -86,20 +86,33 @@ dataset = build_analysis_dataset(
     neural_path="data/202604/202604_data.parquet",
     matrix_path="data/matrix.xlsx",
     metadata_path="data/metabolism_raw_data.xlsx",
-    anchor_path="data/202604/202604_data_withbaseodor.parquet",
     exclude_dates=["20260331"],
+)
+
+anchor_dataset = build_anchor_dataset(
+    neural_path="data/202604/202604_data_withbaseodor.parquet",
+    anchor_stimuli=("s3_0", "s6_1", "s8_2"),
 )
 ```
 
 The returned `AnalysisDataset` should contain:
 
-- filtered neural trial table or trial tensor inputs;
+- filtered neural trial data loaded from the raw neural parquet;
 - metabolite matrix;
 - metabolite metadata;
 - stimulus-to-sample mapping;
-- optional anchor-stimulus raw table;
 - dataset metadata such as included dates, excluded dates, number of stimuli,
   and default stimulus order.
+
+The default dataset path should read directly from raw neural parquet and build
+the needed trial-level features in memory. Preprocessing is usually fast enough
+that new analysis code should not require existing preprocess output directories
+as the public input contract. Preprocessed artifacts may still be used as an
+internal optimization later, but they should not be required for the main API.
+
+Anchor-stimulus data should be accepted as a separate dataset because it may use
+different raw files, date filters, or stimulus panels from the main neural-
+chemical analysis.
 
 This module should replace scattered path defaults in review scripts.
 
@@ -251,7 +264,7 @@ Primary API:
 
 ```python
 anchor = run_anchor_batch_effect(
-    dataset,
+    anchor_dataset,
     anchor_stimuli=("s3_0", "s6_1", "s8_2"),
     views=("response_window", "full_trajectory"),
     aggregation="median",
@@ -309,6 +322,21 @@ Main outputs:
 - date-preserving significance where date labels are available;
 - sample/stimulus subset stability;
 - compact RDM and null-distribution figures.
+
+Current caution:
+
+The current RDM rank similarity is not high, so the first implementation should
+not freeze one alignment metric as final. It should expose a small set of
+comparison summaries that can be inspected side by side:
+
+- raw upper-triangle Spearman RSA;
+- date-stratified rank RSA;
+- within-date and cross-date RSA;
+- sample/stimulus subset stability;
+- label-shuffle and date-preserving null context.
+
+This keeps the analysis honest while leaving room to explore whether another
+alignment comparison better captures the shared structure.
 
 Default saved outputs should omit full pair-level and null-draw tables. Those
 large tables are useful only under `debug=True`.
@@ -437,11 +465,17 @@ Existing modules to reuse where possible:
 The first implementation should copy or move only the stable, needed pieces.
 Avoid preserving incidental exploratory behavior just because it exists.
 
+After the new notebook workflow is validated, `scripts/run_rsa.py` may be frozen
+as a legacy compatibility entry point. It should not receive new feature work
+unless a specific comparison against the old workflow is needed.
+
 ## Migration Plan
 
 ### Slice 1: Build the new foundation
 
 - Add `AnalysisDataset`.
+- Make raw neural parquet the default input for the new dataset builder.
+- Add `AnchorDataset` or an equivalent separate anchor-data input object.
 - Add RDM utilities.
 - Add neural feature/RDM construction for the current reference:
   non-ASE L/R merge, trial median, response-window and full-trajectory views.
@@ -451,7 +485,11 @@ Avoid preserving incidental exploratory behavior just because it exists.
 ### Slice 2: Rebuild RDM alignment
 
 - Implement `run_rdm_alignment` from source data.
-- Recreate the current broad-baseline RSA values within expected tolerance.
+- Recreate the current broad-baseline RSA values within a tolerance based on the
+  relevant 99th-percentile/null or resampling context, rather than a brittle
+  exact-match threshold for stochastic summaries.
+- Keep alignment-comparison methods inspectable because the current rank
+  similarity is modest and may not be the final best comparison.
 - Add compact figures and explicit saving.
 - Keep large pair/null tables debug-only.
 
@@ -485,6 +523,8 @@ Avoid preserving incidental exploratory behavior just because it exists.
 Unit tests should cover:
 
 - date filtering and stimulus/sample mapping;
+- raw neural parquet loading for the new default dataset path;
+- separate anchor-dataset loading;
 - neural feature aggregation and L/R merge behavior;
 - chemical QC filtering and log2 transform;
 - RDM alignment and upper-triangle extraction;
@@ -501,7 +541,8 @@ Integration tests should use small synthetic fixtures to run:
 
 One real-data smoke test may be kept outside default CI or marked slow. It
 should verify that the filtered 202604 workflow can run end-to-end and produce
-the expected result object structure.
+the expected result object structure. Stochastic regression checks should use a
+99th-percentile or null-context tolerance instead of hard-coded exact values.
 
 ## Acceptance Criteria
 
@@ -513,19 +554,23 @@ the expected result object structure.
 - Saving is explicit and produces only final summaries, figures, and compact
   tables.
 - The broad RDM alignment result approximately reproduces the current filtered
-  202604 baseline.
+  202604 baseline under the agreed 99th-percentile/null-context tolerance.
 - The chemical class result recovers `Purine nucleosides` as the leading current
   class under the current data and parameters.
 - The code paths used by notebooks are the same code paths covered by tests.
 
-## Open Questions
+## Resolved Decisions
 
-- Should `build_analysis_dataset` read directly from raw neural parquet, from
-  preprocess outputs, or support both with a clear preference?
-- Should anchor-stimulus data live inside the same dataset object, or should
-  anchor analysis accept a separate anchor dataset?
+- `build_analysis_dataset` should read directly from raw neural parquet by
+  default. Existing preprocess outputs should not be required for the new public
+  API.
+- Anchor-stimulus data should be accepted as a separate dataset/input object.
+- `scripts/run_rsa.py` can be frozen once the new notebook workflow is confirmed.
+- Stochastic comparison tolerance can use the relevant 99th-percentile/null
+  context rather than exact-value matching.
+
+## Remaining Open Questions
+
 - Should saved RDM matrices be considered final outputs or debug artifacts?
-- What tolerance should define "reproduces current result" for stochastic
-  permutation summaries?
-- Should the old `scripts/run_rsa.py` remain maintained, or be frozen after the
-  new notebook workflow is validated?
+- Which alignment comparison should become the primary scientific summary if
+  raw rank similarity remains modest?
