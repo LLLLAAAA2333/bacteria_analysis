@@ -317,7 +317,6 @@ Main outputs:
 - broad chemical RDM;
 - all-pair RSA;
 - within-date and cross-date RSA;
-- date-pair-stratified RSA;
 - label-shuffle significance;
 - date-preserving significance where date labels are available;
 - sample/stimulus subset stability;
@@ -330,10 +329,15 @@ not freeze one alignment metric as final. It should expose a small set of
 comparison summaries that can be inspected side by side:
 
 - raw upper-triangle Spearman RSA;
-- date-stratified rank RSA;
 - within-date and cross-date RSA;
 - sample/stimulus subset stability;
 - label-shuffle and date-preserving null context.
+
+Within-date and cross-date RSA should be the primary date-control summaries
+because they are direct and easy to interpret. Date-pair-stratified rank RSA may
+be kept as a diagnostic-only sensitivity check, but it should not drive the main
+scientific narrative unless later evidence shows it captures a clearer and more
+defensible alignment signal.
 
 This keeps the analysis honest while leaving room to explore whether another
 alignment comparison better captures the shared structure.
@@ -572,5 +576,5 @@ the expected result object structure. Stochastic regression checks should use a
 ## Remaining Open Questions
 
 - Should saved RDM matrices be considered final outputs or debug artifacts?
-- Which alignment comparison should become the primary scientific summary if
-  raw rank similarity remains modest?
+- Which alignment comparison, beyond direct all-pair/within-date/cross-date
+  RSA, is worth retaining if raw rank similarity remains modest?
