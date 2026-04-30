@@ -13,6 +13,8 @@ geometry = "python scripts/run_geometry.py"
 rsa = "python scripts/run_rsa.py"
 model-space = "python scripts/build_model_space.py"
 
+[activation.env]
+PYTHONPATH = "src"
 
 [dependencies]
 python = "3.11.*"
