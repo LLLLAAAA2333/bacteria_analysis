@@ -3,6 +3,12 @@
 Date: 2026-04-24
 Status: interim interpretation summary for slides and discussion; not paper-ready wording
 
+Workflow note added 2026-04-30: future reruns should use the new function-first
+APIs (`build_analysis_dataset`, `run_rdm_alignment`, and
+`run_chemical_class_rsa`) once the notebook workflow is validated. The result
+directories listed below remain audit snapshots, not preferred inputs for new
+analyses.
+
 ## One-Sentence Conclusion
 
 Gut bacterial chemical space shows a modest but statistically reliable alignment
