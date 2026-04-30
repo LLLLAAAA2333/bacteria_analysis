@@ -34,6 +34,21 @@ def plot_rdm_heatmap_pair(neural: pd.DataFrame, chemical: pd.DataFrame, *, title
     return figure
 
 
+def plot_rdm_heatmap(matrix: pd.DataFrame, *, title: str = "RDM") -> Figure:
+    """Return a single compact RDM heatmap."""
+
+    figure, axis = plt.subplots(figsize=(4.2, 3.6), constrained_layout=True)
+    values = matrix.to_numpy(dtype=float, copy=False)
+    finite = values[np.isfinite(values)]
+    vmax = float(np.nanmax(finite)) if finite.size else 1.0
+    image = axis.imshow(values, cmap="viridis", vmin=0.0, vmax=vmax)
+    axis.set_xticks(range(len(matrix.columns)), matrix.columns.astype(str), rotation=90)
+    axis.set_yticks(range(len(matrix.index)), matrix.index.astype(str))
+    axis.set_title(title)
+    figure.colorbar(image, ax=axis, shrink=0.85, label="distance")
+    return figure
+
+
 def plot_null_distribution(null_values: np.ndarray, observed: float, *, title: str = "Label-shuffle null") -> Figure:
     """Return a compact null-distribution plot with the observed RSA marked."""
 
@@ -66,6 +81,7 @@ def plot_subset_stability(subset_results: pd.DataFrame, *, title: str = "Subset 
 
 __all__ = [
     "plot_null_distribution",
+    "plot_rdm_heatmap",
     "plot_rdm_heatmap_pair",
     "plot_subset_stability",
 ]

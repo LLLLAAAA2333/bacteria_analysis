@@ -54,7 +54,7 @@ LR_MERGE_PAIRS = {
     "AWB": ("AWBL", "AWBR"),
 }
 
-FEATURE_ID_COLUMNS = ("trial_id", "stimulus", "stim_name")
+FEATURE_ID_COLUMNS = ("trial_id", "stimulus", "stim_name", "date")
 SUPPORTED_AGGREGATIONS = ("median", "mean")
 SUPPORTED_DISTANCES = ("correlation", "euclidean")
 FEATURE_COLUMN_PATTERN = re.compile(r"^[A-Za-z0-9]+__t\d{2}$")
