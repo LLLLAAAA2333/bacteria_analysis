@@ -333,11 +333,17 @@ comparison summaries that can be inspected side by side:
 - sample/stimulus subset stability;
 - label-shuffle and date-preserving null context.
 
-Within-date and cross-date RSA should be the primary date-control summaries
-because they are direct and easy to interpret. Date-pair-stratified rank RSA may
-be kept as a diagnostic-only sensitivity check, but it should not drive the main
-scientific narrative unless later evidence shows it captures a clearer and more
-defensible alignment signal.
+Within-date and cross-date RSA should be the primary date-structure summaries
+because they are direct and easy to interpret. They are descriptive summaries,
+not clean controls, because stimulus identity and date are confounded in the
+current dataset. Cross-date RSA is therefore a stress test for cross-date
+stability, not proof of or against generalization.
+
+Date-pair-stratified rank RSA should not be implemented in the new core
+workflow. It is a post-hoc sensitivity analysis with an unclear primary
+scientific estimand, and it risks rank-normalizing away date/sample-composition
+structure. It can be reconsidered only if a future question explicitly needs
+that sensitivity analysis.
 
 This keeps the analysis honest while leaving room to explore whether another
 alignment comparison better captures the shared structure.
@@ -358,7 +364,7 @@ Primary API:
 ```python
 classes = run_chemical_class_rsa(
     dataset,
-    neural_rdm=alignment.neural_rdm,
+    neural_rdm=alignment.rdms["neural"],
     taxonomy_level="Class",
     qc_threshold=0.2,
     min_features=3,
@@ -425,6 +431,8 @@ results/<run_id>/
     summary.md
     summary.json
     parameters.json
+    audit/
+    rdms/
     figures/
     tables/
 
@@ -432,6 +440,8 @@ results/<run_id>/
     summary.md
     summary.json
     parameters.json
+    audit/
+    rdms/
     figures/
     tables/
 ```
@@ -440,12 +450,29 @@ Each analysis should save only final, likely-to-be-read tables and figures by
 default. Large intermediate artifacts go under `debug/` only when explicitly
 requested.
 
+Default saved audit artifacts should be compact and sufficient to reproduce the
+analysis:
+
+- source manifest with input paths, file hashes when cheap to compute, git
+  commit, package version when available, seeds, permutation counts, and key
+  parameters;
+- aligned stimulus order for every final RDM comparison;
+- `n_pairs` by scope for all-pair, within-date, and cross-date summaries;
+- retained metabolite lists for full chemical RDMs;
+- retained feature lists for reported chemical classes;
+- final aligned RDM matrices used in headline figures or summaries.
+
+Final aligned RDM matrices are considered audit outputs, not disposable
+intermediates. Save the RDMs used for the broad alignment and the reported
+top-class/final-shortlist comparisons by default. Do not save every candidate
+class RDM by default.
+
 Examples of debug-only files:
 
 - pair-level distance tables;
 - every permutation draw;
 - every resampling draw;
-- all candidate RDM matrices.
+- all non-reported candidate RDM matrices.
 
 ## Relationship to Existing Code
 
@@ -572,9 +599,10 @@ the expected result object structure. Stochastic regression checks should use a
 - `scripts/run_rsa.py` can be frozen once the new notebook workflow is confirmed.
 - Stochastic comparison tolerance can use the relevant 99th-percentile/null
   context rather than exact-value matching.
+- Final aligned RDM matrices used for headline comparisons should be saved by
+  default as audit outputs; non-reported candidate RDMs stay debug-only.
 
 ## Remaining Open Questions
 
-- Should saved RDM matrices be considered final outputs or debug artifacts?
-- Which alignment comparison, beyond direct all-pair/within-date/cross-date
-  RSA, is worth retaining if raw rank similarity remains modest?
+- Which alignment comparison, beyond direct all-pair/within-date/cross-date RSA
+  and sample stability, is worth exploring if raw rank similarity remains modest?
