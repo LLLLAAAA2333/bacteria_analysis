@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
-import warnings
 
 import matplotlib
 
@@ -20,17 +19,17 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from bacteria_analysis.constants import NEURON_ORDER
-from bacteria_analysis.model_space import build_stimulus_sample_map, read_metabolite_matrix
-from bacteria_analysis.model_space_seed import RAW_METADATA_SHEET_NAME, _normalize_header_text
-from bacteria_analysis.reliability import TrialView
-from bacteria_analysis.rsa import compute_rsa_score
-from bacteria_analysis.rsa_aggregated_responses import (
-    build_aggregated_response_rdm,
-    build_grouped_aggregated_responses,
-    load_aggregated_response_context_inputs,
+from bacteria_analysis.biological_subspace import (
+    VIEW_NAMES,
+    build_chemical_rdm,
+    build_neural_rdms,
+    build_stimulus_mapping,
+    coerce_rdm_heatmap_frame,
+    load_taxonomy_qc,
+    prepare_display_frames,
 )
-from bacteria_analysis.rsa_outputs import _coerce_rdm_heatmap_frame, _prepare_rdm_heatmap_frame
+from bacteria_analysis.model_space import read_metabolite_matrix
+from bacteria_analysis.rsa import compute_rsa_score
 
 DEFAULT_SELECTED_MODELS: tuple[tuple[str, str], ...] = (
     ("Class", "Pyridines and derivatives"),
@@ -38,8 +37,6 @@ DEFAULT_SELECTED_MODELS: tuple[tuple[str, str], ...] = (
     ("Class", "Purine nucleosides"),
     ("SubClass", "Indolyl carboxylic acids and derivatives"),
 )
-VIEW_NAMES: tuple[str, str] = ("response_window", "full_trajectory")
-KEEP_SEPARATE_NEURONS = {"ASEL", "ASER"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,147 +70,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _build_lr_merge_plan() -> tuple[list[str], list[list[int]]]:
-    neurons = list(NEURON_ORDER)
-    present = set(neurons)
-    merged_names: list[str] = []
-    merged_indices: list[list[int]] = []
-    seen_bases: set[str] = set()
-
-    for index, neuron in enumerate(neurons):
-        if neuron in KEEP_SEPARATE_NEURONS:
-            merged_names.append(neuron)
-            merged_indices.append([index])
-            continue
-
-        if neuron.endswith("L") or neuron.endswith("R"):
-            base_name = neuron[:-1]
-            left_name = f"{base_name}L"
-            right_name = f"{base_name}R"
-            if base_name in seen_bases:
-                continue
-            if left_name in present and right_name in present and base_name != "ASE":
-                merged_names.append(base_name)
-                merged_indices.append([neurons.index(left_name), neurons.index(right_name)])
-                seen_bases.add(base_name)
-                continue
-
-        merged_names.append(neuron)
-        merged_indices.append([index])
-
-    return merged_names, merged_indices
-
-
-def merge_lr_view(view: TrialView) -> TrialView:
-    _, merged_indices = _build_lr_merge_plan()
-    merged_slices: list[np.ndarray] = []
-    for neuron_indices in merged_indices:
-        subset = view.values[:, neuron_indices, :]
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            merged_slices.append(np.nanmean(subset, axis=1))
-    merged_values = np.stack(merged_slices, axis=1)
-    return TrialView(
-        name=view.name,
-        timepoints=view.timepoints,
-        metadata=view.metadata.reset_index(drop=True),
-        values=merged_values,
-    )
-
-
-def build_neural_rdms(preprocess_root: Path) -> tuple[dict[str, pd.DataFrame], pd.DataFrame]:
-    context = load_aggregated_response_context_inputs(preprocess_root, view_names=VIEW_NAMES)
-
-    rdms: dict[str, pd.DataFrame] = {}
-    supports: list[pd.DataFrame] = []
-    for view_name in VIEW_NAMES:
-        merged_view = merge_lr_view(context.views[view_name])
-        pooled_responses, support = build_grouped_aggregated_responses(
-            merged_view,
-            group_columns=("stimulus", "stim_name"),
-            aggregation="median",
-        )
-        rdms[view_name] = build_aggregated_response_rdm(pooled_responses, id_columns=("stimulus",))
-        supports.append(support.assign(view_name=view_name))
-    return rdms, pd.concat(supports, ignore_index=True)
-
-
-def load_taxonomy_qc(raw_metadata_path: Path) -> pd.DataFrame:
-    frame = pd.read_excel(
-        raw_metadata_path,
-        sheet_name=RAW_METADATA_SHEET_NAME,
-        usecols=lambda column: column in {"name", "QCRSD", "SuperClass", "Class", "SubClass"},
-        dtype=str,
-    ).fillna("")
-    frame["name"] = frame["name"].astype(str).str.strip()
-    frame = frame.loc[frame["name"] != ""].copy()
-    frame["normalized_name"] = frame["name"].map(lambda value: _normalize_header_text(str(value))[0])
-    frame["QCRSD"] = pd.to_numeric(frame["QCRSD"], errors="coerce")
-    for column in ("SuperClass", "Class", "SubClass"):
-        frame[column] = frame[column].astype(str).str.strip()
-    return frame.loc[:, ["normalized_name", "QCRSD", "SuperClass", "Class", "SubClass"]].drop_duplicates(
-        subset=["normalized_name"]
-    )
-
-
-def build_stimulus_mapping(preprocess_root: Path, matrix: pd.DataFrame) -> pd.DataFrame:
-    metadata = pd.read_parquet(preprocess_root / "trial_level" / "trial_metadata.parquet")
-    return build_stimulus_sample_map(metadata, matrix_sample_ids=matrix.index)
-
-
-def build_chemical_rdm(
-    matrix: pd.DataFrame,
-    stimulus_sample_map: pd.DataFrame,
-    metabolite_names: list[str],
-) -> pd.DataFrame:
-    feature_frame = matrix.loc[stimulus_sample_map["sample_id"].astype(str).tolist(), metabolite_names].copy()
-    feature_frame.index = pd.Index(stimulus_sample_map["stimulus"].astype(str).tolist(), name="stimulus")
-    feature_frame = feature_frame.apply(pd.to_numeric, errors="coerce")
-    finite_feature_mask = np.isfinite(feature_frame).all(axis=0)
-    feature_frame = feature_frame.loc[:, finite_feature_mask].copy()
-    if feature_frame.shape[1] == 0:
-        raise ValueError("selected metabolite set has no finite retained features")
-
-    values = np.log2(feature_frame.to_numpy(dtype=float, copy=False))
-    deltas = values[:, np.newaxis, :] - values[np.newaxis, :, :]
-    distances = np.sqrt(np.sum(deltas * deltas, axis=2))
-    np.fill_diagonal(distances, 0.0)
-
-    frame = pd.DataFrame(distances, index=feature_frame.index, columns=feature_frame.index)
-    frame.insert(0, "stimulus_row", frame.index.astype(str))
-    return frame.reset_index(drop=True)
-
-
-def prepare_display_frames(
-    neural_matrix: pd.DataFrame,
-    model_matrices: dict[str, pd.DataFrame],
-    stimulus_sample_map: pd.DataFrame,
-) -> tuple[list[str], dict[str, pd.DataFrame]]:
-    neural_display, order_labels = _prepare_rdm_heatmap_frame(neural_matrix, stimulus_sample_map)
-    neural_display = _mask_diagonal(neural_display)
-    displays = {"neural": neural_display}
-    for model_id, model_matrix in model_matrices.items():
-        display, _ = _prepare_rdm_heatmap_frame(
-            model_matrix,
-            stimulus_sample_map,
-            order_labels=order_labels,
-        )
-        displays[model_id] = _mask_diagonal(display)
-    return order_labels, displays
-
-
-def _mask_diagonal(frame: pd.DataFrame) -> pd.DataFrame:
-    masked = _coerce_rdm_heatmap_frame(frame).copy()
-    diagonal_length = min(masked.shape)
-    for index in range(diagonal_length):
-        masked.iat[index, index] = np.nan
-    return masked
-
-
 def _shared_norm(frames: list[pd.DataFrame]) -> matplotlib.colors.PowerNorm:
     finite_values: list[np.ndarray] = []
     for frame in frames:
-        values = _coerce_rdm_heatmap_frame(frame).to_numpy(dtype=float, copy=False)
+        values = coerce_rdm_heatmap_frame(frame).to_numpy(dtype=float, copy=False)
         if values.size == 0:
             continue
         finite_mask = np.isfinite(values)
@@ -271,7 +131,7 @@ def render_panel(
         for col_index, (panel_id, title) in enumerate(panel_titles):
             axis = figure.add_subplot(grid[row_index, col_index])
             display = row_displays[panel_id]
-            values = _coerce_rdm_heatmap_frame(display).to_numpy(dtype=float, copy=False)
+            values = coerce_rdm_heatmap_frame(display).to_numpy(dtype=float, copy=False)
             last_image = axis.imshow(values, cmap=cmap, norm=row_norm)
             if row_index == 0:
                 axis.set_title(title, fontsize=10)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -673,6 +674,71 @@ def plot_anchor_ideal_models(
     return finish_figure(figure, output_path, dpi=dpi)
 
 
+def create_rdm_panel_figure(
+    *,
+    nrows: int,
+    figsize: tuple[float, float],
+) -> tuple[Figure, np.ndarray, np.ndarray]:
+    """Create a two-column RDM panel grid with dedicated colorbar axes."""
+
+    figure = plt.figure(figsize=figsize)
+    grid = figure.add_gridspec(
+        nrows=nrows,
+        ncols=4,
+        width_ratios=(1.0, 0.06, 1.0, 0.06),
+        left=0.07,
+        right=0.96,
+        bottom=0.08,
+        top=0.9,
+        wspace=0.28,
+        hspace=0.34,
+    )
+    axes = np.empty((nrows, 2), dtype=object)
+    colorbar_axes = np.empty((nrows, 2), dtype=object)
+    for row_index in range(nrows):
+        axes[row_index, 0] = figure.add_subplot(grid[row_index, 0])
+        colorbar_axes[row_index, 0] = figure.add_subplot(grid[row_index, 1])
+        axes[row_index, 1] = figure.add_subplot(grid[row_index, 2])
+        colorbar_axes[row_index, 1] = figure.add_subplot(grid[row_index, 3])
+    return figure, axes, colorbar_axes
+
+
+def render_prepared_rdm_panels(
+    figure: Figure,
+    axes: np.ndarray,
+    colorbar_axes: np.ndarray,
+    panels: list[tuple[int, int, pd.DataFrame | None, str, str]],
+) -> None:
+    """Render prepared RDM heatmaps into a two-column panel grid."""
+
+    cmap = matplotlib.colormaps["viridis"].copy()
+    cmap.set_bad("#f2f2f2")
+
+    for row_index, col_index, frame, title, fallback_message in panels:
+        axis = axes[row_index, col_index]
+        colorbar_axis = colorbar_axes[row_index, col_index]
+        axis.set_title(title)
+        image = _render_prepared_rdm_axis(
+            axis,
+            frame,
+            fallback_message=fallback_message,
+            cmap=cmap,
+        )
+        if image is None:
+            colorbar_axis.set_visible(False)
+            continue
+        try:
+            colorbar_axis.set_visible(True)
+            figure.colorbar(image, cax=colorbar_axis, label="RDM dissimilarity")
+        except Exception as exc:
+            warnings.warn(
+                f"RDM colorbar failed for panel ({row_index}, {col_index}): {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            colorbar_axis.set_visible(False)
+
+
 def _ordered_square(matrix: pd.DataFrame, order: list[str] | None) -> pd.DataFrame:
     if order is None:
         return matrix.copy()
@@ -782,7 +848,94 @@ def _anchor_label_metadata(labels: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _render_prepared_rdm_axis(
+    axis: plt.Axes,
+    heatmap_frame: pd.DataFrame | None,
+    *,
+    fallback_message: str,
+    cmap: matplotlib.colors.Colormap,
+) -> object | None:
+    if heatmap_frame is None or heatmap_frame.empty:
+        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
+        axis.axis("off")
+        return None
+
+    display_frame = _coerce_square_frame(heatmap_frame)
+    norm = _rdm_power_norm(display_frame)
+    if norm is None:
+        axis.text(0.5, 0.5, fallback_message, ha="center", va="center")
+        axis.axis("off")
+        return None
+
+    values = display_frame.to_numpy(dtype=float)
+    axis.set_axis_on()
+    image = axis.imshow(values, cmap=cmap, norm=norm)
+    axis.set_xticks(np.arange(len(display_frame.columns)), display_frame.columns.tolist(), rotation=45, ha="right")
+    axis.set_yticks(np.arange(len(display_frame.index)), display_frame.index.tolist())
+    return image
+
+
+def _rdm_power_norm(
+    heatmap_frame: pd.DataFrame,
+    *,
+    lower_quantile: float = 0.05,
+    upper_quantile: float = 0.95,
+) -> matplotlib.colors.PowerNorm | None:
+    finite = _finite_off_diagonal_values(heatmap_frame)
+    if finite.size == 0:
+        return None
+
+    quantiles = np.quantile(finite, [lower_quantile, upper_quantile])
+    if np.all(np.isfinite(quantiles)):
+        vmin = float(quantiles[0])
+        vmax = float(quantiles[1])
+    else:
+        vmin = float(np.min(finite))
+        vmax = float(np.max(finite))
+
+    if vmin > vmax:
+        vmin, vmax = vmax, vmin
+    finite_min = float(np.min(finite))
+    finite_max = float(np.max(finite))
+    if vmin == vmax:
+        if finite_min != finite_max:
+            vmin, vmax = finite_min, finite_max
+        else:
+            padding = max(abs(finite_min) * 0.05, 1e-6)
+            vmin = finite_min - padding
+            vmax = finite_min + padding
+    return matplotlib.colors.PowerNorm(gamma=0.7, vmin=vmin, vmax=vmax, clip=True)
+
+
+def _finite_off_diagonal_values(heatmap_frame: pd.DataFrame) -> np.ndarray:
+    values = _coerce_square_frame(heatmap_frame).to_numpy(dtype=float)
+    if values.size == 0:
+        return np.array([], dtype=float)
+    finite_mask = np.isfinite(values)
+    diagonal_length = min(values.shape)
+    if diagonal_length:
+        diagonal_indices = np.arange(diagonal_length)
+        finite_mask[diagonal_indices, diagonal_indices] = False
+    return values[finite_mask]
+
+
+def _coerce_square_frame(matrix_frame: pd.DataFrame) -> pd.DataFrame:
+    if "stimulus_row" in matrix_frame.columns:
+        heatmap_frame = matrix_frame.set_index("stimulus_row").copy()
+    else:
+        heatmap_frame = matrix_frame.copy()
+    if heatmap_frame.empty:
+        return heatmap_frame
+    heatmap_frame.index = pd.Index(heatmap_frame.index.astype(str))
+    heatmap_frame.columns = pd.Index(heatmap_frame.columns.astype(str))
+    if set(heatmap_frame.index) != set(heatmap_frame.columns):
+        raise ValueError("RDM heatmap requires matching row and column labels")
+    heatmap_frame = heatmap_frame.reindex(columns=heatmap_frame.index)
+    return heatmap_frame.apply(pd.to_numeric, errors="coerce")
+
+
 __all__ = [
+    "create_rdm_panel_figure",
     "finish_figure",
     "plot_anchor_clustered_rdm_heatmaps",
     "plot_anchor_ideal_models",
@@ -804,6 +957,7 @@ __all__ = [
     "plot_summary_scorecard",
     "plot_subset_stability",
     "plot_top_class_rdm_comparison",
+    "render_prepared_rdm_panels",
     "write_null_distribution",
     "write_rdm_heatmap_pair",
     "write_subset_stability",

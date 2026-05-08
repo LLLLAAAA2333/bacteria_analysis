@@ -18,9 +18,8 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from bacteria_analysis.rsa import compute_rsa_score
-from bacteria_analysis.rsa_outputs import _create_rdm_panel_figure, _render_prepared_rdm_panels
-from plot_biological_subspace_rdm_panel import (
+from bacteria_analysis.analysis_plotting import create_rdm_panel_figure, render_prepared_rdm_panels
+from bacteria_analysis.biological_subspace import (
     VIEW_NAMES,
     build_chemical_rdm,
     build_neural_rdms,
@@ -29,6 +28,7 @@ from plot_biological_subspace_rdm_panel import (
     prepare_display_frames,
 )
 from bacteria_analysis.model_space import read_metabolite_matrix
+from bacteria_analysis.rsa import compute_rsa_score
 
 DEFAULT_SELECTED_MODELS: tuple[str, ...] = (
     "Class::Indoles and derivatives",
@@ -99,7 +99,7 @@ def render_union_figure(
     n_features: int,
     title_suffix: str,
 ) -> None:
-    figure, axes, colorbar_axes = _create_rdm_panel_figure(nrows=len(VIEW_NAMES), figsize=(9.6, 8.8))
+    figure, axes, colorbar_axes = create_rdm_panel_figure(nrows=len(VIEW_NAMES), figsize=(9.6, 8.8))
     panels: list[tuple[int, int, pd.DataFrame | None, str, str]] = []
     for row_index, view_name in enumerate(VIEW_NAMES):
         panels.append(
@@ -121,7 +121,7 @@ def render_union_figure(
             )
         )
 
-    _render_prepared_rdm_panels(figure, axes, colorbar_axes, panels)
+    render_prepared_rdm_panels(figure, axes, colorbar_axes, panels)
     figure.suptitle(
         f"{title_suffix}\n"
         f"Neural order: non-ASE L/R merge + trial median + correlation distance | union n={n_features}",
