@@ -1,9 +1,15 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from bacteria_analysis.analysis_dataset import AnchorDataset
 from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
+from bacteria_analysis.analyses import anchor_batch_effect as anchor_batch_effect_module
 from bacteria_analysis.analyses.anchor_batch_effect import run_anchor_batch_effect
+from bacteria_analysis.anchor_effects import merge_neurons
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 
 
@@ -52,60 +58,114 @@ def _anchor_dataset():
 def test_run_anchor_batch_effect_reports_coverage_distances_and_contrast():
     result = run_anchor_batch_effect(
         _anchor_dataset(),
-        views=("response_window",),
         include_debug=True,
     )
 
     assert isinstance(result, AnalysisResult)
     assert result.summary["anchor_count"] == 2
-    assert result.summary["view_count"] == 1
+    assert result.summary["view_count"] == 2
 
-    coverage = result.tables["anchor_coverage"]
+    coverage = result.tables["anchor_stimulus_coverage"]
     assert coverage.to_dict("records") == [
-        {"view": "response_window", "stimulus": "anchor_a", "date": "20260401", "n_trials": 1},
-        {"view": "response_window", "stimulus": "anchor_a", "date": "20260402", "n_trials": 1},
-        {"view": "response_window", "stimulus": "anchor_b", "date": "20260401", "n_trials": 1},
-        {"view": "response_window", "stimulus": "anchor_b", "date": "20260402", "n_trials": 1},
+        {"stimulus": "anchor_a", "stim_name": "anchor_a", "date": "20260401", "n_trials": 1, "n_worms": 1},
+        {"stimulus": "anchor_a", "stim_name": "anchor_a", "date": "20260402", "n_trials": 1, "n_worms": 1},
+        {"stimulus": "anchor_b", "stim_name": "anchor_b", "date": "20260401", "n_trials": 1, "n_worms": 1},
+        {"stimulus": "anchor_b", "stim_name": "anchor_b", "date": "20260402", "n_trials": 1, "n_worms": 1},
     ]
 
-    pairwise = result.tables["anchor_pairwise_distances"]
-    assert len(pairwise) == 6
-    assert pairwise["same_anchor"].any()
+    pairwise = result.debug_tables["anchor_stimulus_pairwise_prototype_distances"]
+    assert len(pairwise) == 12
+    assert pairwise["same_stimulus"].any()
     assert pairwise["same_date"].any()
     assert pairwise["distance"].notna().all()
 
-    same_anchor_summary = result.tables["same_anchor_cross_date_summary"]
-    assert same_anchor_summary.loc[0, "view"] == "response_window"
-    assert same_anchor_summary.loc[0, "n_pairs"] == 2
+    same_anchor_summary = result.tables["anchor_stimulus_cross_date_anchor_summary"]
+    response_summary = same_anchor_summary.loc[same_anchor_summary["view_name"] == "response_window"]
+    assert len(response_summary) == 2
+    assert response_summary["n_cross_date_pairs"].eq(1).all()
 
-    contrast = result.tables["stimulus_vs_date_contrast"]
-    assert contrast.loc[0, "n_same_anchor_cross_date"] == 2
-    assert contrast.loc[0, "n_different_anchor_within_date"] == 2
-    assert "date_effect_minus_stimulus_effect" in contrast.columns
+    contrast = result.tables["anchor_stimulus_date_pair_same_vs_other_contrasts"]
+    response_contrast = contrast.loc[contrast["view_name"] == "response_window"]
+    assert set(response_contrast["contrast"]) == {"same", "different"}
 
     assert "response_window_anchor" in result.rdms
-    assert "response_window_anchor_rdm" in result.figures
-    assert "response_window_prototypes" in result.debug_tables
+    assert "full_trajectory_anchor" in result.rdms
+    assert "anchor_stimulus_date_prototype_rdms.png" in result.figures
+    assert "anchor_stimulus_date_mds__response_window.png" in result.figures
+    assert "anchor_stimulus_trial_features" in result.debug_tables
+
+    figure = result.figures["anchor_stimulus_date_prototype_rdms.png"](None)
+    assert isinstance(figure, Figure)
+    plt.close(figure)
+
+
+def test_merge_neurons_uses_generic_group_mapping():
+    centered = pd.DataFrame(
+        [
+            {
+                "trial_id": "trial_1",
+                "date": "20260401",
+                "stimulus": "s1",
+                "stim_name": "s1",
+                "worm_key": "worm_1",
+                "segment_index": 0,
+                "time_point": 6,
+                "neuron": "LEFT",
+                "dff_baseline_centered": 1.0,
+            },
+            {
+                "trial_id": "trial_1",
+                "date": "20260401",
+                "stimulus": "s1",
+                "stim_name": "s1",
+                "worm_key": "worm_1",
+                "segment_index": 0,
+                "time_point": 6,
+                "neuron": "RIGHT",
+                "dff_baseline_centered": 3.0,
+            },
+            {
+                "trial_id": "trial_1",
+                "date": "20260401",
+                "stimulus": "s1",
+                "stim_name": "s1",
+                "worm_key": "worm_1",
+                "segment_index": 0,
+                "time_point": 6,
+                "neuron": "SINGLE",
+                "dff_baseline_centered": 5.0,
+            },
+        ]
+    )
+
+    merged = merge_neurons(centered, {"PAIR": ("LEFT", "RIGHT"), "SINGLE": ("SINGLE",)})
+
+    assert merged.set_index("merged_neuron")["dff_baseline_centered"].to_dict() == {
+        "PAIR": 2.0,
+        "SINGLE": 5.0,
+    }
 
 
 def test_anchor_batch_effect_can_be_saved_without_debug_by_default(tmp_path):
     result = run_anchor_batch_effect(
         _anchor_dataset(),
-        views=("response_window",),
         include_debug=True,
     )
 
     save_analysis_result(result, tmp_path / "anchor")
 
-    assert (tmp_path / "anchor" / "tables" / "anchor_coverage.csv").exists()
-    assert (tmp_path / "anchor" / "tables" / "anchor_pairwise_distances.csv").exists()
+    assert (tmp_path / "anchor" / "tables" / "anchor_stimulus_coverage.csv").exists()
+    assert not (tmp_path / "anchor" / "tables" / "anchor_stimulus_pairwise_prototype_distances.csv").exists()
     assert (tmp_path / "anchor" / "rdms" / "response_window_anchor.csv").exists()
-    assert (tmp_path / "anchor" / "figures" / "response_window_anchor_rdm.png").exists()
+    assert (tmp_path / "anchor" / "figures" / "anchor_stimulus_date_prototype_rdms.png").exists()
+    assert (
+        tmp_path / "anchor" / "figures" / "anchor_stimulus_neuron_time_heatmap__full_trajectory.png"
+    ).exists()
     assert not (tmp_path / "anchor" / "debug").exists()
 
 
 def test_anchor_batch_effect_omits_debug_tables_by_default():
-    result = run_anchor_batch_effect(_anchor_dataset(), views=("response_window",))
+    result = run_anchor_batch_effect(_anchor_dataset())
 
     assert result.debug_tables == {}
 
@@ -122,6 +182,13 @@ def test_anchor_batch_effect_respects_declared_anchor_stimuli():
         parameters=dataset.parameters,
     )
 
-    result = run_anchor_batch_effect(dataset, views=("response_window",))
+    result = run_anchor_batch_effect(dataset)
 
-    assert set(result.tables["anchor_coverage"]["stimulus"]) == {"anchor_a", "anchor_b"}
+    assert set(result.tables["anchor_stimulus_coverage"]["stimulus"]) == {"anchor_a", "anchor_b"}
+
+
+def test_anchor_batch_effect_does_not_load_legacy_plot_scripts():
+    source = Path(anchor_batch_effect_module.__file__).read_text(encoding="utf-8")
+
+    assert "analysis_plot_scripts" not in source
+    assert "load_plot_script" not in source

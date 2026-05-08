@@ -7,9 +7,9 @@ import pandas as pd
 
 from bacteria_analysis.analysis_dataset import AnalysisDataset
 from bacteria_analysis.analysis_plotting import (
-    plot_null_distribution,
-    plot_rdm_heatmap_pair,
-    plot_subset_stability,
+    write_null_distribution,
+    write_rdm_heatmap_pair,
+    write_subset_stability,
 )
 from bacteria_analysis.analysis_results import AnalysisResult
 from bacteria_analysis.chemical_features import build_chemical_rdm
@@ -37,9 +37,10 @@ def run_rdm_alignment(
     chemical_qc_threshold: float = 0.2,
     chemical_transform: str = "log2",
     chemical_distance: str = "euclidean",
-    permutations: int = 2000,
+    permutations: int = 10000,
     subset_count: int = 200,
     subset_fraction: float = 0.8,
+    subset_permutations: int = 500,
     seed: int = 0,
     include_debug: bool = False,
 ) -> AnalysisResult:
@@ -66,6 +67,7 @@ def run_rdm_alignment(
         subset_fraction=subset_fraction,
         seed=seed + 1,
     )
+    display_order = _display_order(neural_rdm)
 
     date_map = _stimulus_date_map(dataset.neural)
     pair_values_with_dates = _attach_pair_dates(pair_values, date_map)
@@ -96,12 +98,36 @@ def run_rdm_alignment(
 
     tables = {
         "rsa_summary_by_scope": scope_summary,
-        "subset_stability_summary": pd.DataFrame([subset_summary]),
     }
+    figure_prefix = _label_shuffle_prefix(permutations)
+    subset_prefix = _subset_prefix(subset_count, subset_fraction, subset_permutations)
     figures = {
-        "aligned_rdms": plot_rdm_heatmap_pair(neural_rdm, chemical_rdm),
-        "label_shuffle_null": plot_null_distribution(label_null, observed),
-        "subset_stability": plot_subset_stability(subset_results),
+        f"{figure_prefix}_rdms.png": lambda output_path: write_rdm_heatmap_pair(
+            neural=neural_rdm,
+            chemical=chemical_rdm,
+            output_path=output_path,
+            display_order=display_order,
+            title="Neural vs chemical RDMs",
+        ),
+        f"{figure_prefix}_distribution.png": lambda output_path: write_null_distribution(
+            null_values=label_null,
+            output_path=output_path,
+            observed=observed,
+            title="Label-shuffle null",
+            y_mode="count",
+        ),
+        f"{figure_prefix}_distribution_fraction.png": lambda output_path: write_null_distribution(
+            null_values=label_null,
+            output_path=output_path,
+            observed=observed,
+            title="Label-shuffle null",
+            y_mode="fraction",
+        ),
+        f"{subset_prefix}_distribution_fraction.png": lambda output_path: write_subset_stability(
+            subset_results=subset_results,
+            output_path=output_path,
+            title="Stimulus-subset stability",
+        ),
     }
     audit = {
         "aligned_stimulus_order": neural_rdm.index.astype(str).tolist(),
@@ -129,6 +155,9 @@ def run_rdm_alignment(
             "label_shuffle_null": pd.DataFrame(
                 {"iteration": np.arange(len(label_null)), "rsa_similarity": label_null}
             ),
+            f"{_subset_prefix(subset_count, subset_fraction, subset_permutations)}_summary": pd.DataFrame(
+                [subset_summary]
+            ),
             "date_preserving_label_shuffle_null": pd.DataFrame(
                 {"iteration": np.arange(len(date_preserving_null)), "rsa_similarity": date_preserving_null}
             ),
@@ -147,6 +176,7 @@ def run_rdm_alignment(
             "permutations": permutations,
             "subset_count": subset_count,
             "subset_fraction": subset_fraction,
+            "subset_permutations": subset_permutations,
             "seed": seed,
         },
         summary=summary,
@@ -175,6 +205,21 @@ def _stimulus_date_map(neural: pd.DataFrame) -> dict[str, str]:
         counts = group["date"].value_counts()
         date_map[str(stimulus)] = str(counts.sort_index().idxmax())
     return date_map
+
+
+def _display_order(neural: pd.DataFrame) -> list[str]:
+    return neural.index.astype(str).tolist()
+
+
+def _label_shuffle_prefix(permutations: int) -> str:
+    return f"neural_chemical_rdm_foundation__response_window_label_shuffle_{permutations // 1000}k"
+
+
+def _subset_prefix(subset_count: int, subset_fraction: float, subset_permutations: int) -> str:
+    return (
+        "neural_chemical_rdm_foundation__response_window_random_subsets_"
+        f"{subset_count}x{subset_permutations}_frac{int(round(subset_fraction * 100)):02d}"
+    )
 
 
 def _attach_pair_dates(pair_values: pd.DataFrame, date_map: dict[str, str]) -> pd.DataFrame:

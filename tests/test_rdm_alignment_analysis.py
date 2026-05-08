@@ -1,9 +1,14 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from bacteria_analysis.analysis_dataset import AnalysisDataset
 from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
+from bacteria_analysis.analyses import rdm_alignment as rdm_alignment_module
 from bacteria_analysis.analyses.rdm_alignment import run_rdm_alignment
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 
@@ -108,7 +113,17 @@ def test_run_rdm_alignment_returns_result_with_expected_summary_and_audit():
     assert set(result.audit["date_pair_coverage"]["date_scope"]) == {"within_date", "cross_date"}
 
     assert "rsa_summary_by_scope" in result.tables
-    assert "aligned_rdms" in result.figures
+    assert "neural_chemical_rdm_foundation__response_window_label_shuffle_0k_rdms.png" in result.figures
+    assert "neural_chemical_rdm_foundation__response_window_label_shuffle_0k_distribution.png" in result.figures
+    assert "neural_chemical_rdm_foundation__response_window_label_shuffle_0k_distribution_fraction.png" in result.figures
+    assert (
+        "neural_chemical_rdm_foundation__response_window_random_subsets_6x500_frac75_distribution_fraction.png"
+        in result.figures
+    )
+    figure = result.figures["neural_chemical_rdm_foundation__response_window_label_shuffle_0k_rdms.png"](None)
+    assert isinstance(figure, Figure)
+    plt.close(figure)
+
     assert "pair_values" in result.debug_tables
     assert "label_shuffle_null" in result.debug_tables
     assert "subset_rsa" in result.debug_tables
@@ -142,5 +157,12 @@ def test_run_rdm_alignment_saved_result_keeps_final_rdms_and_skips_debug_by_defa
 
     assert (tmp_path / "alignment" / "rdms" / "neural.csv").exists()
     assert (tmp_path / "alignment" / "rdms" / "chemical.csv").exists()
-    assert (tmp_path / "alignment" / "audit" / "aligned_stimulus_order.json").exists()
+    assert not (tmp_path / "alignment" / "audit").exists()
     assert not (tmp_path / "alignment" / "debug").exists()
+
+
+def test_rdm_alignment_does_not_load_legacy_plot_scripts():
+    source = Path(rdm_alignment_module.__file__).read_text(encoding="utf-8")
+
+    assert "analysis_plot_scripts" not in source
+    assert "load_plot_script" not in source

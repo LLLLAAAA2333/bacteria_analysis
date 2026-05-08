@@ -8,12 +8,31 @@ import numpy as np
 import pandas as pd
 
 from bacteria_analysis.analysis_dataset import AnalysisDataset
-from bacteria_analysis.analysis_plotting import plot_rdm_heatmap, plot_rdm_heatmap_grid, plot_score_bars
+from bacteria_analysis.analysis_plotting import (
+    plot_class_chemical_rdm_similarity,
+    plot_class_vs_full_chemical_similarity,
+    plot_fixed_class_permutation,
+    plot_reselection_stability,
+    plot_summary_scorecard,
+    plot_top_class_rdm_comparison,
+)
 from bacteria_analysis.analysis_results import AnalysisResult
 from bacteria_analysis.chemical_features import build_chemical_class_rdms, build_chemical_rdm
 from bacteria_analysis.neural_features import build_neural_rdm
-from bacteria_analysis.rdm import align_square_rdms, rdm_pair_values, spearman_similarity
-from bacteria_analysis.stats import empirical_p_value, label_shuffle_null
+from bacteria_analysis.taxonomy_rsa import (
+    ClassCandidate,
+    avg_rank,
+    build_final_shortlist,
+    class_chemical_rdm_similarity,
+    class_observed_scores,
+    class_vs_full_chemical_similarity,
+    fixed_class_permutations,
+    full_search_permutation,
+    pearson,
+    reselection_stability,
+    spearman,
+    symmetric_rank_matrix,
+)
 
 RESELECTION_FRACTION = 0.8
 
@@ -37,8 +56,8 @@ def run_chemical_class_rsa(
 
     if top_k < 1:
         raise ValueError("top_k must be at least 1")
-    if fixed_permutations < 0 or resamples < 0 or search_permutations < 0:
-        raise ValueError("permutation and resample counts must be non-negative")
+    if fixed_permutations < 1 or resamples < 1 or search_permutations < 1:
+        raise ValueError("permutation and resample counts must be at least 1")
 
     neural = neural_rdm.copy() if neural_rdm is not None else build_neural_rdm(dataset, view=neural_view).matrix
     full_chemical = build_chemical_rdm(dataset, qc_threshold=qc_threshold)
@@ -51,74 +70,129 @@ def run_chemical_class_rsa(
     if not class_results:
         raise ValueError("no chemical classes passed feature filters")
 
-    observed_scores = _observed_scores(neural, class_results)
-    fixed_summary, fixed_nulls = _fixed_class_permutation_summary(
-        neural,
-        class_results,
-        observed_scores,
-        fixed_permutations=fixed_permutations,
-        seed=seed,
+    candidates, labels, upper_i, upper_j, primary_ranks = _class_candidates(
+        neural=neural,
+        full_chemical=full_chemical.matrix,
+        class_results=class_results,
+        taxonomy_level=taxonomy_level,
     )
-    reselection_draws, reselection_summary = _reselection_stability(
-        neural,
-        class_results,
-        observed_scores,
+    if not candidates:
+        raise ValueError("no chemical classes had enough shared stimuli")
+
+    rng = np.random.default_rng(seed)
+    observed_scores = _observed_scores_from_candidates(class_observed_scores(candidates))
+    fixed_summary, fixed_nulls = fixed_class_permutations(
+        candidates=candidates,
+        labels=labels,
+        neural_ranks=primary_ranks,
+        upper_i=upper_i,
+        upper_j=upper_j,
+        n_permutations=fixed_permutations,
+        rng=rng,
+    )
+    fixed_summary = _fixed_summary_with_aliases(fixed_summary)
+    reselection_draws, reselection_summary = reselection_stability(
+        candidates=candidates,
+        primary_neural=neural.loc[labels, labels],
+        labels=labels,
         date_map=_stimulus_date_map(dataset.neural),
-        resamples=resamples,
-        seed=seed + 10_000,
+        n_resamples=resamples,
+        resample_fraction=RESELECTION_FRACTION,
+        top_k=max(top_k, 5),
+        rng=rng,
     )
-    search_summary, search_null = _search_corrected_diagnostic_summary(
-        neural,
-        class_results,
-        observed_scores,
-        search_permutations=search_permutations,
-        seed=seed + 20_000,
+    reselection_summary = _reselection_summary_with_aliases(
+        reselection_summary,
+        date_aware=_can_resample_by_date(np.asarray(labels, dtype=object), _stimulus_date_map(dataset.neural)),
     )
-    final_shortlist = fixed_summary.head(top_k).copy()
-    final_shortlist["selected_for_audit"] = True
-
-    class_similarity = _class_to_class_similarity(class_results)
-    class_vs_full = _class_vs_full_similarity(full_chemical.matrix, class_results)
-    class_similarity_matrix = _similarity_matrix(class_similarity, class_results.keys())
-    result_rdms = _reported_rdms(neural, full_chemical.matrix, class_results, final_shortlist["class"].tolist())
-
-    figures = {
-        "fixed_class_permutation_scores": plot_score_bars(
+    search_summary, search_null = full_search_permutation(
+        candidates=candidates,
+        labels=labels,
+        neural_ranks=primary_ranks,
+        upper_i=upper_i,
+        upper_j=upper_j,
+        n_permutations=search_permutations,
+        rng=rng,
+    )
+    search_summary = _search_summary_with_aliases(search_summary)
+    final_shortlist = _ensure_shortlist_size(
+        build_final_shortlist(
+            observed_scores,
             fixed_summary,
-            label_column="class",
-            value_column="observed_rsa",
-            title="Fixed-class RSA",
-        ),
-        "reselection_stability": plot_score_bars(
             reselection_summary,
-            label_column="class",
-            value_column="top_fraction",
-            title="Reselection stability",
-            ylabel="top fraction",
+            search_summary,
         ),
-        "top_class_rdm_comparison": plot_rdm_heatmap_grid(
-            _top_class_comparison_rdms(neural, full_chemical.matrix, class_results, final_shortlist),
-            title="Top class RDM comparison",
+        observed_scores,
+        fixed_summary,
+        reselection_summary,
+        search_summary,
+        top_k=top_k,
+    )
+    final_shortlist = _shortlist_with_aliases(final_shortlist)
+
+    class_similarity, class_similarity_summary, top_class_similarity = class_chemical_rdm_similarity(
+        candidates=candidates,
+        labels=labels,
+        upper_i=upper_i,
+        upper_j=upper_j,
+    )
+    class_vs_full, class_vs_full_summary = class_vs_full_chemical_similarity(
+        candidates=candidates,
+        full_chemical=full_chemical.matrix.loc[labels, labels],
+        labels=labels,
+        upper_i=upper_i,
+        upper_j=upper_j,
+    )
+    result_rdms = _reported_rdms_from_candidates(
+        neural.loc[labels, labels],
+        full_chemical.matrix.loc[labels, labels],
+        candidates,
+        final_shortlist["category"].astype(str).tolist(),
+    )
+
+    top_candidate = candidates[0]
+    figures = {
+        "fixed_class_permutation.png": lambda output_path: plot_fixed_class_permutation(
+            fixed_summary,
+            output_path,
+            class_limit=24,
         ),
-        "final_shortlist_scorecard": plot_score_bars(
+        "reselection_stability.png": lambda output_path: plot_reselection_stability(
+            reselection_summary,
+            observed_scores,
+            output_path,
+            class_limit=24,
+        ),
+        "top_class_rdm_comparison.png": lambda output_path: plot_top_class_rdm_comparison(
+            primary_neural=neural.loc[labels, labels],
+            full_chemical=full_chemical.matrix.loc[labels, labels],
+            candidate=top_candidate,
+            labels=labels,
+            stimulus_sample_map=dataset.stimulus_sample_map,
+            output_path=output_path,
+        ),
+        "taxonomy_class_stability_summary.png": lambda output_path: plot_summary_scorecard(
             final_shortlist,
-            label_column="class",
-            value_column="observed_rsa",
-            title="Final shortlist",
+            output_path,
+            class_limit=min(24, 18),
         ),
-        "class_chemical_rdm_similarity": plot_rdm_heatmap(
-            class_similarity_matrix,
-            title="Class chemical RDM similarity",
-            colorbar_label="similarity",
+        "class_chemical_rdm_similarity_matrix.png": lambda output_path: plot_class_chemical_rdm_similarity(
+            pairwise=class_similarity,
+            top_class_similarity=top_class_similarity,
+            output_path=output_path,
+        ),
+        "class_vs_full_chemical_rdm_similarity.png": lambda output_path: plot_class_vs_full_chemical_similarity(
+            similarity=class_vs_full,
+            output_path=output_path,
         ),
     }
 
     summary = {
-        "top_class": str(final_shortlist.iloc[0]["class"]),
-        "top_class_rsa": float(final_shortlist.iloc[0]["observed_rsa"]),
-        "top_class_fixed_p_value": float(final_shortlist.iloc[0]["p_value"]),
-        "top_class_fixed_q_value": float(final_shortlist.iloc[0]["q_value"]),
-        "top_class_feature_count": int(final_shortlist.iloc[0]["feature_count"]),
+        "top_class": str(final_shortlist.iloc[0]["category"]),
+        "top_class_rsa": float(final_shortlist.iloc[0]["response_window_rsa"]),
+        "top_class_fixed_p_value": float(final_shortlist.iloc[0]["p_one_sided_ge"]),
+        "top_class_fixed_q_value": float(final_shortlist.iloc[0]["p_fdr_bh"]),
+        "top_class_feature_count": int(final_shortlist.iloc[0]["n_features"]),
         "evaluated_class_count": int(len(observed_scores)),
         "fixed_permutations": fixed_permutations,
         "resamples": resamples,
@@ -132,6 +206,10 @@ def run_chemical_class_rsa(
             "fixed_class_null": fixed_nulls,
             "search_max_null": search_null,
             "reselection_draws": reselection_draws,
+            "search_corrected_diagnostic_summary": search_summary,
+            "class_to_class_chemical_rdm_similarity": class_similarity,
+            "class_to_class_chemical_rdm_similarity_summary": class_similarity_summary,
+            "class_vs_full_chemical_rdm_similarity_summary": class_vs_full_summary,
         }
 
     return AnalysisResult(
@@ -154,9 +232,7 @@ def run_chemical_class_rsa(
             "observed_class_scores": observed_scores,
             "fixed_class_permutation_summary": fixed_summary,
             "reselection_stability_summary": reselection_summary,
-            "search_corrected_diagnostic_summary": search_summary,
             "final_class_shortlist": final_shortlist,
-            "class_to_class_chemical_rdm_similarity": class_similarity,
             "class_vs_full_chemical_rdm_similarity": class_vs_full,
         },
         rdms=result_rdms,
@@ -164,7 +240,7 @@ def run_chemical_class_rsa(
         audit={
             "reported_rdm_keys": list(result_rdms),
             "full_chemical_retained_features": list(full_chemical.metadata["retained_features"]),
-            "reselection_date_composition": _date_composition_audit(reselection_draws),
+            "reselection_date_composition": _date_composition_audit_from_runs(reselection_draws, _stimulus_date_map(dataset.neural)),
             "search_corrected_layer": {
                 "diagnostic": True,
                 "reason": "search-corrected results test exploratory class selection and are not fixed-class evidence",
@@ -181,133 +257,153 @@ def run_chemical_class_rsa(
     )
 
 
-def _observed_scores(neural: pd.DataFrame, class_results: dict[str, object]) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
-    for class_name, result in class_results.items():
-        aligned_neural, aligned_class = align_square_rdms(neural, result.matrix)
-        pair_values = rdm_pair_values(aligned_neural, aligned_class)
-        rows.append(
-            {
-                "class": class_name,
-                "rsa_similarity": _rsa(pair_values),
-                "n_pairs": int(len(pair_values)),
-                "feature_count": int(result.metadata["feature_count"]),
-                "retained_features": ";".join(result.metadata["retained_features"]),
-            }
-        )
-    return (
-        pd.DataFrame(rows)
-        .sort_values(["rsa_similarity", "feature_count", "class"], ascending=[False, False, True])
-        .reset_index(drop=True)
-    )
-
-
-def _fixed_class_permutation_summary(
-    neural: pd.DataFrame,
-    class_results: dict[str, object],
-    observed_scores: pd.DataFrame,
+def _class_candidates(
     *,
-    fixed_permutations: int,
-    seed: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    null_rows: list[pd.DataFrame] = []
-    summary_rows: list[dict[str, object]] = []
-    observed_by_class = observed_scores.set_index("class")
+    neural: pd.DataFrame,
+    full_chemical: pd.DataFrame,
+    class_results: dict[str, object],
+    taxonomy_level: str,
+) -> tuple[list[ClassCandidate], list[str], np.ndarray, np.ndarray, np.ndarray]:
+    labels = observed_scores_for_labels(neural, class_results)
+    labels = [label for label in labels if label in full_chemical.index and label in full_chemical.columns]
+    if len(labels) < 3:
+        return [], labels, np.array([], dtype=int), np.array([], dtype=int), np.array([], dtype=float)
 
-    for offset, (class_name, result) in enumerate(class_results.items()):
-        aligned_neural, aligned_class = align_square_rdms(neural, result.matrix)
-        null_values = label_shuffle_null(
-            aligned_neural,
-            aligned_class,
-            n_permutations=fixed_permutations,
-            seed=seed + offset,
-        )
-        observed = float(observed_by_class.loc[class_name, "rsa_similarity"])
-        p_value = empirical_p_value(observed, null_values, side="greater")
-        summary_rows.append(
-            {
-                "class": class_name,
-                "observed_rsa": observed,
-                "p_value": p_value,
-                "n_permutations": fixed_permutations,
-                "n_pairs": int(observed_by_class.loc[class_name, "n_pairs"]),
-                "feature_count": int(observed_by_class.loc[class_name, "feature_count"]),
-            }
-        )
-        null_rows.append(
-            pd.DataFrame(
-                {
-                    "class": class_name,
-                    "iteration": np.arange(len(null_values)),
-                    "rsa_similarity": null_values,
-                }
+    upper_i, upper_j = np.triu_indices(len(labels), k=1)
+    primary_values = neural.loc[labels, labels].to_numpy(float)[upper_i, upper_j]
+    primary_ranks = avg_rank(primary_values)
+    full_values = full_chemical.loc[labels, labels].to_numpy(float)[upper_i, upper_j]
+    candidates: list[ClassCandidate] = []
+
+    for class_name, result in class_results.items():
+        chemical = result.matrix.loc[labels, labels]
+        chemical_values = chemical.to_numpy(float)[upper_i, upper_j]
+        chemical_ranks = avg_rank(chemical_values)
+        candidates.append(
+            ClassCandidate(
+                model_id=f"{taxonomy_level}::{class_name}",
+                taxonomy_level=str(taxonomy_level),
+                category=str(class_name),
+                metabolites=tuple(result.metadata["retained_features"]),
+                chemical=chemical,
+                primary_rank_matrix=symmetric_rank_matrix(
+                    len(labels),
+                    upper_i,
+                    upper_j,
+                    chemical_ranks,
+                ),
+                primary_observed_rsa=pearson(primary_ranks, chemical_ranks),
+                full_trajectory_rsa=spearman(full_values, chemical_values),
+                n_pairs=int(len(chemical_values)),
             )
         )
 
-    summary = pd.DataFrame(summary_rows)
-    summary["q_value"] = _benjamini_hochberg(summary["p_value"].to_numpy(dtype=float))
-    summary = summary.sort_values(["observed_rsa", "feature_count", "class"], ascending=[False, False, True])
-    nulls = pd.concat(null_rows, ignore_index=True) if null_rows else pd.DataFrame()
-    return summary.reset_index(drop=True), nulls
+    candidates = sorted(candidates, key=lambda candidate: candidate.primary_observed_rsa, reverse=True)
+    return candidates, labels, upper_i, upper_j, primary_ranks
 
 
-def _reselection_stability(
-    neural: pd.DataFrame,
-    class_results: dict[str, object],
-    observed_scores: pd.DataFrame,
+def _observed_scores_from_candidates(frame: pd.DataFrame) -> pd.DataFrame:
+    observed = frame.copy()
+    observed["class"] = observed["category"]
+    observed["feature_count"] = observed["n_features"]
+    observed["rsa_similarity"] = observed["response_window_rsa"]
+    observed["retained_features"] = observed["metabolites"].astype(str).str.replace(" | ", ";", regex=False)
+    return observed
+
+
+def _fixed_summary_with_aliases(frame: pd.DataFrame) -> pd.DataFrame:
+    summary = frame.copy()
+    summary["class"] = summary["category"]
+    summary["feature_count"] = summary["n_features"]
+    summary["p_value"] = summary["p_one_sided_ge"]
+    summary["q_value"] = summary["p_fdr_bh"]
+    return summary
+
+
+def _reselection_summary_with_aliases(frame: pd.DataFrame, *, date_aware: bool) -> pd.DataFrame:
+    summary = frame.copy()
+    summary["class"] = summary["category"]
+    summary["feature_count"] = summary["n_features"]
+    summary["top_fraction"] = summary["top1_frequency"]
+    summary["date_aware_resampling"] = date_aware
+    return summary
+
+
+def _search_summary_with_aliases(frame: pd.DataFrame) -> pd.DataFrame:
+    summary = frame.copy()
+    summary["class"] = summary["observed_best_category"]
+    summary["observed_rsa"] = summary["observed_best_rsa"]
+    summary["search_corrected_p_value"] = summary["search_corrected_p"]
+    summary["diagnostic"] = True
+    return summary
+
+
+def _shortlist_with_aliases(frame: pd.DataFrame) -> pd.DataFrame:
+    shortlist = frame.copy()
+    shortlist["class"] = shortlist["category"]
+    shortlist["feature_count"] = shortlist["n_features"]
+    shortlist["observed_rsa"] = shortlist["response_window_rsa"]
+    shortlist["selected_for_audit"] = True
+    return shortlist
+
+
+def _ensure_shortlist_size(
+    shortlist: pd.DataFrame,
+    observed: pd.DataFrame,
+    fixed: pd.DataFrame,
+    reselection: pd.DataFrame,
+    search_summary: pd.DataFrame,
     *,
-    date_map: dict[str, str],
-    resamples: int,
-    seed: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    labels = np.asarray(observed_scores_for_labels(neural, class_results), dtype=object)
-    rng = np.random.default_rng(seed)
-    draw_rows: list[dict[str, object]] = []
-    date_aware = _can_resample_by_date(labels, date_map)
+    top_k: int,
+) -> pd.DataFrame:
+    scorecard = observed.merge(
+        fixed.loc[:, ["model_id", "observed_percentile", "p_one_sided_ge", "p_fdr_bh", "null_q95", "null_q99"]],
+        on="model_id",
+        how="left",
+    ).merge(
+        reselection.loc[:, ["model_id", "top1_frequency", "top3_frequency", "top5_frequency", "mean_selected_rank"]],
+        on="model_id",
+        how="left",
+    )
+    search_p = float(search_summary["search_corrected_p"].iloc[0])
+    observed_best = str(search_summary["observed_best_model_id"].iloc[0])
+    scorecard["fixed_signal_pass"] = (
+        scorecard["response_window_rsa"].to_numpy(float) > scorecard["null_q95"].to_numpy(float)
+    )
+    scorecard["reselection_preferred"] = scorecard["top3_frequency"].fillna(0.0).ge(0.20)
+    scorecard["is_observed_best"] = scorecard["model_id"].eq(observed_best)
+    scorecard["search_corrected_p_for_best"] = np.where(scorecard["is_observed_best"], search_p, np.nan)
+    missing = scorecard.loc[~scorecard["model_id"].isin(set(shortlist["model_id"].astype(str)))].copy()
+    return pd.concat([shortlist, missing], ignore_index=True).head(top_k)
 
-    for iteration in range(resamples):
-        subset = _date_aware_subset(labels, date_map, rng) if date_aware else _random_subset(labels, rng)
-        scores = _scores_on_subset(neural, class_results, subset)
-        top = scores.iloc[0] if not scores.empty else pd.Series(dtype=object)
-        composition = _date_composition(subset, date_map)
-        draw_rows.append(
+
+def _reported_rdms_from_candidates(
+    neural: pd.DataFrame,
+    full_chemical: pd.DataFrame,
+    candidates: list[object],
+    shortlisted_classes: list[str],
+) -> dict[str, pd.DataFrame]:
+    rdms = {"neural": neural.copy(), "chemical_full": full_chemical.copy()}
+    by_class = {candidate.category: candidate.chemical for candidate in candidates}
+    for class_name in shortlisted_classes:
+        rdms[f"class_{_safe_name(class_name)}"] = by_class[class_name].copy()
+    return rdms
+
+
+def _date_composition_audit_from_runs(runs: pd.DataFrame, date_map: dict[str, str]) -> pd.DataFrame:
+    if runs.empty:
+        return pd.DataFrame(columns=["iteration", "date_composition", "date_aware_resampling"])
+    rows = []
+    for resample_index, group in runs.groupby("resample_index", sort=True):
+        stimuli = str(group["stimuli"].iloc[0]).split(";") if "stimuli" in group else []
+        rows.append(
             {
-                "iteration": iteration,
-                "top_class": top.get("class", ""),
-                "top_score": top.get("rsa_similarity", np.nan),
-                "n_stimuli": int(len(subset)),
-                "date_composition": composition,
-                "date_aware_resampling": date_aware,
+                "iteration": int(resample_index),
+                "date_composition": _date_composition([stimulus for stimulus in stimuli if stimulus], date_map),
+                "date_aware_resampling": _can_resample_by_date(np.asarray(stimuli, dtype=object), date_map),
             }
         )
-
-    draws = pd.DataFrame(
-        draw_rows,
-        columns=["iteration", "top_class", "top_score", "n_stimuli", "date_composition", "date_aware_resampling"],
-    )
-    summary_rows: list[dict[str, object]] = []
-    feature_counts = observed_scores.set_index("class")["feature_count"].to_dict()
-    for class_name in observed_scores["class"].tolist():
-        class_draws = draws.loc[draws["top_class"] == class_name]
-        scores = pd.to_numeric(class_draws["top_score"], errors="coerce").dropna()
-        summary_rows.append(
-            {
-                "class": class_name,
-                "top_count": int(len(class_draws)),
-                "top_fraction": float(len(class_draws) / resamples) if resamples else np.nan,
-                "score_median": float(scores.median()) if not scores.empty else np.nan,
-                "score_q01": float(scores.quantile(0.01)) if not scores.empty else np.nan,
-                "score_q99": float(scores.quantile(0.99)) if not scores.empty else np.nan,
-                "feature_count": int(feature_counts[class_name]),
-                "date_aware_resampling": date_aware,
-            }
-        )
-    summary = (
-        pd.DataFrame(summary_rows)
-        .sort_values(["top_fraction", "score_median", "class"], ascending=[False, False, True])
-        .reset_index(drop=True)
-    )
-    return draws, summary
+    return pd.DataFrame(rows)
 
 
 def observed_scores_for_labels(neural: pd.DataFrame, class_results: dict[str, object]) -> list[str]:
@@ -315,147 +411,6 @@ def observed_scores_for_labels(neural: pd.DataFrame, class_results: dict[str, ob
     for result in class_results.values():
         labels &= set(result.matrix.index.astype(str))
     return sorted(labels)
-
-
-def _scores_on_subset(neural: pd.DataFrame, class_results: dict[str, object], subset: list[str]) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
-    for class_name, result in class_results.items():
-        aligned_neural, aligned_class = align_square_rdms(neural, result.matrix)
-        labels = [label for label in aligned_neural.index.astype(str).tolist() if label in set(subset)]
-        if len(labels) < 3:
-            score = np.nan
-            n_pairs = 0
-        else:
-            pair_values = rdm_pair_values(
-                aligned_neural.loc[labels, labels],
-                aligned_class.loc[labels, labels],
-            )
-            score = _rsa(pair_values)
-            n_pairs = int(len(pair_values))
-        rows.append({"class": class_name, "rsa_similarity": score, "n_pairs": n_pairs})
-    return (
-        pd.DataFrame(rows)
-        .sort_values(["rsa_similarity", "class"], ascending=[False, True], na_position="last")
-        .reset_index(drop=True)
-    )
-
-
-def _search_corrected_diagnostic_summary(
-    neural: pd.DataFrame,
-    class_results: dict[str, object],
-    observed_scores: pd.DataFrame,
-    *,
-    search_permutations: int,
-    seed: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if search_permutations == 0:
-        max_null = np.array([], dtype=float)
-    else:
-        null_arrays = []
-        for offset, result in enumerate(class_results.values()):
-            aligned_neural, aligned_class = align_square_rdms(neural, result.matrix)
-            null_arrays.append(
-                label_shuffle_null(
-                    aligned_neural,
-                    aligned_class,
-                    n_permutations=search_permutations,
-                    seed=seed + offset,
-                )
-            )
-        max_null = np.nanmax(np.vstack(null_arrays), axis=0)
-
-    rows = []
-    for _, row in observed_scores.iterrows():
-        rows.append(
-            {
-                "class": row["class"],
-                "observed_rsa": row["rsa_similarity"],
-                "search_corrected_p_value": empirical_p_value(row["rsa_similarity"], max_null, side="greater"),
-                "n_permutations": search_permutations,
-                "diagnostic": True,
-            }
-        )
-    summary = pd.DataFrame(rows).sort_values(["observed_rsa", "class"], ascending=[False, True]).reset_index(drop=True)
-    null = pd.DataFrame({"iteration": np.arange(len(max_null)), "max_rsa_similarity": max_null})
-    return summary, null
-
-
-def _class_to_class_similarity(class_results: dict[str, object]) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
-    class_names = list(class_results)
-    for left_index, left_class in enumerate(class_names):
-        for right_class in class_names[left_index + 1 :]:
-            left, right = align_square_rdms(class_results[left_class].matrix, class_results[right_class].matrix)
-            pair_values = rdm_pair_values(left, right)
-            rows.append(
-                {
-                    "class_left": left_class,
-                    "class_right": right_class,
-                    "rdm_similarity": _rsa(pair_values),
-                }
-            )
-    return pd.DataFrame(rows, columns=["class_left", "class_right", "rdm_similarity"])
-
-
-def _class_vs_full_similarity(full_chemical: pd.DataFrame, class_results: dict[str, object]) -> pd.DataFrame:
-    rows = []
-    for class_name, result in class_results.items():
-        left, right = align_square_rdms(full_chemical, result.matrix)
-        pair_values = rdm_pair_values(left, right)
-        rows.append({"class": class_name, "full_similarity": _rsa(pair_values)})
-    return (
-        pd.DataFrame(rows)
-        .sort_values(["full_similarity", "class"], ascending=[False, True])
-        .reset_index(drop=True)
-    )
-
-
-def _similarity_matrix(summary: pd.DataFrame, class_names) -> pd.DataFrame:
-    labels = sorted(str(class_name) for class_name in class_names)
-    matrix = pd.DataFrame(np.eye(len(labels)), index=labels, columns=labels, dtype=float)
-    for _, row in summary.iterrows():
-        matrix.loc[row["class_left"], row["class_right"]] = row["rdm_similarity"]
-        matrix.loc[row["class_right"], row["class_left"]] = row["rdm_similarity"]
-    return matrix
-
-
-def _reported_rdms(
-    neural: pd.DataFrame,
-    full_chemical: pd.DataFrame,
-    class_results: dict[str, object],
-    shortlisted_classes: list[str],
-) -> dict[str, pd.DataFrame]:
-    rdms = {"neural": neural.copy(), "chemical_full": full_chemical.copy()}
-    for class_name in shortlisted_classes:
-        rdms[f"class_{_safe_name(class_name)}"] = class_results[class_name].matrix.copy()
-    return rdms
-
-
-def _top_class_comparison_rdms(
-    neural: pd.DataFrame,
-    full_chemical: pd.DataFrame,
-    class_results: dict[str, object],
-    final_shortlist: pd.DataFrame,
-) -> dict[str, pd.DataFrame]:
-    top_class = str(final_shortlist.iloc[0]["class"])
-    aligned_neural, aligned_full = align_square_rdms(neural, full_chemical)
-    aligned_neural, aligned_top = align_square_rdms(aligned_neural, class_results[top_class].matrix)
-    aligned_full = aligned_full.loc[aligned_neural.index, aligned_neural.columns]
-    return {
-        "Neural": aligned_neural,
-        "Full chemical": aligned_full,
-        top_class: aligned_top,
-    }
-
-
-def _date_composition_audit(draws: pd.DataFrame) -> pd.DataFrame:
-    if draws.empty:
-        return pd.DataFrame(columns=["iteration", "date_composition", "date_aware_resampling"])
-    return draws.loc[:, ["iteration", "date_composition", "date_aware_resampling"]].copy()
-
-
-def _rsa(pair_values: pd.DataFrame) -> float:
-    return spearman_similarity(pair_values["neural_distance"], pair_values["chemical_distance"])
 
 
 def _stimulus_date_map(neural: pd.DataFrame) -> dict[str, str]:
@@ -473,27 +428,6 @@ def _can_resample_by_date(labels: np.ndarray, date_map: dict[str, str]) -> bool:
     return all(dates) and len(set(dates)) > 1
 
 
-def _date_aware_subset(labels: np.ndarray, date_map: dict[str, str], rng: np.random.Generator) -> list[str]:
-    by_date: dict[str, list[str]] = {}
-    for label in labels:
-        by_date.setdefault(date_map[str(label)], []).append(str(label))
-    selected: list[str] = []
-    for group in by_date.values():
-        sample_size = max(1, int(np.ceil(len(group) * RESELECTION_FRACTION)))
-        selected.extend(rng.choice(group, size=min(len(group), sample_size), replace=False).tolist())
-    if len(selected) < 3 and len(labels) >= 3:
-        remaining = [str(label) for label in labels if str(label) not in set(selected)]
-        selected.extend(rng.choice(remaining, size=3 - len(selected), replace=False).tolist())
-    return [str(label) for label in labels if str(label) in set(selected)]
-
-
-def _random_subset(labels: np.ndarray, rng: np.random.Generator) -> list[str]:
-    sample_size = max(3, int(np.ceil(len(labels) * RESELECTION_FRACTION)))
-    sample_size = min(len(labels), sample_size)
-    subset = rng.choice(labels, size=sample_size, replace=False)
-    return [str(label) for label in labels if label in set(subset)]
-
-
 def _date_composition(subset: list[str], date_map: dict[str, str]) -> str:
     if not date_map:
         return f"unknown:{len(subset)}"
@@ -501,24 +435,6 @@ def _date_composition(subset: list[str], date_map: dict[str, str]) -> str:
     for label in subset:
         counts[date_map.get(str(label), "unknown")] = counts.get(date_map.get(str(label), "unknown"), 0) + 1
     return ";".join(f"{date}:{counts[date]}" for date in sorted(counts))
-
-
-def _benjamini_hochberg(p_values: np.ndarray) -> np.ndarray:
-    q_values = np.full_like(p_values, np.nan, dtype=float)
-    finite_positions = np.flatnonzero(np.isfinite(p_values))
-    if finite_positions.size == 0:
-        return q_values
-    finite = p_values[finite_positions]
-    order = np.argsort(finite)
-    ranked = finite[order]
-    adjusted = np.empty_like(ranked)
-    running = 1.0
-    n_tests = len(ranked)
-    for index in range(n_tests - 1, -1, -1):
-        running = min(running, ranked[index] * n_tests / (index + 1))
-        adjusted[index] = running
-    q_values[finite_positions[order]] = adjusted
-    return q_values
 
 
 def _safe_name(value: object) -> str:

@@ -80,10 +80,7 @@ def test_save_analysis_result_writes_final_artifacts_without_debug_by_default(tm
     assert (output_root / "rdms" / "neural.csv").exists()
     assert (output_root / "rdms" / "chemical.csv").exists()
     assert (output_root / "figures" / "overview.png").exists()
-    assert (output_root / "audit" / "aligned_stimulus_order.json").exists()
-    assert (output_root / "audit" / "retained_features.json").exists()
-    assert (output_root / "audit" / "date_coverage.csv").exists()
-    assert (output_root / "audit" / "source_manifest.json").exists()
+    assert not (output_root / "audit").exists()
     assert not (output_root / "debug").exists()
     assert "debug.pair_values" not in written
 
@@ -91,6 +88,20 @@ def test_save_analysis_result_writes_final_artifacts_without_debug_by_default(tm
     assert summary["n_pairs_all"] == 1
     diagnostics = json.loads((output_root / "diagnostics.json").read_text(encoding="utf-8"))
     assert diagnostics["caveat"] == "cross-date RSA is descriptive"
+
+
+def test_save_analysis_result_writes_audit_only_when_requested(tmp_path):
+    source_path = tmp_path / "raw.csv"
+    source_path.write_text("sample,value\ns1,1\n", encoding="utf-8")
+    output_root = tmp_path / "result"
+
+    written = save_analysis_result(_result(source_path), output_root, include_audit=True)
+
+    assert (output_root / "audit" / "aligned_stimulus_order.json").exists()
+    assert (output_root / "audit" / "retained_features.json").exists()
+    assert (output_root / "audit" / "date_coverage.csv").exists()
+    assert (output_root / "audit" / "source_manifest.json").exists()
+    assert written["audit.source_manifest"] == output_root / "audit" / "source_manifest.json"
 
     manifest = json.loads((output_root / "audit" / "source_manifest.json").read_text(encoding="utf-8"))
     assert manifest["analysis_id"] == "rdm_alignment"
@@ -111,6 +122,24 @@ def test_save_analysis_result_writes_debug_tables_when_requested(tmp_path):
 
     assert (output_root / "debug" / "pair_values.csv").exists()
     assert written["debug.pair_values"] == output_root / "debug" / "pair_values.csv"
+
+
+def test_save_analysis_result_accepts_figure_writer_with_png_name(tmp_path):
+    def write_figure(path):
+        path.write_bytes(b"figure")
+
+    result = AnalysisResult(
+        analysis_id="writer",
+        parameters={},
+        summary={},
+        figures={"custom_panel.png": write_figure},
+    )
+
+    written = save_analysis_result(result, tmp_path / "result")
+
+    assert (tmp_path / "result" / "figures" / "custom_panel.png").read_bytes() == b"figure"
+    assert not (tmp_path / "result" / "figures" / "custom_panel.png.png").exists()
+    assert written["figures.custom_panel.png"] == tmp_path / "result" / "figures" / "custom_panel.png"
 
 
 def test_save_analysis_result_accepts_dataframe_summary(tmp_path):

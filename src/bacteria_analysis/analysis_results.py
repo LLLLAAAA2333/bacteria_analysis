@@ -10,7 +10,7 @@ import math
 from pathlib import Path
 import re
 import subprocess
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,7 @@ class AnalysisResult:
     summary: dict[str, object] | pd.DataFrame
     tables: dict[str, pd.DataFrame] = field(default_factory=dict)
     rdms: dict[str, pd.DataFrame] = field(default_factory=dict)
-    figures: dict[str, Figure] = field(default_factory=dict)
+    figures: dict[str, Figure | Callable[[Path | None], Figure | None]] = field(default_factory=dict)
     audit: dict[str, object | pd.DataFrame] = field(default_factory=dict)
     diagnostics: dict[str, object] = field(default_factory=dict)
     debug_tables: dict[str, pd.DataFrame] = field(default_factory=dict)
@@ -37,6 +37,7 @@ def save_analysis_result(
     output_root: str | Path,
     *,
     include_debug: bool = False,
+    include_audit: bool = False,
 ) -> dict[str, Path]:
     """Write explicit final artifacts for an in-memory analysis result."""
 
@@ -53,7 +54,8 @@ def save_analysis_result(
     written.update(_write_dataframes(result.tables, root / "tables", prefix="tables"))
     written.update(_write_dataframes(result.rdms, root / "rdms", prefix="rdms", include_index=True))
     written.update(_write_figures(result.figures, root / "figures"))
-    written.update(_write_audit(result, root / "audit"))
+    if include_audit:
+        written.update(_write_audit(result, root / "audit"))
 
     if include_debug and result.debug_tables:
         written.update(_write_dataframes(result.debug_tables, root / "debug", prefix="debug"))
@@ -79,14 +81,18 @@ def _write_dataframes(
     return written
 
 
-def _write_figures(figures: dict[str, Figure], directory: Path) -> dict[str, Path]:
+def _write_figures(figures: dict[str, Figure | Callable[[Path | None], Figure | None]], directory: Path) -> dict[str, Path]:
     written: dict[str, Path] = {}
     if not figures:
         return written
     directory.mkdir(parents=True, exist_ok=True)
-    for name, figure in figures.items():
-        path = directory / f"{_safe_name(name)}.png"
-        figure.savefig(path, dpi=150, bbox_inches="tight")
+    for name, figure_or_writer in figures.items():
+        safe_name = _safe_name(name)
+        path = directory / (safe_name if safe_name.lower().endswith(".png") else f"{safe_name}.png")
+        if isinstance(figure_or_writer, Figure):
+            figure_or_writer.savefig(path, dpi=150, bbox_inches="tight")
+        else:
+            figure_or_writer(path)
         written[f"figures.{name}"] = path
     return written
 

@@ -1,8 +1,13 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from bacteria_analysis.analysis_dataset import AnalysisDataset
 from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
+from bacteria_analysis.analyses import chemical_class_rsa as chemical_class_rsa_module
 from bacteria_analysis.analyses.chemical_class_rsa import run_chemical_class_rsa
 
 
@@ -97,7 +102,7 @@ def test_run_chemical_class_rsa_separates_evidence_layers_and_ranks_top_class():
     assert "reselection_date_composition" in result.audit
     assert result.audit["reselection_date_composition"]["date_composition"].str.contains("20260401").all()
 
-    search = result.tables["search_corrected_diagnostic_summary"]
+    search = result.debug_tables["search_corrected_diagnostic_summary"]
     assert search["diagnostic"].all()
     assert "search_corrected_p_value" in search.columns
 
@@ -107,13 +112,17 @@ def test_run_chemical_class_rsa_separates_evidence_layers_and_ranks_top_class():
     assert len(shortlist) == 2
     assert shortlist.loc[shortlist["class"] == "match", "feature_count"].iloc[0] == 3
 
-    assert "class_to_class_chemical_rdm_similarity" in result.tables
     assert "class_vs_full_chemical_rdm_similarity" in result.tables
-    assert "fixed_class_permutation_scores" in result.figures
-    assert "reselection_stability" in result.figures
-    assert "top_class_rdm_comparison" in result.figures
-    assert "final_shortlist_scorecard" in result.figures
-    assert "class_chemical_rdm_similarity" in result.figures
+    assert "class_to_class_chemical_rdm_similarity" in result.debug_tables
+    assert "fixed_class_permutation.png" in result.figures
+    assert "reselection_stability.png" in result.figures
+    assert "top_class_rdm_comparison.png" in result.figures
+    assert "taxonomy_class_stability_summary.png" in result.figures
+    assert "class_chemical_rdm_similarity_matrix.png" in result.figures
+    assert "class_vs_full_chemical_rdm_similarity.png" in result.figures
+    figure = result.figures["top_class_rdm_comparison.png"](None)
+    assert isinstance(figure, Figure)
+    plt.close(figure)
 
     assert set(result.rdms).issuperset({"neural", "chemical_full", "class_match"})
     assert len([key for key in result.rdms if key.startswith("class_")]) == 2
@@ -139,6 +148,7 @@ def test_chemical_class_rsa_saved_result_does_not_write_all_candidate_rdms(tmp_p
     assert (tmp_path / "class_rsa" / "rdms" / "neural.csv").exists()
     assert (tmp_path / "class_rsa" / "rdms" / "chemical_full.csv").exists()
     assert (tmp_path / "class_rsa" / "rdms" / "class_match.csv").exists()
+    assert (tmp_path / "class_rsa" / "figures" / "top_class_rdm_comparison.png").exists()
     assert not (tmp_path / "class_rsa" / "rdms" / "class_noise.csv").exists()
     assert not (tmp_path / "class_rsa" / "rdms" / "class_third.csv").exists()
     assert not (tmp_path / "class_rsa" / "debug").exists()
@@ -155,3 +165,10 @@ def test_chemical_class_rsa_omits_debug_tables_by_default():
     )
 
     assert result.debug_tables == {}
+
+
+def test_chemical_class_rsa_does_not_load_legacy_plot_scripts():
+    source = Path(chemical_class_rsa_module.__file__).read_text(encoding="utf-8")
+
+    assert "analysis_plot_scripts" not in source
+    assert "load_plot_script" not in source
