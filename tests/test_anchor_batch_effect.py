@@ -9,7 +9,7 @@ from bacteria_analysis.analysis_dataset import AnchorDataset
 from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
 from bacteria_analysis.analyses import anchor_batch_effect as anchor_batch_effect_module
 from bacteria_analysis.analyses.anchor_batch_effect import run_anchor_batch_effect
-from bacteria_analysis.anchor_effects import merge_neurons
+from bacteria_analysis.features.anchor import merge_neurons
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 
 

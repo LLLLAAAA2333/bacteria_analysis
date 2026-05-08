@@ -24,7 +24,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from bacteria_analysis.biological_subspace import build_chemical_rdm, build_stimulus_mapping, load_taxonomy_qc
+from bacteria_analysis.features.biological_subspace import build_chemical_rdm, build_stimulus_mapping, load_taxonomy_qc
 from bacteria_analysis.model_space import read_metabolite_matrix
 
 

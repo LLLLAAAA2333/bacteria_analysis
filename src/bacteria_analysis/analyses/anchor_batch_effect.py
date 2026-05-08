@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from bacteria_analysis.analysis_dataset import AnchorDataset
-from bacteria_analysis.analysis_plotting import (
+from bacteria_analysis.plotting import (
     plot_anchor_clustered_rdm_heatmaps,
     plot_anchor_ideal_models,
     plot_anchor_rdm_heatmaps,
@@ -17,7 +17,7 @@ from bacteria_analysis.analysis_plotting import (
     plot_stimulus_resolved_date_pair_heatmap,
 )
 from bacteria_analysis.analysis_results import AnalysisResult
-from bacteria_analysis.anchor_effects import (
+from bacteria_analysis.features.anchor import (
     build_anchor_stimulus_neuron_activity,
     build_anchor_stimulus_neuron_time_activity,
     build_coverage,

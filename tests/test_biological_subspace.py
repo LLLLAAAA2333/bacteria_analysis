@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from bacteria_analysis.biological_subspace import (
+from bacteria_analysis.features.biological_subspace import (
     build_chemical_rdm,
     coerce_rdm_heatmap_frame,
     prepare_display_frames,

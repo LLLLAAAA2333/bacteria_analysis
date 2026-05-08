@@ -19,7 +19,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from bacteria_analysis.biological_subspace import (
+from bacteria_analysis.features.biological_subspace import (
     VIEW_NAMES,
     build_chemical_rdm,
     build_neural_rdms,
