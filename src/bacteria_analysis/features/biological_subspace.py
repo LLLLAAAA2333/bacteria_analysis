@@ -11,6 +11,7 @@ from scipy.cluster.hierarchy import leaves_list, linkage
 from scipy.spatial.distance import squareform
 
 from bacteria_analysis.constants import NEURON_ORDER
+from bacteria_analysis.io import resolve_preprocessing_path
 from bacteria_analysis.model_space import build_stimulus_sample_map
 from bacteria_analysis.model_space_seed import RAW_METADATA_SHEET_NAME, _normalize_header_text
 from bacteria_analysis.reliability import TrialView
@@ -108,7 +109,7 @@ def load_taxonomy_qc(raw_metadata_path: Path) -> pd.DataFrame:
 
 
 def build_stimulus_mapping(preprocess_root: Path, matrix: pd.DataFrame) -> pd.DataFrame:
-    metadata = pd.read_parquet(preprocess_root / "trial_level" / "trial_metadata.parquet")
+    metadata = pd.read_parquet(resolve_preprocessing_path(preprocess_root, "trial_metadata.parquet"))
     return build_stimulus_sample_map(metadata, matrix_sample_ids=matrix.index)
 
 

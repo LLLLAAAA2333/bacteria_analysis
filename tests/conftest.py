@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
-from bacteria_analysis.io import write_json, write_markdown_report, write_parquet, write_tensor_npz
+from bacteria_analysis.io import write_markdown_report, write_parquet, write_tensor_npz
 from bacteria_analysis.preprocessing import run_preprocessing_pipeline
 
 STAGE1_STIMULI = ("b1_1", "b2_1", "b3_1")
@@ -187,22 +187,16 @@ def synthetic_trial_tensor(synthetic_preprocessing_outputs):
 @pytest.fixture
 def synthetic_preprocess_root(tmp_path, synthetic_preprocessing_outputs):
     root = tmp_path / "preprocess"
-    clean_dir = root / "clean"
-    trial_level_dir = root / "trial_level"
-    qc_dir = root / "qc"
-
-    write_parquet(synthetic_preprocessing_outputs["clean_df"], clean_dir / "neuron_segments_clean.parquet")
-    write_parquet(synthetic_preprocessing_outputs["metadata"], trial_level_dir / "trial_metadata.parquet")
-    write_parquet(synthetic_preprocessing_outputs["wide"], trial_level_dir / "trial_wide_baseline_centered.parquet")
+    write_parquet(synthetic_preprocessing_outputs["metadata"], root / "trial_metadata.parquet")
+    write_parquet(synthetic_preprocessing_outputs["wide"], root / "trial_wide_baseline_centered.parquet")
     write_tensor_npz(
-        trial_level_dir / "trial_tensor_baseline_centered.npz",
+        root / "trial_tensor_baseline_centered.npz",
         synthetic_preprocessing_outputs["tensor"],
         synthetic_preprocessing_outputs["metadata"]["trial_id"].tolist(),
         synthetic_preprocessing_outputs["metadata"]["stimulus"].tolist(),
         synthetic_preprocessing_outputs["metadata"]["stim_name"].tolist(),
     )
-    write_json(synthetic_preprocessing_outputs["report"], qc_dir / "preprocessing_report.json")
-    write_markdown_report(synthetic_preprocessing_outputs["report"], qc_dir / "preprocessing_report.md")
+    write_markdown_report(synthetic_preprocessing_outputs["report"], root / "preprocessing_report.md")
 
     return root
 

@@ -14,7 +14,6 @@ if str(SRC_DIR) not in sys.path:
 from bacteria_analysis.io import (
     ensure_output_dirs,
     read_parquet,
-    write_json,
     write_markdown_report,
     write_parquet,
     write_tensor_npz,
@@ -36,27 +35,24 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_df = read_parquet(input_path)
     outputs = run_preprocessing_pipeline(raw_df)
-    paths = ensure_output_dirs(output_root)
+    output_dir = ensure_output_dirs(output_root)["output_root"]
 
-    clean_path = write_parquet(outputs["clean_df"], paths["clean_dir"] / "neuron_segments_clean.parquet")
-    metadata_path = write_parquet(outputs["metadata"], paths["trial_level_dir"] / "trial_metadata.parquet")
-    wide_path = write_parquet(outputs["wide"], paths["trial_level_dir"] / "trial_wide_baseline_centered.parquet")
+    metadata_path = write_parquet(outputs["metadata"], output_dir / "trial_metadata.parquet")
+    wide_path = write_parquet(outputs["wide"], output_dir / "trial_wide_baseline_centered.parquet")
     tensor_path = write_tensor_npz(
-        paths["trial_level_dir"] / "trial_tensor_baseline_centered.npz",
+        output_dir / "trial_tensor_baseline_centered.npz",
         outputs["tensor"],
         outputs["metadata"]["trial_id"].tolist(),
         outputs["metadata"]["stimulus"].tolist(),
         outputs["metadata"]["stim_name"].tolist(),
     )
-    report_json_path = write_json(outputs["report"], paths["qc_dir"] / "preprocessing_report.json")
-    report_md_path = write_markdown_report(outputs["report"], paths["qc_dir"] / "preprocessing_report.md")
+    report_md_path = write_markdown_report(outputs["report"], output_dir / "preprocessing_report.md")
 
     print(f"Loaded {len(raw_df)} rows from {input_path}")
-    print(f"Wrote clean table to {clean_path}")
     print(f"Wrote trial metadata to {metadata_path}")
     print(f"Wrote wide table to {wide_path}")
     print(f"Wrote tensor to {tensor_path}")
-    print(f"Wrote QC report to {report_json_path} and {report_md_path}")
+    print(f"Wrote QC report to {report_md_path}")
 
     return 0
 

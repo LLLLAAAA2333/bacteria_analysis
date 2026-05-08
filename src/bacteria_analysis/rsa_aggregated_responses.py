@@ -10,6 +10,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from bacteria_analysis.io import resolve_preprocessing_path
 from bacteria_analysis.reliability import (
     DEFAULT_DISTANCE_METRIC,
     MIN_VALID_VALUES,
@@ -38,10 +39,10 @@ def load_aggregated_response_context_inputs(
     """Load preprocessing outputs required for aggregated-response context outputs."""
 
     root = Path(preprocess_root)
-    wide_path = root / "trial_level" / "trial_wide_baseline_centered.parquet"
+    wide_path = resolve_preprocessing_path(root, "trial_wide_baseline_centered.parquet")
     inputs = load_reliability_inputs(
-        metadata_path=root / "trial_level" / "trial_metadata.parquet",
-        tensor_path=root / "trial_level" / "trial_tensor_baseline_centered.npz",
+        metadata_path=resolve_preprocessing_path(root, "trial_metadata.parquet"),
+        tensor_path=resolve_preprocessing_path(root, "trial_tensor_baseline_centered.npz"),
         wide_path=wide_path if wide_path.exists() else None,
     )
 

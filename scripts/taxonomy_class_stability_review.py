@@ -25,6 +25,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from bacteria_analysis.features.biological_subspace import build_chemical_rdm, build_stimulus_mapping, load_taxonomy_qc
+from bacteria_analysis.io import resolve_preprocessing_path
 from bacteria_analysis.model_space import read_metabolite_matrix
 
 
@@ -265,7 +266,7 @@ def load_rdm(path: Path) -> pd.DataFrame:
 
 
 def load_date_map(preprocess_root: Path) -> dict[str, str]:
-    metadata = pd.read_parquet(preprocess_root / "trial_level" / "trial_metadata.parquet")
+    metadata = pd.read_parquet(resolve_preprocessing_path(preprocess_root, "trial_metadata.parquet"))
     support = metadata.loc[:, ["stimulus", "date"]].drop_duplicates().copy()
     counts = support.groupby("stimulus")["date"].nunique()
     repeated = counts.loc[counts > 1]

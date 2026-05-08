@@ -8,6 +8,8 @@ import re
 
 import numpy as np
 import pandas as pd
+
+from bacteria_analysis.io import resolve_preprocessing_path
 from openpyxl import load_workbook
 
 STIMULUS_SAMPLE_MAP_REQUIRED_COLUMNS = ("stimulus", "stim_name", "sample_id")
@@ -203,7 +205,7 @@ def resolve_direct_global_profile_inputs(
     matrix_path: str | Path,
 ) -> dict[str, pd.DataFrame]:
     preprocess_root = Path(preprocess_root)
-    metadata = pd.read_parquet(preprocess_root / "trial_level" / "trial_metadata.parquet")
+    metadata = pd.read_parquet(resolve_preprocessing_path(preprocess_root, "trial_metadata.parquet"))
     matrix = read_metabolite_matrix(matrix_path)
     mapping = build_stimulus_sample_map(metadata, matrix_sample_ids=matrix.index)
     annotation = _build_minimal_metabolite_annotation(matrix)

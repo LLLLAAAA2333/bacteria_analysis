@@ -456,9 +456,11 @@ def test_qc_report_rejects_mismatched_trial_sets(raw_annotated_df, processed_df)
 def test_ensure_output_dirs_creates_expected_tree(tmp_path):
     paths = ensure_output_dirs(tmp_path)
 
-    assert paths["clean_dir"].exists()
-    assert paths["trial_level_dir"].exists()
-    assert paths["qc_dir"].exists()
+    assert paths == {"output_root": tmp_path}
+    assert tmp_path.exists()
+    assert not (tmp_path / "clean").exists()
+    assert not (tmp_path / "trial_level").exists()
+    assert not (tmp_path / "qc").exists()
 
 
 def test_write_parquet_round_trips(tmp_path, processed_df):
@@ -474,7 +476,7 @@ def test_write_parquet_round_trips(tmp_path, processed_df):
 def test_write_tensor_npz_writes_expected_arrays(tmp_path, processed_df):
     metadata = build_trial_metadata(processed_df)
     tensor = build_trial_tensor(processed_df, metadata)
-    path = tmp_path / "trial_level" / "tensor.npz"
+    path = tmp_path / "tensor.npz"
 
     write_tensor_npz(
         path,

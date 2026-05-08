@@ -11,6 +11,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from bacteria_analysis.io import resolve_preprocessing_path
 from bacteria_analysis.reliability import build_trial_views, load_reliability_inputs, run_reliability_pipeline
 from bacteria_analysis.reliability_outputs import write_reliability_outputs
 from bacteria_analysis.reliability_stats import (
@@ -33,21 +34,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run reliability analysis from preprocessing outputs.")
     parser.add_argument(
         "--input-root",
-        help="Root directory containing clean/, trial_level/, and qc/ outputs.",
+        help="Root directory containing preprocessing outputs.",
     )
     parser.add_argument(
         "--metadata",
-        default="data/processed/trial_level/trial_metadata.parquet",
+        default="data/processed/trial_metadata.parquet",
         help="Path to trial metadata parquet.",
     )
     parser.add_argument(
         "--wide",
-        default="data/processed/trial_level/trial_wide_baseline_centered.parquet",
+        default="data/processed/trial_wide_baseline_centered.parquet",
         help="Path to trial wide parquet.",
     )
     parser.add_argument(
         "--tensor",
-        default="data/processed/trial_level/trial_tensor_baseline_centered.npz",
+        default="data/processed/trial_tensor_baseline_centered.npz",
         help="Path to trial tensor npz.",
     )
     parser.add_argument(
@@ -85,9 +86,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.input_root:
         input_root = Path(args.input_root)
         input_paths = {
-            "metadata": input_root / "trial_level" / "trial_metadata.parquet",
-            "wide": input_root / "trial_level" / "trial_wide_baseline_centered.parquet",
-            "tensor": input_root / "trial_level" / "trial_tensor_baseline_centered.npz",
+            "metadata": resolve_preprocessing_path(input_root, "trial_metadata.parquet"),
+            "wide": resolve_preprocessing_path(input_root, "trial_wide_baseline_centered.parquet"),
+            "tensor": resolve_preprocessing_path(input_root, "trial_tensor_baseline_centered.npz"),
         }
     else:
         input_paths = {

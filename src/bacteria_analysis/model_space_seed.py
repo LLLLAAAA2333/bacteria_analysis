@@ -13,7 +13,7 @@ from urllib import error, parse, request
 import pandas as pd
 from openpyxl import load_workbook
 
-from bacteria_analysis.io import write_json
+from bacteria_analysis.io import resolve_preprocessing_path, write_json
 from bacteria_analysis.model_space import (
     _canonicalize_metabolite_name as shared_canonicalize_metabolite_name,
     build_stimulus_sample_map,
@@ -845,7 +845,7 @@ def build_model_space(
     registry_path = Path(registry_path)
     output_root = Path(output_root)
     cache_dir = output_root / "cache"
-    trial_metadata_path = preprocess_root / "trial_level" / "trial_metadata.parquet"
+    trial_metadata_path = resolve_preprocessing_path(preprocess_root, "trial_metadata.parquet")
     resolved_raw_metadata_path = _resolve_raw_metadata_path(matrix_path, raw_metadata_path)
 
     matrix = read_metabolite_matrix(matrix_path)

@@ -15,6 +15,7 @@ from bacteria_analysis.reliability import (
     compute_pairwise_distances,
     load_reliability_inputs,
 )
+from bacteria_analysis.io import resolve_preprocessing_path
 
 GROUP_TYPES = ("pooled", "individual", "date")
 DEFAULT_GEOMETRY_VIEWS = ("response_window", "full_trajectory")
@@ -52,8 +53,8 @@ def run_geometry_pipeline(
 ) -> dict[str, pd.DataFrame]:
     input_root = Path(input_root)
     input_paths = {
-        "metadata": input_root / "trial_level" / "trial_metadata.parquet",
-        "tensor": input_root / "trial_level" / "trial_tensor_baseline_centered.npz",
+        "metadata": resolve_preprocessing_path(input_root, "trial_metadata.parquet"),
+        "tensor": resolve_preprocessing_path(input_root, "trial_tensor_baseline_centered.npz"),
     }
     missing = [f"{name}={path}" for name, path in input_paths.items() if not path.exists()]
     if missing:

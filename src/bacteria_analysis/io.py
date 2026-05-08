@@ -9,14 +9,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bacteria_analysis._analysis_dataset_impl import (
-    AnalysisDataset,
-    AnchorDataset,
-    build_analysis_dataset,
-    build_anchor_dataset,
-)
-from bacteria_analysis._analysis_results_impl import AnalysisResult, save_analysis_result
-
 
 def read_parquet(path: str | Path) -> pd.DataFrame:
     """Read a parquet file from disk."""
@@ -25,22 +17,29 @@ def read_parquet(path: str | Path) -> pd.DataFrame:
 
 
 def ensure_output_dirs(output_root: str | Path) -> dict[str, Path]:
-    """Create and return the standard preprocessing output tree."""
+    """Create and return the output directory."""
 
     root = Path(output_root)
-    clean_dir = root / "clean"
-    trial_level_dir = root / "trial_level"
-    qc_dir = root / "qc"
-
-    for directory in (root, clean_dir, trial_level_dir, qc_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
 
     return {
         "output_root": root,
-        "clean_dir": clean_dir,
-        "trial_level_dir": trial_level_dir,
-        "qc_dir": qc_dir,
     }
+
+
+def resolve_preprocessing_path(output_root: str | Path, filename: str) -> Path:
+    """Resolve a preprocessing artifact from the flat layout, with legacy fallback."""
+
+    root = Path(output_root)
+    flat_path = root / filename
+    if flat_path.exists():
+        return flat_path
+
+    for legacy_dir in ("trial_level", "qc", "clean"):
+        legacy_path = root / legacy_dir / filename
+        if legacy_path.exists():
+            return legacy_path
+    return flat_path
 
 
 def write_parquet(df: pd.DataFrame, path: str | Path) -> Path:
@@ -145,6 +144,15 @@ def write_markdown_report(report: dict[str, Any], path: str | Path) -> Path:
     return output_path
 
 
+from bacteria_analysis._analysis_dataset_impl import (  # noqa: E402
+    AnalysisDataset,
+    AnchorDataset,
+    build_analysis_dataset,
+    build_anchor_dataset,
+)
+from bacteria_analysis._analysis_results_impl import AnalysisResult, save_analysis_result  # noqa: E402
+
+
 __all__ = [
     "AnalysisDataset",
     "AnalysisResult",
@@ -153,6 +161,7 @@ __all__ = [
     "build_anchor_dataset",
     "ensure_output_dirs",
     "read_parquet",
+    "resolve_preprocessing_path",
     "save_analysis_result",
     "write_json",
     "write_markdown_report",
