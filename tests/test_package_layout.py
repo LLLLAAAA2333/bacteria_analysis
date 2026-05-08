@@ -1,5 +1,8 @@
 from bacteria_analysis import analysis_plotting
+from bacteria_analysis import analysis_dataset
+from bacteria_analysis import analysis_results
 from bacteria_analysis import chemical_features
+from bacteria_analysis import io
 from bacteria_analysis import neural_features
 from bacteria_analysis import plotting
 from bacteria_analysis.features import anchor, biological_subspace, chemical, neural, taxonomy
@@ -16,3 +19,8 @@ def test_feature_facades_reexport_current_helpers():
     assert anchor.merge_neurons.__name__ == "merge_neurons"
     assert biological_subspace.prepare_display_frames.__name__ == "prepare_display_frames"
     assert taxonomy.ClassCandidate.__name__ == "ClassCandidate"
+
+
+def test_io_is_public_analysis_io_boundary():
+    assert io.AnalysisDataset is analysis_dataset.AnalysisDataset
+    assert io.save_analysis_result is analysis_results.save_analysis_result

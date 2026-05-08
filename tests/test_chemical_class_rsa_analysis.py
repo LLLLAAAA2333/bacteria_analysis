@@ -5,10 +5,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.analysis_dataset import AnalysisDataset
-from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
 from bacteria_analysis.analyses import chemical_class_rsa as chemical_class_rsa_module
 from bacteria_analysis.analyses.chemical_class_rsa import run_chemical_class_rsa
+from bacteria_analysis.io import AnalysisDataset, AnalysisResult, save_analysis_result
 
 
 def _target_rdm():

@@ -6,7 +6,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
+from bacteria_analysis.io import AnalysisResult, save_analysis_result
 
 
 def _rdm():

@@ -5,13 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bacteria_analysis.analysis_dataset import AnalysisDataset
+from bacteria_analysis.io import AnalysisDataset, AnalysisResult
 from bacteria_analysis.plotting import (
     write_null_distribution,
     write_rdm_heatmap_pair,
     write_subset_stability,
 )
-from bacteria_analysis.analysis_results import AnalysisResult
 from bacteria_analysis.features.chemical import build_chemical_rdm
 from bacteria_analysis.features.neural import build_neural_rdm
 from bacteria_analysis.rdm import align_square_rdms, rdm_pair_values, spearman_similarity

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bacteria_analysis.analysis_dataset import (
+from bacteria_analysis.io import (
     AnalysisDataset,
     AnchorDataset,
     build_analysis_dataset,

@@ -1,4 +1,4 @@
-"""Filesystem helpers for preprocessing outputs."""
+"""I/O helpers and small data containers for analysis workflows."""
 
 from __future__ import annotations
 
@@ -8,6 +8,14 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from bacteria_analysis._analysis_dataset_impl import (
+    AnalysisDataset,
+    AnchorDataset,
+    build_analysis_dataset,
+    build_anchor_dataset,
+)
+from bacteria_analysis._analysis_results_impl import AnalysisResult, save_analysis_result
 
 
 def read_parquet(path: str | Path) -> pd.DataFrame:
@@ -135,3 +143,19 @@ def write_markdown_report(report: dict[str, Any], path: str | Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return output_path
+
+
+__all__ = [
+    "AnalysisDataset",
+    "AnalysisResult",
+    "AnchorDataset",
+    "build_analysis_dataset",
+    "build_anchor_dataset",
+    "ensure_output_dirs",
+    "read_parquet",
+    "save_analysis_result",
+    "write_json",
+    "write_markdown_report",
+    "write_parquet",
+    "write_tensor_npz",
+]

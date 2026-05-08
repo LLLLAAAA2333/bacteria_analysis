@@ -6,11 +6,10 @@ import pytest
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.analysis_dataset import AnalysisDataset
-from bacteria_analysis.analysis_results import AnalysisResult, save_analysis_result
 from bacteria_analysis.analyses import rdm_alignment as rdm_alignment_module
 from bacteria_analysis.analyses.rdm_alignment import run_rdm_alignment
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
+from bacteria_analysis.io import AnalysisDataset, AnalysisResult, save_analysis_result
 
 
 def _patterns():

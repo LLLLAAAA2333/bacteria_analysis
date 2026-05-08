@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bacteria_analysis.analysis_dataset import AnalysisDataset
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
+from bacteria_analysis.io import AnalysisDataset
 from bacteria_analysis.neural_features import (
     build_neural_rdm,
     build_stimulus_prototypes,
