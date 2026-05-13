@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bacteria_analysis.rdm import (
+from bacteria_analysis.analyses.rdm.core import (
     align_square_rdms,
     pearson_similarity,
     rank_normalize,

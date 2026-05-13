@@ -1,16 +1,14 @@
-"""Chemical feature and RDM construction from metabolite matrices."""
+"""Chemical feature construction from metabolite matrices."""
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from bacteria_analysis.features.neural import RdmResult
-
 SUPPORTED_TRANSFORMS = ("none", "log2")
-SUPPORTED_DISTANCES = ("euclidean", "correlation")
 
 NAME_COLUMN_ALIASES = ("metabolite_name", "metabolitename", "name")
 QCRSD_COLUMN_ALIASES = ("QCRSD", "qcrsd", "qc_rsd", "qc rsd", "qcrsd_percent")
@@ -34,16 +32,21 @@ UNKNOWN_TAXONOMY_VALUES = {
 }
 
 
-def build_chemical_rdm(
+@dataclass(frozen=True)
+class ChemicalFeatureResult:
+    matrix: pd.DataFrame
+    metadata: dict[str, object]
+
+
+def build_chemical_feature_matrix(
     dataset,
     *,
     qc_threshold: float = 0.2,
     transform: str = "log2",
-    distance: str = "euclidean",
-) -> RdmResult:
-    """Build a stimulus-level chemical RDM from a sample-by-feature matrix."""
+) -> ChemicalFeatureResult:
+    """Build a stimulus-by-feature chemical matrix after QC and transform."""
 
-    _validate_options(qc_threshold=qc_threshold, transform=transform, distance=distance)
+    _validate_options(qc_threshold=qc_threshold, transform=transform)
     matrix = _numeric_matrix(_dataset_matrix(dataset))
     annotations = _feature_annotations(_dataset_metadata(dataset), require_name=False)
     retained_features = _retained_features(
@@ -56,15 +59,13 @@ def build_chemical_rdm(
 
     stimulus_matrix = _stimulus_matrix(dataset, matrix.loc[:, retained_features])
     transformed = _transform_matrix(stimulus_matrix, transform=transform)
-    rdm = _build_rdm_matrix(transformed, distance=distance)
-    return RdmResult(
-        matrix=rdm,
+    return ChemicalFeatureResult(
+        matrix=transformed,
         metadata={
             "feature_count": int(len(retained_features)),
             "retained_features": tuple(retained_features),
             "qc_threshold": float(qc_threshold),
             "transform": transform,
-            "distance": distance,
             "n_stimuli": int(len(stimulus_matrix)),
             "n_samples": int(stimulus_matrix.index.nunique()),
             "qcrsd_filter_applied": bool(_has_qcrsd(annotations)),
@@ -72,18 +73,17 @@ def build_chemical_rdm(
     )
 
 
-def build_chemical_class_rdms(
+def build_chemical_class_feature_matrices(
     dataset,
     *,
     taxonomy_level: str = "Class",
     qc_threshold: float = 0.2,
     min_features: int = 3,
     transform: str = "log2",
-    distance: str = "euclidean",
-) -> dict[str, RdmResult]:
-    """Build chemical RDMs for each retained taxonomy category."""
+) -> dict[str, ChemicalFeatureResult]:
+    """Build stimulus-by-feature chemical matrices for retained taxonomy categories."""
 
-    _validate_options(qc_threshold=qc_threshold, transform=transform, distance=distance)
+    _validate_options(qc_threshold=qc_threshold, transform=transform)
     if min_features < 1:
         raise ValueError("min_features must be at least 1")
 
@@ -92,7 +92,7 @@ def build_chemical_class_rdms(
     taxonomy_column = _taxonomy_column(annotations, taxonomy_level)
     taxonomy_key = _canonical_taxonomy_key(taxonomy_level)
 
-    results: dict[str, RdmResult] = {}
+    results: dict[str, ChemicalFeatureResult] = {}
     for category in sorted({_clean_category(value) for value in annotations[taxonomy_column].unique()}):
         if not category:
             continue
@@ -114,8 +114,8 @@ def build_chemical_class_rdms(
 
         stimulus_matrix = _stimulus_matrix(dataset, matrix.loc[:, retained_features])
         transformed = _transform_matrix(stimulus_matrix, transform=transform)
-        results[category] = RdmResult(
-            matrix=_build_rdm_matrix(transformed, distance=distance),
+        results[category] = ChemicalFeatureResult(
+            matrix=transformed,
             metadata={
                 "taxonomy_level": taxonomy_key,
                 "category": category,
@@ -123,7 +123,6 @@ def build_chemical_class_rdms(
                 "retained_features": tuple(retained_features),
                 "qc_threshold": float(qc_threshold),
                 "transform": transform,
-                "distance": distance,
                 "n_stimuli": int(len(stimulus_matrix)),
                 "n_samples": int(stimulus_matrix.index.nunique()),
                 "qcrsd_filter_applied": bool(_has_qcrsd(category_annotations)),
@@ -145,13 +144,11 @@ def _dataset_metadata(dataset) -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def _validate_options(*, qc_threshold: float, transform: str, distance: str) -> None:
+def _validate_options(*, qc_threshold: float, transform: str) -> None:
     if not 0 <= qc_threshold <= 1:
         raise ValueError("qc_threshold must be a fraction between 0 and 1")
     if transform not in SUPPORTED_TRANSFORMS:
         raise ValueError(f"unsupported chemical transform {transform!r}")
-    if distance not in SUPPORTED_DISTANCES:
-        raise ValueError(f"unsupported chemical distance {distance!r}")
 
 
 def _numeric_matrix(matrix: pd.DataFrame) -> pd.DataFrame:
@@ -319,40 +316,6 @@ def _transform_matrix(matrix: pd.DataFrame, *, transform: str) -> pd.DataFrame:
     return transformed
 
 
-def _build_rdm_matrix(values: pd.DataFrame, *, distance: str) -> pd.DataFrame:
-    labels = values.index.astype(str).tolist()
-    array = values.to_numpy(dtype=float, copy=False)
-    distances = np.full((len(labels), len(labels)), np.nan, dtype=float)
-    np.fill_diagonal(distances, 0.0)
-
-    for left_index in range(len(labels)):
-        for right_index in range(left_index + 1, len(labels)):
-            pair_distance = _pair_distance(array[left_index], array[right_index], distance=distance)
-            distances[left_index, right_index] = pair_distance
-            distances[right_index, left_index] = pair_distance
-
-    return pd.DataFrame(distances, index=labels, columns=labels)
-
-
-def _pair_distance(left: np.ndarray, right: np.ndarray, *, distance: str) -> float:
-    valid = np.isfinite(left) & np.isfinite(right)
-    left_values = left[valid]
-    right_values = right[valid]
-    if distance == "euclidean":
-        if left_values.size == 0:
-            return float("nan")
-        return float(np.linalg.norm(left_values - right_values))
-
-    if left_values.size < 2:
-        return float("nan")
-    if np.std(left_values) == 0.0 or np.std(right_values) == 0.0:
-        return float("nan")
-    correlation = float(np.corrcoef(left_values, right_values)[0, 1])
-    if not np.isfinite(correlation):
-        return float("nan")
-    return 1.0 - float(np.clip(correlation, -1.0, 1.0))
-
-
 def _find_column(frame: pd.DataFrame, aliases: tuple[str, ...]) -> str | None:
     alias_keys = {_normalize_column_key(alias) for alias in aliases}
     for column in frame.columns:
@@ -379,6 +342,7 @@ def _clean_category(value: object) -> str:
 
 
 __all__ = [
-    "build_chemical_class_rdms",
-    "build_chemical_rdm",
+    "ChemicalFeatureResult",
+    "build_chemical_class_feature_matrices",
+    "build_chemical_feature_matrix",
 ]

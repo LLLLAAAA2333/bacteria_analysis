@@ -5,8 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.analyses import anchor_batch_effect as anchor_batch_effect_module
-from bacteria_analysis.analyses.anchor_batch_effect import run_anchor_batch_effect
+from bacteria_analysis.analyses.rdm import anchor_batch as anchor_batch_effect_module
+from bacteria_analysis.analyses.rdm.anchor_batch import run_anchor_batch_effect
 from bacteria_analysis.features.anchor import merge_neurons
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 from bacteria_analysis.io import AnchorDataset, AnalysisResult, save_analysis_result

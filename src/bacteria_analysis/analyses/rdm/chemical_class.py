@@ -8,7 +8,12 @@ import numpy as np
 import pandas as pd
 
 from bacteria_analysis.io import AnalysisDataset, AnalysisResult
-from bacteria_analysis.plotting import (
+from bacteria_analysis.analyses.rdm.builders import (
+    build_chemical_class_rdms,
+    build_chemical_rdm,
+    build_neural_rdm,
+)
+from bacteria_analysis.analyses.rdm.plots import (
     plot_class_chemical_rdm_similarity,
     plot_class_vs_full_chemical_similarity,
     plot_fixed_class_permutation,
@@ -16,8 +21,6 @@ from bacteria_analysis.plotting import (
     plot_summary_scorecard,
     plot_top_class_rdm_comparison,
 )
-from bacteria_analysis.features.chemical import build_chemical_class_rdms, build_chemical_rdm
-from bacteria_analysis.features.neural import build_neural_rdm
 from bacteria_analysis.features.taxonomy import (
     ClassCandidate,
     avg_rank,

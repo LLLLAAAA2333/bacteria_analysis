@@ -6,8 +6,8 @@ import pytest
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.analyses import rdm_alignment as rdm_alignment_module
-from bacteria_analysis.analyses.rdm_alignment import run_rdm_alignment
+from bacteria_analysis.analyses.rdm import neural_chemical as rdm_alignment_module
+from bacteria_analysis.analyses.rdm.neural_chemical import run_rdm_alignment
 from bacteria_analysis.constants import EXPECTED_TIMEPOINTS, REQUIRED_COLUMNS
 from bacteria_analysis.io import AnalysisDataset, AnalysisResult, save_analysis_result
 

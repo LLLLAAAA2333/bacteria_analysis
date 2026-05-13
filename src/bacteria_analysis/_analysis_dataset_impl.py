@@ -8,7 +8,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from bacteria_analysis.model_space import build_stimulus_sample_map, read_metabolite_matrix
+from bacteria_analysis._data_loaders import build_stimulus_sample_map, read_metabolite_matrix
 
 
 @dataclass(frozen=True)

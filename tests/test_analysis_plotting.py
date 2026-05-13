@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.plotting import create_rdm_panel_figure, render_prepared_rdm_panels
+from bacteria_analysis.analyses.rdm.plots import create_rdm_panel_figure, render_prepared_rdm_panels
 
 
 def test_public_rdm_panel_helpers_render_prepared_frames():

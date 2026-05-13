@@ -23,13 +23,14 @@ Use these Python functions for new work:
 
 - `build_analysis_dataset`
 - `build_anchor_dataset`
-- `run_anchor_batch_effect`
-- `run_rdm_alignment`
-- `run_chemical_class_rsa`
+- `bacteria_analysis.analyses.rdm.run_anchor_batch_effect`
+- `bacteria_analysis.analyses.rdm.run_rdm_alignment`
+- `bacteria_analysis.analyses.rdm.run_chemical_class_rsa`
 - `save_analysis_result`
 
-The notebooks in `notebook/` are thin wrappers around these functions. They are
-for inspection and presentation, not for core scientific logic.
+These functions are the maintained entry points. Notebook or script wrappers may
+be recreated for presentation, but they should stay thin and should not contain
+core scientific logic.
 
 ## Output Policy
 
@@ -37,9 +38,10 @@ Analysis functions return in-memory `AnalysisResult` objects by default. They do
 not write large intermediate directories unless `save_analysis_result(...)` is
 called explicitly.
 
-When saved, the default output is limited to final summaries, compact tables,
-figures, reported RDMs, and audit metadata. Debug tables are written only when
-`include_debug=True` is passed to `save_analysis_result`.
+When saved, the default output is limited to final summaries, selected result
+tables, figures, and reported RDMs. Debug tables are written only when
+`include_debug=True` is passed to `save_analysis_result`; audit metadata is
+written only when `include_audit=True` is requested.
 
 ## Frozen Legacy Workflow
 

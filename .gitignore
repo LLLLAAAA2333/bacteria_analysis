@@ -28,5 +28,8 @@ state/heartbeat-state.json
 # local git worktrees
 .worktrees/
 
+# archived legacy pipeline
+src/bacteria_analysis/_legacy/
+
 # results
 results

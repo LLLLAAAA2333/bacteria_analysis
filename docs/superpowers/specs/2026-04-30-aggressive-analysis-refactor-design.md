@@ -60,20 +60,32 @@ pipeline-stage oriented. The code should reflect that.
 
 ```text
 src/bacteria_analysis/
-  analysis_dataset.py
-  neural_features.py
-  chemical_features.py
-  rdm.py
-  stats.py
-  analysis_results.py
-  analysis_plotting.py
+  io.py
+  preprocessing.py
+
+  features/
+    neural.py
+    chemical.py
+    taxonomy.py
+    anchor.py
 
   analyses/
     __init__.py
-    anchor_batch_effect.py
-    rdm_alignment.py
-    chemical_class_rsa.py
+    rdm/
+      __init__.py
+      core.py
+      builders.py
+      stats.py
+      plots.py
+      neural_chemical.py
+      chemical_class.py
+      anchor_batch.py
 ```
+
+The root package remains the project/domain package. Shared feature and metadata
+construction stays under `features/`; all distance-matrix/RDM/RSA-style
+analysis logic lives under `analyses/rdm/`. Future non-RDM methods should get
+their own method subpackage under `analyses/`.
 
 ### `analysis_dataset.py`
 
@@ -212,14 +224,14 @@ class AnalysisResult:
     parameters: dict[str, object]
     summary: pd.DataFrame | dict[str, object]
     tables: dict[str, pd.DataFrame]
-    figures: dict[str, matplotlib.figure.Figure]
+    figures: dict[str, matplotlib.figure.Figure | Callable[[Path], None]]
     diagnostics: dict[str, object]
 ```
 
 Saving should be explicit:
 
 ```python
-save_analysis_result(result, output_root, include_debug=False)
+save_analysis_result(result, output_root, include_debug=False, include_audit=False)
 ```
 
 Default saved outputs:
@@ -236,18 +248,22 @@ Debug-only outputs:
 - full permutation-null draws;
 - large resampling draw tables.
 
-### `analysis_plotting.py`
+Audit-only outputs when `include_audit=True`:
 
-Shared plotting primitives for concise scientific figures:
+- source manifests;
+- retained-feature details;
+- aligned stimulus-order tables and other compact provenance records.
 
-- RDM heatmap panels;
-- null distribution panels;
-- class score/rank panels;
-- sample-stability panels;
-- anchor-stimulus date-effect panels.
+### Plotting Integration
 
-Plotting functions should accept data frames/RDMs and return `Figure` objects.
-They should not save files directly except through `save_analysis_result`.
+The default figures should use the existing useful review plotting logic
+directly, not simplified replacement panels. New analysis functions should
+construct the required in-memory tables/RDMs from raw inputs, then register
+figure writers that call the current plotting functions when
+`save_analysis_result` is invoked.
+
+This keeps the new workflow independent of generated review-output directories
+while preserving the figure content and filenames that are currently useful.
 
 ## Main Analysis APIs
 
@@ -277,7 +293,8 @@ Main outputs:
 - date-by-anchor prototype RDM;
 - same-anchor cross-date distance summary;
 - date-effect versus stimulus-effect contrast;
-- compact figures for prototype RDM, MDS, and neuron activity heatmaps.
+- the current anchor-stimulus prototype RDM, MDS, date-pair heatmap, neuron
+  activity, time-trajectory, same-vs-other, and ideal-model figures.
 
 Interpretation boundary:
 
@@ -304,7 +321,7 @@ alignment = run_rdm_alignment(
     chemical_qc_threshold=0.2,
     chemical_transform="log2",
     chemical_distance="euclidean",
-    permutations=2000,
+    permutations=10000,
     subset_count=200,
     subset_fraction=0.8,
     seed=20260430,
@@ -320,7 +337,8 @@ Main outputs:
 - label-shuffle significance;
 - date-preserving significance where date labels are available;
 - sample/stimulus subset stability;
-- compact RDM and null-distribution figures.
+- the current neural-chemical RDM foundation heatmap, label-shuffle
+  distribution, label-shuffle fraction, and random-subset distribution figures.
 
 Current caution:
 
@@ -349,7 +367,7 @@ This keeps the analysis honest while leaving room to explore whether another
 alignment comparison better captures the shared structure.
 
 Default saved outputs should omit full pair-level and null-draw tables. Those
-large tables are useful only under `debug=True`.
+large tables are useful only under `include_debug=True`.
 
 ### 3. Chemical Class RSA
 
@@ -381,10 +399,13 @@ Main outputs:
 - observed class RSA scores;
 - fixed-class permutation summary;
 - reselection stability summary;
-- search-corrected diagnostic summary;
 - top-class RDM comparison;
-- class-to-class chemical RDM similarity;
 - class-versus-full chemical RDM similarity.
+
+Debug-only outputs:
+
+- search-corrected diagnostic summary;
+- class-to-class chemical RDM similarity tables.
 
 Interpretation boundary:
 
@@ -398,16 +419,16 @@ The preferred user-facing workflow is a small notebook sequence:
 
 ```text
 notebook/
-  01_anchor_batch_effect.ipynb
-  02_rdm_alignment.ipynb
-  03_chemical_class_rsa.ipynb
+  anchor_batch_effect.ipynb
+  rdm_alignment.ipynb
+  chemical_class_rsa.ipynb
 ```
 
 The notebooks should:
 
 - import the function APIs;
 - define dataset paths and key parameters near the top;
-- display returned summaries and figures inline;
+- display returned summaries and render figure writers inline;
 - save final outputs only when explicitly requested.
 
 Notebook code should be thin. Scientific logic belongs in `src/`.
@@ -431,7 +452,6 @@ results/<run_id>/
     summary.md
     summary.json
     parameters.json
-    audit/
     rdms/
     figures/
     tables/
@@ -440,7 +460,6 @@ results/<run_id>/
     summary.md
     summary.json
     parameters.json
-    audit/
     rdms/
     figures/
     tables/
@@ -450,8 +469,8 @@ Each analysis should save only final, likely-to-be-read tables and figures by
 default. Large intermediate artifacts go under `debug/` only when explicitly
 requested.
 
-Default saved audit artifacts should be compact and sufficient to reproduce the
-analysis:
+Audit artifacts are optional and should be written only when
+`include_audit=True` is requested:
 
 - source manifest with input paths, file hashes when cheap to compute, git
   commit, package version when available, seeds, permutation counts, and key
@@ -460,18 +479,19 @@ analysis:
 - `n_pairs` by scope for all-pair, within-date, and cross-date summaries;
 - retained metabolite lists for full chemical RDMs;
 - retained feature lists for reported chemical classes;
-- final aligned RDM matrices used in headline figures or summaries.
+- provenance records for final aligned RDM matrices used in headline figures or
+  summaries.
 
-Final aligned RDM matrices are considered audit outputs, not disposable
-intermediates. Save the RDMs used for the broad alignment and the reported
-top-class/final-shortlist comparisons by default. Do not save every candidate
-class RDM by default.
+Final aligned RDM matrices are saved for the broad alignment and reported
+top-class/final-shortlist comparisons. Do not save every candidate class RDM by
+default.
 
 Examples of debug-only files:
 
 - pair-level distance tables;
 - every permutation draw;
 - every resampling draw;
+- pairwise class-similarity tables and search-corrected diagnostics;
 - all non-reported candidate RDM matrices.
 
 ## Relationship to Existing Code
@@ -521,7 +541,7 @@ unless a specific comparison against the old workflow is needed.
   exact-match threshold for stochastic summaries.
 - Keep alignment-comparison methods inspectable because the current rank
   similarity is modest and may not be the final best comparison.
-- Add compact figures and explicit saving.
+- Wire the current RDM foundation figure logic into explicit saving.
 - Keep large pair/null tables debug-only.
 
 ### Slice 3: Rebuild anchor batch effect
@@ -562,7 +582,7 @@ Unit tests should cover:
 - Spearman similarity and empirical p-value behavior;
 - label-shuffle and date-preserving permutation reproducibility;
 - class candidate selection and min-feature filtering;
-- save behavior with and without `include_debug`.
+- save behavior with and without `include_debug` and `include_audit`.
 
 Integration tests should use small synthetic fixtures to run:
 
@@ -600,7 +620,8 @@ the expected result object structure. Stochastic regression checks should use a
 - Stochastic comparison tolerance can use the relevant 99th-percentile/null
   context rather than exact-value matching.
 - Final aligned RDM matrices used for headline comparisons should be saved by
-  default as audit outputs; non-reported candidate RDMs stay debug-only.
+  default as compact reported outputs; non-reported candidate RDMs and
+  provenance/audit records stay opt-in.
 
 ## Remaining Open Questions
 

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bacteria_analysis.chemical_features import build_chemical_class_rdms, build_chemical_rdm
+from bacteria_analysis.analyses.rdm.builders import build_chemical_class_rdms, build_chemical_rdm
 from bacteria_analysis.io import AnalysisDataset
 
 

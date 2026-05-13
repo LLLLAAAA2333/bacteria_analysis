@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bacteria_analysis.stats import (
+from bacteria_analysis.analyses.rdm.stats import (
     date_preserving_label_shuffle_null,
     empirical_p_value,
     label_shuffle_null,

@@ -5,8 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from bacteria_analysis.analyses import chemical_class_rsa as chemical_class_rsa_module
-from bacteria_analysis.analyses.chemical_class_rsa import run_chemical_class_rsa
+from bacteria_analysis.analyses.rdm import chemical_class as chemical_class_rsa_module
+from bacteria_analysis.analyses.rdm.chemical_class import run_chemical_class_rsa
 from bacteria_analysis.io import AnalysisDataset, AnalysisResult, save_analysis_result
 
 

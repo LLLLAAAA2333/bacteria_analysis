@@ -1,8 +1,7 @@
-"""Neural feature and RDM construction from raw trial rows."""
+"""Neural feature construction from raw trial rows."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
 import warnings
 
@@ -19,8 +18,6 @@ from bacteria_analysis.preprocessing import (
     filter_traces,
     validate_input_dataframe,
 )
-from bacteria_analysis.reliability import compute_vector_distance
-
 VIEW_TIMEPOINTS: dict[str, tuple[int, ...]] = {
     "response_window": tuple(range(6, 21)),
     "full_trajectory": tuple(range(45)),
@@ -56,14 +53,7 @@ LR_MERGE_PAIRS = {
 
 FEATURE_ID_COLUMNS = ("trial_id", "stimulus", "stim_name", "date")
 SUPPORTED_AGGREGATIONS = ("median", "mean")
-SUPPORTED_DISTANCES = ("correlation", "euclidean")
 FEATURE_COLUMN_PATTERN = re.compile(r"^[A-Za-z0-9]+__t\d{2}$")
-
-
-@dataclass(frozen=True)
-class RdmResult:
-    matrix: pd.DataFrame
-    metadata: dict[str, object]
 
 
 def build_trial_feature_matrix(dataset_or_frame, *, view: str, merge_lr: bool = True) -> pd.DataFrame:
@@ -107,7 +97,7 @@ def build_stimulus_prototypes(features: pd.DataFrame, *, aggregation: str = "med
     if "stimulus" not in features.columns:
         raise ValueError("features must include a stimulus column")
 
-    feature_columns = _feature_columns(features)
+    feature_columns = neural_feature_columns(features)
     if not feature_columns:
         raise ValueError("features must include at least one neural feature column")
 
@@ -129,35 +119,6 @@ def build_stimulus_prototypes(features: pd.DataFrame, *, aggregation: str = "med
     id_columns = ["stimulus", "stim_name", "n_trials"]
     ordered_columns = [column for column in id_columns if any(column in row for row in rows)] + feature_columns
     return pd.DataFrame.from_records(rows, columns=ordered_columns)
-
-
-def build_neural_rdm(
-    dataset,
-    *,
-    view: str,
-    aggregation: str = "median",
-    merge_lr: bool = True,
-    distance: str = "correlation",
-) -> RdmResult:
-    """Build a stimulus-level neural RDM from raw neural rows."""
-
-    if distance not in SUPPORTED_DISTANCES:
-        raise ValueError(f"unsupported neural RDM distance {distance!r}")
-
-    features = build_trial_feature_matrix(dataset, view=view, merge_lr=merge_lr)
-    prototypes = build_stimulus_prototypes(features, aggregation=aggregation)
-    matrix = _build_rdm_matrix(prototypes, distance=distance)
-    metadata = {
-        "view": view,
-        "aggregation": aggregation,
-        "merge_lr": merge_lr,
-        "distance": distance,
-        "n_trials": int(len(features)),
-        "n_stimuli": int(len(prototypes)),
-        "feature_count": int(len(_feature_columns(prototypes))),
-        "timepoints": VIEW_TIMEPOINTS[view],
-    }
-    return RdmResult(matrix=matrix, metadata=metadata)
 
 
 def _extract_neural_frame(dataset_or_frame) -> pd.DataFrame:
@@ -188,37 +149,14 @@ def _select_neuron_features(tensor: np.ndarray, *, merge_lr: bool) -> tuple[tupl
     return MERGED_NEURON_ORDER, merged
 
 
-def _feature_columns(frame: pd.DataFrame) -> list[str]:
+def neural_feature_columns(frame: pd.DataFrame) -> list[str]:
+    """Return neural feature columns from a trial or stimulus feature table."""
+
     return [column for column in frame.columns if FEATURE_COLUMN_PATTERN.match(str(column))]
 
 
-def _build_rdm_matrix(prototypes: pd.DataFrame, *, distance: str) -> pd.DataFrame:
-    feature_columns = _feature_columns(prototypes)
-    stimuli = prototypes["stimulus"].astype(str).tolist()
-    values = prototypes.loc[:, feature_columns].to_numpy(dtype=float, copy=False)
-    matrix = np.full((len(stimuli), len(stimuli)), np.nan, dtype=float)
-    np.fill_diagonal(matrix, 0.0)
-
-    for left_index in range(len(stimuli)):
-        for right_index in range(left_index + 1, len(stimuli)):
-            left_values = values[left_index]
-            right_values = values[right_index]
-            valid = np.isfinite(left_values) & np.isfinite(right_values)
-            pair_distance, status = compute_vector_distance(
-                left_values[valid],
-                right_values[valid],
-                metric=distance,
-            )
-            if status == "ok" and np.isfinite(pair_distance):
-                matrix[left_index, right_index] = pair_distance
-                matrix[right_index, left_index] = pair_distance
-
-    return pd.DataFrame(matrix, index=stimuli, columns=stimuli)
-
-
 __all__ = [
-    "RdmResult",
-    "build_neural_rdm",
     "build_stimulus_prototypes",
     "build_trial_feature_matrix",
+    "neural_feature_columns",
 ]

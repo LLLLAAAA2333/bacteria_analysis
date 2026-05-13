@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from bacteria_analysis.io import AnchorDataset, AnalysisResult
-from bacteria_analysis.plotting import (
+from bacteria_analysis.analyses.rdm.plots import (
     plot_anchor_clustered_rdm_heatmaps,
     plot_anchor_ideal_models,
     plot_anchor_rdm_heatmaps,

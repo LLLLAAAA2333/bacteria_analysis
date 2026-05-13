@@ -22,10 +22,36 @@ The implementation must follow these decisions from
 - `date-stratified rank RSA` is not part of the new core workflow. It is a post-hoc sensitivity analysis with an unclear primary scientific estimand and should not be implemented unless a future explicit question requests it.
 - Primary RDM alignment summaries are all-pair RSA, within-date RSA, cross-date RSA, sample/stimulus stability, and null context.
 - Within-date and cross-date RSA are date-structure summaries, not clean controls, because stimulus identity and date are confounded.
-- Final aligned RDM matrices used for headline comparisons are compact audit outputs and should be saved by default when saving a result; non-reported candidate RDMs remain debug-only.
+- Final aligned RDM matrices used for headline comparisons are compact reported outputs and should be saved by default when saving a result; non-reported candidate RDMs and provenance/audit records remain opt-in.
 - `scripts/run_rsa.py` may be frozen after the notebook workflow is validated.
 
 ## File Structure
+
+Current target layout after the 2026-05-13 method-boundary cleanup:
+
+```text
+src/bacteria_analysis/
+  io.py
+  preprocessing.py
+  features/
+    neural.py
+    chemical.py
+    taxonomy.py
+    anchor.py
+  analyses/
+    rdm/
+      core.py
+      builders.py
+      stats.py
+      plots.py
+      neural_chemical.py
+      chemical_class.py
+      anchor_batch.py
+```
+
+`features/` owns reusable feature tables and metadata. `analyses/rdm/` owns RDM
+building, RDM comparison, shuffle/resample statistics, RDM-specific plotting,
+and the maintained RDM analysis entry points.
 
 Create:
 
@@ -40,9 +66,11 @@ Create:
 - `src/bacteria_analysis/stats.py`
   - Shared permutation, empirical p-value, and sample/stimulus stability helpers.
 - `src/bacteria_analysis/analysis_results.py`
-  - Result dataclasses, aligned RDM audit outputs, source manifests, and explicit save behavior.
+  - Result dataclasses, reported RDM outputs, optional source manifests, and explicit save behavior.
 - `src/bacteria_analysis/analysis_plotting.py`
-  - Shared plotting primitives returning `matplotlib.figure.Figure`.
+  - Optional shared plotting helpers.
+- `src/bacteria_analysis/analysis_plot_scripts.py`
+  - Thin loader for existing useful review plotting scripts.
 - `src/bacteria_analysis/analyses/__init__.py`
   - Public analysis exports.
 - `src/bacteria_analysis/analyses/anchor_batch_effect.py`
@@ -60,9 +88,9 @@ Create:
 - `tests/test_anchor_batch_effect.py`
 - `tests/test_rdm_alignment_analysis.py`
 - `tests/test_chemical_class_rsa_analysis.py`
-- `notebook/01_anchor_batch_effect.ipynb`
-- `notebook/02_rdm_alignment.ipynb`
-- `notebook/03_chemical_class_rsa.ipynb`
+- `notebook/anchor_batch_effect.ipynb`
+- `notebook/rdm_alignment.ipynb`
+- `notebook/chemical_class_rsa.ipynb`
 - `docs/legacy-analysis-notes.md`
 
 Modify:
@@ -393,7 +421,8 @@ Test:
 - `AnalysisResult` stores final aligned RDM matrices used for headline comparisons.
 - `AnalysisResult` stores compact audit metadata and audit tables.
 - `save_analysis_result(..., include_debug=False)` writes only final summaries/tables/figures.
-- default saving writes final aligned RDM matrices, aligned stimulus order, retained feature lists, source manifest, seeds, permutation counts, and `n_pairs` by scope where present.
+- default saving writes final aligned RDM matrices but does not write `audit/`.
+- `include_audit=True` writes aligned stimulus order, retained feature lists, source manifest, seeds, permutation counts, and `n_pairs` by scope where present.
 - `include_debug=True` writes debug tables under `debug/`.
 - no files are written when analysis functions are called without save.
 
@@ -409,19 +438,25 @@ class AnalysisResult:
     summary: dict[str, object] | pd.DataFrame
     tables: dict[str, pd.DataFrame] = field(default_factory=dict)
     rdms: dict[str, pd.DataFrame] = field(default_factory=dict)
-    figures: dict[str, Figure] = field(default_factory=dict)
+    figures: dict[str, Figure | Callable[[Path], None]] = field(default_factory=dict)
     audit: dict[str, object | pd.DataFrame] = field(default_factory=dict)
     diagnostics: dict[str, object] = field(default_factory=dict)
     debug_tables: dict[str, pd.DataFrame] = field(default_factory=dict)
 
-save_analysis_result(result: AnalysisResult, output_root: str | Path, *, include_debug: bool = False) -> dict[str, Path]
+save_analysis_result(
+    result: AnalysisResult,
+    output_root: str | Path,
+    *,
+    include_debug: bool = False,
+    include_audit: bool = False,
+) -> dict[str, Path]
 ```
 
 Write `summary.json`, `summary.md`, `parameters.json`, final tables, final
-RDMs, final figures, compact audit artifacts, and optional debug tables.
-`audit/source_manifest.json` should include source paths, file hashes when cheap
-to compute, git commit when available, package version when available, seed
-values, permutation counts, and key parameters.
+RDMs, final figures, optional audit artifacts, and optional debug tables.
+When `include_audit=True`, `audit/source_manifest.json` should include source
+paths, file hashes when cheap to compute, git commit when available, package
+version when available, seed values, permutation counts, and key parameters.
 
 - [ ] **Step 3: Run result tests**
 
@@ -443,7 +478,7 @@ git commit -m "feat: add explicit analysis result saving"
 **Files:**
 - Create: `src/bacteria_analysis/analyses/__init__.py`
 - Create: `src/bacteria_analysis/analyses/rdm_alignment.py`
-- Create or update: `src/bacteria_analysis/analysis_plotting.py`
+- Create or update: `src/bacteria_analysis/analysis_plot_scripts.py`
 - Test: `tests/test_rdm_alignment_analysis.py`
 
 - [ ] **Step 1: Write failing tests for the high-level alignment result**
@@ -456,7 +491,7 @@ Test expectations:
 - summary contains all-pair RSA;
 - summary contains within-date and cross-date RSA as descriptive date-structure summaries when date metadata are available;
 - summary reports `n_pairs` by all-pair, within-date, and cross-date scope;
-- audit reports date and date-pair coverage;
+- audit can report date and date-pair coverage when `include_audit=True`;
 - summary caveats state that cross-date RSA is a stress test, not proof of generalization;
 - summary contains label-shuffle p-value;
 - summary contains sample/stimulus stability summary;
@@ -498,13 +533,13 @@ Required summaries:
 - `subset_rsa_q01`;
 - `subset_rsa_q99`.
 
-Required audit artifacts:
+Optional audit artifacts when `include_audit=True`:
 
 - aligned stimulus order;
 - date/date-pair coverage;
 - retained metabolite list for the broad chemical RDM;
 - source manifest;
-- final aligned neural and chemical RDM matrices.
+- provenance records for final aligned neural and chemical RDM matrices.
 
 Debug-only tables:
 
@@ -512,15 +547,15 @@ Debug-only tables:
 - full null values;
 - subset draw values.
 
-- [ ] **Step 3: Add compact plotting primitives**
+- [ ] **Step 3: Wire the current RDM foundation figure logic**
 
-In `analysis_plotting.py`, add only the plotting functions needed now:
+Use the existing `plot_neural_chemical_rdm_foundation.py` plotting functions
+as save-time figure writers. The default saved figures should be:
 
-- RDM heatmap pair;
-- null distribution;
-- subset stability distribution.
-
-They should return figures and avoid saving.
+- label-shuffle RDM heatmap panel;
+- label-shuffle distribution;
+- label-shuffle fraction distribution;
+- random-subset distribution.
 
 - [ ] **Step 4: Run alignment tests**
 
@@ -533,7 +568,7 @@ Expected: pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/bacteria_analysis/analyses/__init__.py src/bacteria_analysis/analyses/rdm_alignment.py src/bacteria_analysis/analysis_plotting.py tests/test_rdm_alignment_analysis.py
+git add src/bacteria_analysis/analyses/__init__.py src/bacteria_analysis/analyses/rdm_alignment.py src/bacteria_analysis/analysis_plot_scripts.py tests/test_rdm_alignment_analysis.py
 git commit -m "feat: add rdm alignment analysis"
 ```
 
@@ -541,7 +576,7 @@ git commit -m "feat: add rdm alignment analysis"
 
 **Files:**
 - Create: `src/bacteria_analysis/analyses/anchor_batch_effect.py`
-- Modify: `src/bacteria_analysis/analysis_plotting.py`
+- Modify: `src/bacteria_analysis/analysis_plot_scripts.py`
 - Test: `tests/test_anchor_batch_effect.py`
 
 - [ ] **Step 1: Write failing anchor analysis tests**
@@ -553,7 +588,7 @@ Test expectations:
 - coverage table reports anchor/date counts;
 - same-anchor cross-date distances are summarized;
 - stimulus-effect versus date-effect contrast is present;
-- figures are returned, not saved;
+- figure writers are returned, not saved;
 - result can be saved through `save_analysis_result`.
 
 - [ ] **Step 2: Implement anchor batch-effect analysis**
@@ -573,11 +608,10 @@ run_anchor_batch_effect(
 
 Primary outputs:
 
-- `anchor_coverage`;
-- `anchor_pairwise_distances`;
-- `same_anchor_cross_date_summary`;
-- `stimulus_vs_date_contrast`;
-- RDM heatmap and MDS-style figure if the helper is simple enough.
+- `anchor_stimulus_coverage`;
+- `anchor_stimulus_cross_date_anchor_summary`;
+- `anchor_stimulus_date_pair_same_vs_other_contrasts`;
+- the current nine anchor-stimulus review figures.
 
 Keep this focused on batch/date effect assessment. Do not add broad RSA logic here.
 
@@ -592,7 +626,7 @@ Expected: pass.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/bacteria_analysis/analyses/anchor_batch_effect.py src/bacteria_analysis/analysis_plotting.py tests/test_anchor_batch_effect.py
+git add src/bacteria_analysis/analyses/anchor_batch_effect.py src/bacteria_analysis/analysis_plot_scripts.py tests/test_anchor_batch_effect.py
 git commit -m "feat: add anchor batch effect analysis"
 ```
 
@@ -600,7 +634,7 @@ git commit -m "feat: add anchor batch effect analysis"
 
 **Files:**
 - Create: `src/bacteria_analysis/analyses/chemical_class_rsa.py`
-- Modify: `src/bacteria_analysis/analysis_plotting.py`
+- Modify: `src/bacteria_analysis/analysis_plot_scripts.py`
 - Test: `tests/test_chemical_class_rsa_analysis.py`
 
 - [ ] **Step 1: Write failing class RSA tests**
@@ -614,7 +648,7 @@ Test expectations:
 - fixed-class summary includes adjusted p/q values when multiple classes are evaluated;
 - reselection stability summary is produced;
 - reselection reports date composition per draw or uses date-aware resampling;
-- search-corrected diagnostic summary is produced but marked diagnostic;
+- search-corrected diagnostic summary is produced only when debug outputs are requested and is marked diagnostic;
 - top class metadata includes feature count;
 - result saves only reported top-class/final-shortlist RDMs by default and does not write all class RDM matrices.
 
@@ -647,10 +681,8 @@ Required outputs:
 - `observed_class_scores`;
 - `fixed_class_permutation_summary`;
 - `reselection_stability_summary`;
-- `search_corrected_diagnostic_summary`;
 - `final_class_shortlist`;
-- class-to-class chemical RDM similarity summary;
-- class-versus-full chemical RDM similarity summary.
+- `class_vs_full_chemical_rdm_similarity`.
 
 Scientific constraints:
 
@@ -659,16 +691,19 @@ Scientific constraints:
   composition per draw so stability is not silently driven by date imbalance;
 - search-corrected results remain diagnostic and should not be merged into the
   fixed-class evidence layer;
-- save the broad full-chemical RDM and reported top-class/final-shortlist RDMs
-  as audit artifacts, but keep all non-reported candidate RDMs debug-only.
+- save the broad full-chemical RDM and reported top-class/final-shortlist RDMs,
+  but keep all non-reported candidate RDMs debug-only.
+- keep search-corrected diagnostics and class-to-class pairwise similarity
+  tables debug-only unless a later analysis explicitly needs them.
 
-The main figure contract should stay compact:
+The main figure contract should match the current useful taxonomy review figures:
 
 - fixed-class permutation score plot;
 - reselection stability plot;
 - top-class neural/full-chemical/top-class RDM comparison;
 - final shortlist scorecard;
 - class chemical RDM similarity matrix.
+- class-versus-full chemical RDM similarity.
 
 - [ ] **Step 3: Run class RSA tests**
 
@@ -681,7 +716,7 @@ Expected: pass.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/bacteria_analysis/analyses/chemical_class_rsa.py src/bacteria_analysis/analysis_plotting.py tests/test_chemical_class_rsa_analysis.py
+git add src/bacteria_analysis/analyses/chemical_class_rsa.py src/bacteria_analysis/analysis_plot_scripts.py tests/test_chemical_class_rsa_analysis.py
 git commit -m "feat: add chemical class rsa analysis"
 ```
 
@@ -690,9 +725,9 @@ git commit -m "feat: add chemical class rsa analysis"
 **Files:**
 - Modify: `src/bacteria_analysis/__init__.py`
 - Modify: `src/bacteria_analysis/analyses/__init__.py`
-- Create: `notebook/01_anchor_batch_effect.ipynb`
-- Create: `notebook/02_rdm_alignment.ipynb`
-- Create: `notebook/03_chemical_class_rsa.ipynb`
+- Create: `notebook/anchor_batch_effect.ipynb`
+- Create: `notebook/rdm_alignment.ipynb`
+- Create: `notebook/chemical_class_rsa.ipynb`
 
 - [ ] **Step 1: Export public APIs**
 
@@ -713,7 +748,7 @@ Each notebook should:
 
 - define paths and parameters in the first code cell;
 - call the relevant function API;
-- display summary tables and figures inline;
+- display summary tables and render figure writers inline;
 - save outputs only in a final optional cell.
 
 Do not put core scientific logic in notebooks.
@@ -731,7 +766,7 @@ Expected: prints `ok`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/bacteria_analysis/__init__.py src/bacteria_analysis/analyses/__init__.py notebook/01_anchor_batch_effect.ipynb notebook/02_rdm_alignment.ipynb notebook/03_chemical_class_rsa.ipynb
+git add src/bacteria_analysis/__init__.py src/bacteria_analysis/analyses/__init__.py notebook/anchor_batch_effect.ipynb notebook/rdm_alignment.ipynb notebook/chemical_class_rsa.ipynb
 git commit -m "docs: add notebook workflow entry points"
 ```
 
@@ -791,7 +826,7 @@ dataset = build_analysis_dataset(
     exclude_dates=["20260331"],
 )
 
-alignment = run_rdm_alignment(dataset, permutations=20, subset_count=20, seed=1)
+alignment = run_rdm_alignment(dataset, seed=1)
 classes = run_chemical_class_rsa(
     dataset,
     neural_rdm=alignment.rdms["neural"],

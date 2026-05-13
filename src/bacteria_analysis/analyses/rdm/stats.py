@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from bacteria_analysis.rdm import align_square_rdms, spearman_similarity
+from bacteria_analysis.analyses.rdm.core import align_square_rdms, spearman_similarity
 
 
 def empirical_p_value(observed: float, null_values: np.ndarray, side: str = "greater") -> float:

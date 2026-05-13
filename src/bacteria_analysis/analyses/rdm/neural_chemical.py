@@ -6,15 +6,14 @@ import numpy as np
 import pandas as pd
 
 from bacteria_analysis.io import AnalysisDataset, AnalysisResult
-from bacteria_analysis.plotting import (
+from bacteria_analysis.analyses.rdm.builders import build_chemical_rdm, build_neural_rdm
+from bacteria_analysis.analyses.rdm.core import align_square_rdms, rdm_pair_values, spearman_similarity
+from bacteria_analysis.analyses.rdm.plots import (
     write_null_distribution,
     write_rdm_heatmap_pair,
     write_subset_stability,
 )
-from bacteria_analysis.features.chemical import build_chemical_rdm
-from bacteria_analysis.features.neural import build_neural_rdm
-from bacteria_analysis.rdm import align_square_rdms, rdm_pair_values, spearman_similarity
-from bacteria_analysis.stats import (
+from bacteria_analysis.analyses.rdm.stats import (
     date_preserving_label_shuffle_null,
     empirical_p_value,
     label_shuffle_null,

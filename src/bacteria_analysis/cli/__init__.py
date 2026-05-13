@@ -1,10 +1,5 @@
-"""Command-line entry point wrappers.
+"""CLI entry points are no longer maintained.
 
-CLI modules should remain thin adapters around reusable package functions.
+Preprocessing is available as a Python module (`bacteria_analysis.preprocessing`)
+and is called automatically by `bacteria_analysis.features.neural`.
 """
-
-__all__ = [
-    "geometry",
-    "preprocessing",
-    "reliability",
-]
