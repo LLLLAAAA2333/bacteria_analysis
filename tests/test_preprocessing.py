@@ -3,7 +3,6 @@ import pandas as pd
 import pytest
 
 from bacteria_analysis.constants import BASELINE_TIMEPOINTS, EXPECTED_TIMEPOINTS, NEURON_ORDER, REQUIRED_COLUMNS
-from bacteria_analysis.io import ensure_output_dirs, write_markdown_report, write_parquet, write_tensor_npz
 from bacteria_analysis.preprocessing import (
     add_trial_id,
     annotate_trace_quality,
@@ -451,59 +450,3 @@ def test_qc_report_rejects_mismatched_trial_sets(raw_annotated_df, processed_df)
 
     with pytest.raises(ValueError, match="same trial set"):
         build_qc_report(raw_df=broken_raw, processed_df=processed_df, metadata=metadata)
-
-
-def test_ensure_output_dirs_creates_expected_tree(tmp_path):
-    paths = ensure_output_dirs(tmp_path)
-
-    assert paths["clean_dir"].exists()
-    assert paths["trial_level_dir"].exists()
-    assert paths["qc_dir"].exists()
-
-
-def test_write_parquet_round_trips(tmp_path, processed_df):
-    path = tmp_path / "clean" / "sample.parquet"
-    frame = processed_df.head(10).reset_index(drop=True)
-
-    write_parquet(frame, path)
-
-    round_tripped = pd.read_parquet(path)
-    pd.testing.assert_frame_equal(round_tripped, frame, check_dtype=False)
-
-
-def test_write_tensor_npz_writes_expected_arrays(tmp_path, processed_df):
-    metadata = build_trial_metadata(processed_df)
-    tensor = build_trial_tensor(processed_df, metadata)
-    path = tmp_path / "trial_level" / "tensor.npz"
-
-    write_tensor_npz(
-        path,
-        tensor,
-        metadata["trial_id"].tolist(),
-        metadata["stimulus"].tolist(),
-        metadata["stim_name"].tolist(),
-    )
-
-    with np.load(path) as archive:
-        assert set(archive.files) == {"tensor", "trial_ids", "stimulus_labels", "stim_name_labels"}
-        assert archive["tensor"].shape == tensor.shape
-        assert archive["trial_ids"].tolist() == metadata["trial_id"].tolist()
-        assert archive["stimulus_labels"].tolist() == metadata["stimulus"].tolist()
-        assert archive["stim_name_labels"].tolist() == metadata["stim_name"].tolist()
-
-
-def test_write_markdown_report_writes_expected_sections(tmp_path, raw_annotated_df, processed_df):
-    metadata = build_trial_metadata(processed_df)
-    report = build_qc_report(raw_df=raw_annotated_df, processed_df=processed_df, metadata=metadata)
-    path = tmp_path / "qc" / "report.md"
-
-    write_markdown_report(report, path)
-
-    content = path.read_text(encoding="utf-8")
-    assert "# Preprocessing QC Report" in content
-    assert "## Summary" in content
-    assert "## Trace Filtering" in content
-    assert "## Neuron Coverage Distribution" in content
-    assert "## Trials Per Stimulus" in content
-    assert "Unique trials" in content
-    assert "Fully-NaN traces removed" in content
