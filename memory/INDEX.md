@@ -1,7 +1,7 @@
 # Memory Index
 
 > index_schema_version: 1
-> updated_at: 2026-04-25T19:47:56+08:00
+> updated_at: 2026-06-03T21:27:31.4393487+08:00
 
 <!--
 This file stores retrieval metadata only.
@@ -17,6 +17,10 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - lessons: file=MEMORY.md section="Lessons"
 - active-threads: file=MEMORY.md section="Active Threads"
 - key-references: file=MEMORY.md section="Key References"
+- analysis-refactor: file=MEMORY.md section="Active Threads" tags=[analysis-refactor, function-first, notebook-workflow, output-policy, batch-consistency, package-layout, io, cli]
+- chemical-survey: file=MEMORY.md section="Active Threads" tags=[chemical-survey, worktree, exploratory-analysis, no-commit]
+- project-direction: file=MEMORY.md section="Decisions" tags=[scientific-question, neural-representation, chemical-space, interpretation]
+- neural-representation: file=MEMORY.md section="Decisions" tags=[86bac, neural-rdm, active-scaling, flattened-response, correlation, correlation-distance, response-window, timepoints, silent-neuron, asg, neural-mds, shepard-diagram]
 
 ## Tag Map
 
@@ -27,6 +31,9 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #api-design: MEM-20260425-001
 - #module-first: MEM-20260425-001
 - #cli: MEM-20260425-001
+- #scientific-analysis: MEM-20260525-001
+- #analysis-validation: MEM-20260525-001
+- #pytest: MEM-20260525-001
 - #project-layout: MEM-20260409-010
 - #legacy-batch: MEM-20260409-011
 - #202603-batch: MEM-20260409-012
@@ -35,8 +42,11 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #reliability: MEM-20260418-009, MEM-20260418-008, MEM-20260418-007
 - #interpretation: MEM-20260423-002, MEM-20260423-001, MEM-20260422-002, MEM-20260422-001, MEM-20260421-001, MEM-20260420-002, MEM-20260420-001, MEM-20260419-011, MEM-20260419-010, MEM-20260419-009, MEM-20260419-008
 - #permutation: MEM-20260423-002, MEM-20260423-001
-- #matrix-input: MEM-20260419-003, MEM-20260419-001, MEM-20260418-001, MEM-20260409-013, MEM-20260416-001, MEM-20260418-003
-- #metabolism-analysis: MEM-20260419-003, MEM-20260418-001, MEM-20260418-003
+- #matrix-input: MEM-20260603-004, MEM-20260519-002, MEM-20260519-001, MEM-20260419-003, MEM-20260419-001, MEM-20260418-001, MEM-20260409-013, MEM-20260416-001
+- #metabolism-analysis: MEM-20260519-002, MEM-20260519-001, MEM-20260419-003, MEM-20260418-001, MEM-20260418-003
+- #fold-change: MEM-20260519-002, MEM-20260519-001
+- #missingness: MEM-20260519-002, MEM-20260519-001
+- #imputation: MEM-20260519-002
 - #distance-method: MEM-20260419-006, MEM-20260419-004, MEM-20260419-003, MEM-20260419-002
 - #model-mismatch: MEM-20260420-002, MEM-20260419-006, MEM-20260419-002
 - #neural-ceiling: MEM-20260421-001, MEM-20260420-003, MEM-20260419-002
@@ -69,7 +79,38 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #subspace-search: MEM-20260423-001, MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
 - #metabolite-selection: MEM-20260422-002, MEM-20260422-001, MEM-20260421-003
 - #figure-contract: MEM-20260422-001
+- #analysis-refactor: MEM-20260507-011
+- #function-first: MEM-20260507-001
+- #notebook-workflow: MEM-20260507-001
+- #output-policy: MEM-20260507-001
+- #batch-consistency: MEM-20260507-001
+- #package-layout: MEM-20260507-001
+- #io: MEM-20260507-001
+- #cli: MEM-20260507-001
 - #taxonomy-rsa: MEM-20260423-002, MEM-20260423-001, MEM-20260419-007, MEM-20260419-006, MEM-20260419-005
+- #category-pca: MEM-20260515-003, MEM-20260515-002
+- #chemical-pca: MEM-20260518-002, MEM-20260515-003
+- #chemical-space: MEM-20260527-001, MEM-20260518-003, MEM-20260518-002
+- #scientific-question: MEM-20260527-001
+- #neural-representation: MEM-20260527-001
+- #neural-rdm: MEM-20260603-003, MEM-20260529-001
+- #active-scaling: MEM-20260603-002, MEM-20260529-001
+- #flattened-response: MEM-20260529-001
+- #correlation: MEM-20260529-001
+- #correlation-distance: MEM-20260603-003, MEM-20260529-001
+- #response-window: MEM-20260603-001
+- #timepoints: MEM-20260603-001
+- #silent-neuron: MEM-20260603-002
+- #asg: MEM-20260603-002
+- #neural-mds: MEM-20260603-003
+- #mds: MEM-20260603-003
+- #shepard-diagram: MEM-20260603-003
+- #mds-diagnostics: MEM-20260603-003
+- #chemical-features: MEM-20260603-004
+- #small-molecules: MEM-20260603-004
+- #metabolomics: MEM-20260603-004
+- #mass-distribution: MEM-20260603-004
+- #scatter-review: MEM-20260518-001
 - #subspace-fusion: MEM-20260419-007
 - #prototype-rdm: MEM-20260409-008, MEM-20260409-009
 - #writer-contract: MEM-20260409-009
@@ -79,6 +120,9 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - #timestamp: MEM-20260413-001
 - #process-quality: MEM-20260413-001
 - #worktree: MEM-20260413-002
+- #chemical-survey: MEM-20260519-003
+- #exploratory-analysis: MEM-20260525-001, MEM-20260519-003
+- #no-commit: MEM-20260519-003
 - #data-paths: MEM-20260418-009, MEM-20260418-008, MEM-20260418-007, MEM-20260418-006, MEM-20260413-002
 - #execution: MEM-20260413-002
 - #local-tools: MEM-20260418-002
@@ -96,6 +140,9 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - module-first functions -> MEM-20260425-001
 - callable Python APIs -> MEM-20260425-001
 - thin CLI wrappers -> MEM-20260425-001
+- no rigorous pytest for analysis-only work -> MEM-20260525-001
+- analysis sanity checks -> MEM-20260525-001
+- scientific analysis validation -> MEM-20260525-001
 - legacy data layout -> MEM-20260409-011
 - 202603 batch -> MEM-20260409-012
 - 202604 batch -> MEM-20260418-006
@@ -133,6 +180,17 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - matrix semantics -> MEM-20260418-001
 - not total-sum normalized -> MEM-20260418-001
 - derived metabolite signal -> MEM-20260418-001
+- bacterial spent medium fold change -> MEM-20260519-001
+- mean medium blank normalization -> MEM-20260519-001
+- matrix semantics -> MEM-20260519-001
+- fold-change matches neural response -> MEM-20260519-001
+- up down regulation versus blank medium -> MEM-20260519-001
+- missing-to-one policy -> MEM-20260519-002
+- raw missing fold-change neutral placeholder -> MEM-20260519-002
+- raw missing to one matrix -> MEM-20260519-002
+- continue in chemical_survey worktree -> MEM-20260519-003
+- no git commit for chemical survey -> MEM-20260519-003
+- exploratory chemical worktree -> MEM-20260519-003
 - raw metabolite metadata -> MEM-20260418-003
 - preannotated metabolite identities -> MEM-20260418-003
 - raw workbook first -> MEM-20260418-004
@@ -193,10 +251,44 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - taxonomy-first stable classes -> MEM-20260423-002
 - class-neural association -> MEM-20260423-002
 - class-to-class chemical RDM matrix -> MEM-20260423-002
+- aggressive analysis refactor -> MEM-20260507-001
+- function-first refactor -> MEM-20260507-001
+- refactor smoke -> MEM-20260507-001
+- plot_script bridge -> MEM-20260507-001
+- batch consistency workflow -> MEM-20260507-001
+- src package layout -> MEM-20260507-001
+- flat preprocessing outputs -> MEM-20260507-001
+- package cli -> MEM-20260507-001
+- what neural response represents -> MEM-20260527-001
+- neural response representation -> MEM-20260527-001
+- avoid naive chemical euclidean -> MEM-20260527-001
+- high-dimensional euclidean fails -> MEM-20260527-001
+- observed metabolic footprint -> MEM-20260527-001
+- active scaled flattened correlation -> MEM-20260529-001
+- flattened trace correlation -> MEM-20260529-001
+- first neural RDM -> MEM-20260529-001
+- neural shape RDM -> MEM-20260529-001
+- neural_correlation_distance_matrix -> MEM-20260529-001
+- Pearson correlation distance -> MEM-20260529-001
+- not cosine distance -> MEM-20260529-001
+- canonical neural trajectory window -> MEM-20260603-001
+- t05 t24 response window -> MEM-20260603-001
+- stimulus on through offset plus ten seconds -> MEM-20260603-001
+- silent neuron scale one -> MEM-20260603-002
+- leave silent neurons unscaled -> MEM-20260603-002
+- preserve raw weak responses -> MEM-20260603-002
+- 3D neural MDS -> MEM-20260603-003
+- MDS uses correlation RDM -> MEM-20260603-003
+- Shepard diagram interpretation -> MEM-20260603-003
+- embedded Euclidean distance -> MEM-20260603-003
+- matrix chemical small molecule panel -> MEM-20260603-004
+- targeted metabolite panel -> MEM-20260603-004
+- matrix mass distribution -> MEM-20260603-004
 
 ## Active Threads
 
-- MEM-20260423-002 | status=active | topic=rsa-workflow | next=review generated taxonomy stability figures and decide class candidates
+- MEM-20260519-003 | status=active | topic=chemical-survey | next=continue exploratory chemical/metabolite analyses in `.worktrees/chemical_survey` without committing unless requested
+- MEM-20260507-001 | status=active | topic=analysis-refactor | next=review `.worktrees/analysis-refactor-spec` with new `analyses/rdm/` method boundary and decide whether to merge
 
 ## Recent Changes
 
@@ -236,6 +328,10 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - 2026-04-23: added full-chemical raw-value RDM heatmap to the taxonomy class comparison figure
 - 2026-04-23: mirrored the taxonomy class RDM comparison into date_controlled_rsa_review and clarified weighted-fusion RSA scopes
 - 2026-04-23: reorganized class-to-class chemical RDM similarity into a clustered RSA matrix with Purine nucleosides highlighted
+- 2026-05-07: added MEM-20260507-001 for the unfinished aggressive function-first analysis refactor and marked MEM-20260423-002 superseded as the active handoff
+- 2026-05-08: updated MEM-20260507-001 after removing legacy script bridges and moving feature/plotting implementations under the target src package layout
+- 2026-05-08: updated MEM-20260507-001 after exposing analysis I/O through io.py, flattening preprocessing outputs, and moving preprocessing/reliability/geometry CLI logic into src
+- 2026-05-13: updated MEM-20260507-001 after separating shared `features/` from maintained RDM methods under `analyses/rdm/`
 - 2026-04-20: superseded MEM-20260420-003 with MEM-20260420-004 to move the active RSA thread from global diagnosis to shared-structure localization
 - 2026-04-21: added MEM-20260421-001 for current model-diagnosis interpretation and MEM-20260421-002 for the supervised neural-aligned model workstream; superseded MEM-20260420-004
 - 2026-04-21: added MEM-20260421-003 for the supervised chemical subspace and metabolite subset search plan; superseded MEM-20260421-002 as the immediate active thread
@@ -247,3 +343,23 @@ If a tag grows too large, keep the most recent active IDs and point to a topic f
 - 2026-04-23: updated MEM-20260423-001 to distinguish conditional fixed-subset significance from selection stability and search-corrected nulls
 - 2026-04-23: added MEM-20260423-002 to set the next taxonomy thread around stable class-neural association rather than paper-ready reporting
 - 2026-04-25: added MEM-20260425-001 for concise scientific plotting and module-first callable API preferences
+- 2026-05-15: added MEM-20260515-001 for the taxonomy category performance review of RSA shared-structure chemical classes
+- 2026-05-15: added MEM-20260515-002 for category concentration alignment against scaled neural PCA axes
+- 2026-05-15: added MEM-20260515-003 for category-specific chemical PCA alignment against scaled neural PCA axes
+- 2026-05-18: added MEM-20260518-001 for exploratory top-correlation scatter review figures
+- 2026-05-18: added MEM-20260518-002 for exploratory full chemical composition PCA
+- 2026-05-18: added MEM-20260518-003 to pivot the active exploration toward chemical-space preprocessing and dimensionality reduction
+- 2026-05-19: added MEM-20260519-001 clarifying that matrix.xlsx is bacterial spent-medium fold change versus mean medium blank; superseded earlier inferred matrix-semantics entries MEM-20260418-001 and MEM-20260419-003
+- 2026-05-19: added MEM-20260519-002 to use raw-missing fold-change cells as neutral `1` in the main matrix and keep the original mixed low-value fill as sensitivity analysis
+- 2026-05-19: added MEM-20260519-003 to continue chemical survey work in `.worktrees/chemical_survey` and avoid git commits unless explicitly requested
+- 2026-05-25: added MEM-20260525-001 to avoid rigorous pytest requirements for analysis-only scientific work and prefer lightweight analysis sanity checks
+- 2026-05-27: added MEM-20260527-001 to frame the project around neural representation and the chemical-space distance problem
+- 2026-05-27: updated MEM-20260519-001 to record fold-change as a suitable absolute-abundance preprocessing matched to neural response contrast
+- 2026-05-28: updated MEM-20260527-001 to reject high-dimensional `log2FC + Euclidean` as a meaningful biological chemical distance
+- 2026-05-28: updated MEM-20260527-001 to frame no-genome pathway work as observed metabolic-footprint embedding rather than genetic pathway-capacity inference
+- 2026-05-29: added MEM-20260529-001 to use active-scaled flattened trace correlation as the first 86bac neural RDM definition
+- 2026-06-03: added MEM-20260603-001 to set the canonical trajectory response window to `[5,25)` (`t05..t24`) and preserve the earlier `[10,30)` outputs as legacy audit artifacts
+- 2026-06-03: added MEM-20260603-002 to keep silent neurons at `scale=1.0` in active-scaled trajectory RDMs and preserve their raw weak responses
+- 2026-06-03: updated MEM-20260529-001 to clarify that `neural_correlation_distance_matrix.csv` is Pearson correlation distance, not raw cosine distance
+- 2026-06-03: added MEM-20260603-003 for neural MDS and Shepard-distance interpretation
+- 2026-06-03: added MEM-20260603-004 for the matrix.xlsx chemical feature type and mass-distribution audit

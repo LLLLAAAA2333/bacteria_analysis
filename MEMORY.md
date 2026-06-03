@@ -1,8 +1,8 @@
 # Agent Memory
 
 > memory_schema_version: 1
-> updated_at: 2026-04-25T19:47:56+08:00
-> last_consolidated: 2026-03-27
+> updated_at: 2026-06-03T21:27:31.4393487+08:00
+> last_consolidated: 2026-06-03
 
 <!-- Partial migration status: `Preferences` and `Active Threads` use durable memory schema v1. Remaining sections stay in legacy form until they are migrated. -->
 
@@ -123,16 +123,16 @@ Evidence:
 - type: fact
 - source: raw-vs-matrix investigation on 2026-04-18
 - created_at: 2026-04-18T16:58:57+08:00
-- updated_at: 2026-04-18T16:58:57+08:00
+- updated_at: 2026-05-19T16:39:44.3862717+08:00
 - confidence: 0.7
-- status: active
+- status: superseded
 - tags: [matrix-input, metabolism-analysis, relative-signal, compositionality]
 - topic: model-inputs
 - last_seen: 2026-04-18
 - aliases: [matrix semantics, not total-sum normalized, derived metabolite signal]
 - ttl_days: null
 - supersedes: []
-- superseded_by: null
+- superseded_by: MEM-20260519-001
 
 Summary:
 `data/matrix.xlsx` is strongly aligned with `data/metabolism_raw_data.xlsx` but
@@ -358,16 +358,16 @@ Evidence:
 - type: fact
 - source: 2026-04-19 raw-vs-matrix recheck on the filtered 202604 workflow
 - created_at: 2026-04-19T01:35:58.0019370+08:00
-- updated_at: 2026-04-19T01:35:58.0019370+08:00
+- updated_at: 2026-05-19T16:39:44.3862717+08:00
 - confidence: 0.9
-- status: active
+- status: superseded
 - tags: [matrix-input, metabolism-analysis, relative-signal, distance-method, qcrsd]
 - topic: model-inputs
 - last_seen: 2026-04-19
 - aliases: [feature-median-centered matrix, qcrsd uses fractional scale]
 - ttl_days: null
 - supersedes: []
-- superseded_by: null
+- superseded_by: MEM-20260519-001
 
 Summary:
 Across the 299 shared `A*` samples and 380 aligned metabolites, `data/matrix.xlsx`
@@ -390,9 +390,331 @@ Evidence:
 - data/metabolism_raw_data.xlsx
 - data/matrix.xlsx
 
+### MEM-20260519-001 | matrix.xlsx is bacterial spent medium fold change versus mean medium blank
+
+- type: fact
+- source: explicit user clarification on 2026-05-19
+- created_at: 2026-05-19T16:39:44.3862717+08:00
+- updated_at: 2026-05-27T18:43:06.3143771+08:00
+- confidence: 1.0
+- status: active
+- tags: [matrix-input, metabolism-analysis, fold-change, medium-blank, missingness]
+- topic: model-inputs
+- last_seen: 2026-05-27
+- aliases: [bacterial spent medium fold change, mean medium blank normalization, matrix semantics]
+- ttl_days: null
+- supersedes: [MEM-20260418-001, MEM-20260419-003]
+- superseded_by: null
+
+Summary:
+`data/matrix.xlsx` is the bacterial spent-medium metabolite fold-change matrix
+computed relative to the mean in medium blank. It is intended to represent which
+metabolites are increased or decreased by bacterial metabolism relative to
+medium. The matrix retains all chemicals and does not apply QCRSD or missing-rate
+filtering. Missing raw data were handled during matrix generation in mixed ways,
+including values filled as `1` and other imputation/handling routes. The user
+considers fold-change a suitable preprocessing of absolute abundance because it
+converts raw abundance into up/down regulation relative to blank medium.
+
+Why it matters:
+- `matrix.xlsx` should be interpreted as a bacterial effect-versus-medium matrix,
+  not as a QC-filtered raw abundance matrix.
+- Its biological contrast matches the C. elegans response contrast, because the
+  neural response also represents sample change relative to medium blank.
+- This makes fold-change conceptually better matched to the neural response than
+  absolute abundance for the main chemical-neural interpretation.
+- Raw-based QC/filter/imputation analyses remain useful diagnostics, but formal
+  neural-response alignment should keep this fold-change contrast explicit.
+
+Evidence:
+- user clarification on 2026-05-19
+- user clarification on 2026-05-27
+- data/matrix.xlsx
+
+### MEM-20260603-004 | matrix.xlsx chemical features are mostly small metabolite-like molecules
+
+- type: fact
+- source: local audit of data/matrix.xlsx and data/metabolism_raw_data.xlsx on 2026-06-03
+- created_at: 2026-06-03T21:27:31.4393487+08:00
+- updated_at: 2026-06-03T21:27:31.4393487+08:00
+- confidence: 0.9
+- status: active
+- tags: [86bac, matrix-input, chemical-features, small-molecules, metabolomics, mass-distribution]
+- topic: model-inputs
+- last_seen: 2026-06-03
+- aliases: [matrix chemical small molecule panel, targeted metabolite panel, matrix mass distribution]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+`data/matrix.xlsx` contains 380 named chemical features aligned to the raw
+annotation workbook. The panel is best described as a targeted metabolite /
+metabolite-like small-chemical panel, not proteins, macromolecules, or raw
+spectral peaks. A strict `mass <= 500 Da` small-molecule rule leaves 16/380
+features above 500 Da, including cofactors, oligosaccharides, nucleotides,
+porphyrin, and tauro-muricholic acids.
+
+Why it matters:
+- Single-neuron chemical association screens should be interpreted as
+  metabolite-feature association screens, not unidentified peak screens.
+- The mass distribution is mostly low molecular weight: median `180.0 Da`, Q75
+  `266.25 Da`, Q90 `402.1 Da`, Q95 `492.32 Da`, and max `784.0 Da`.
+- Future chemical priors can use metabolite class, genus/taxonomy, and mass
+  context, while retaining a caveat that not every feature satisfies the strict
+  small-molecule cutoff.
+
+Evidence:
+- memory/2026-06-03.md
+- results/86bac_shape_pca_rsa_t05_t24_silent_scale1/tables/chemical_feature_type_audit/matrix_chemical_feature_type_audit.csv
+- results/86bac_shape_pca_rsa_t05_t24_silent_scale1/tables/chemical_feature_type_audit/matrix_chemical_mass_distribution_summary.json
+
 ## Decisions
 
 <!-- Migrated from legacy Architecture & Design Decisions bullets on 2026-04-09. -->
+
+### MEM-20260519-002 | Treat raw-missing fold-change cells as neutral in the main chemical matrix
+
+- type: decision
+- source: user interpretation + assistant sensitivity analysis on 2026-05-19
+- created_at: 2026-05-19T17:13:41.5458726+08:00
+- updated_at: 2026-05-19T17:13:41.5458726+08:00
+- confidence: 0.9
+- status: active
+- tags: [matrix-input, metabolism-analysis, fold-change, missingness, imputation]
+- topic: model-inputs
+- last_seen: 2026-05-19
+- aliases: [missing-to-one policy, raw missing fold-change neutral placeholder, raw missing to one matrix]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For exploratory analysis using `data/matrix.xlsx`, raw missing metabolite cells
+should be set to fold-change `1` (`log2FC = 0`) in the main analysis matrix
+rather than interpreted as low-intensity numerator divided by the medium blank.
+The original mixed low-value fill should be retained as a sensitivity/diagnostic
+view, not treated as direct evidence of bacterial depletion.
+
+Why it matters:
+- Raw missing low-value fill produced extreme negative fold-change values:
+  forcing all raw missing cells to `1` changed 8,417 cells, with median original
+  fold-change `0.0047` and median original log2FC `-7.73`.
+- Global PCA was broadly stable after this correction, but missing-driven neural
+  correlations such as Dimethylamine-PC2 and Kynurenine-PC3 collapsed, while
+  clean observed signals such as Arginine-PC1 and Trimethyllysine-PC1 were
+  unchanged.
+- Future reports should call chemical-neural associations robust only when they
+  are stable under this missing policy or are based on observed raw values.
+
+Evidence:
+- memory/2026-05-19.md
+- .worktrees/chemical_survey/exploratory/chemical_survey/compare_matrix_missing_policies.py
+- .worktrees/chemical_survey/results/chemical_survey/matrix_missing_policy_sensitivity/
+
+### MEM-20260527-001 | Frame the project around neural representation, not response stability alone
+
+- type: decision
+- source: user scientific framing on 2026-05-27 and corrections/research on 2026-05-28
+- created_at: 2026-05-27T18:33:33.6573863+08:00
+- updated_at: 2026-05-28T18:57:37.9769661+08:00
+- confidence: 1.0
+- status: active
+- tags: [scientific-question, neural-representation, chemical-space, interpretation]
+- topic: project-direction
+- last_seen: 2026-05-28
+- aliases: [what neural response represents, neural response representation, avoid naive chemical euclidean, high-dimensional euclidean fails, observed metabolic footprint]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+The central project question should be framed as what C. elegans neural
+responses represent and how those responses can be interpreted, rather than as
+an engineering-style proof that the measured responses are stable. Response
+stability remains important background evidence, but it is not the main
+scientific narrative.
+
+Why it matters:
+- The main analysis challenge is not only neural-response reliability, but the
+  mismatch between moderately multidimensional neural activity and highly
+  structured chemical/metabolic space.
+- Directly flattening neural dynamics or reducing them to simple peaks can hide
+  temporal response structure, although neural dimensionality is still lower and
+  more tractable than chemical dimensionality.
+- Full chemical Euclidean space, naive PCA, and naive full-space RDMs can encode
+  misleading distances because metabolites have precursor/product, pathway, QC,
+  missingness, and compositional relationships.
+- `log2FC + Euclidean` over hundreds of metabolites should not be treated as a
+  meaningful biological chemical distance; at most it is a diagnostic reference,
+  because high-dimensional full-space Euclidean distances can be dominated by
+  irrelevant or correlated axes and lose interpretability.
+- Without genome data, pathway analysis should be framed as observed metabolic
+  footprint analysis, not inferred genetic pathway capacity. Bacterial taxonomy
+  labels can stratify or validate footprint patterns, but should not be treated
+  as proof that specific pathways are encoded or causally active.
+- A more plausible chemical embedding should use pathway, reaction, chemical
+  ontology, and empirical co-change structure to summarize signed production and
+  depletion modules before comparing samples.
+
+Evidence:
+- user message on 2026-05-27
+- user correction on 2026-05-28
+- literature review on 2026-05-28
+
+### MEM-20260529-001 | Use active-scaled flattened trace correlation as first neural RDM definition
+
+- type: decision
+- source: user method decision on 2026-05-29
+- created_at: 2026-05-29T20:23:40.5965276+08:00
+- updated_at: 2026-06-03T21:27:31.4393487+08:00
+- confidence: 1.0
+- status: active
+- tags: [86bac, neural-rdm, active-scaling, flattened-response, correlation, correlation-distance]
+- topic: neural-representation
+- last_seen: 2026-06-03
+- aliases: [active scaled flattened correlation, flattened trace correlation, first neural RDM, neural shape RDM, neural_correlation_distance_matrix, Pearson correlation distance, not cosine distance]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For the 86bac neural RDM first pass, use a neural shape RDM:
+`1 - corr(active-scaled flattened traces)`. This is intentionally a shape/pattern
+RDM, not a strength RDM. It avoids peak-only summaries and avoids averaging
+per-neuron trace similarities; the flattened trace is treated as one
+active-scaled population response pattern.
+
+`neural_correlation_distance_matrix.csv` should be interpreted as Pearson
+correlation distance, not raw cosine distance. Pearson correlation distance is
+equivalent to cosine distance only after each flattened trajectory vector is
+mean-centered.
+
+Why it matters:
+- Keeps dynamic trace shape instead of letting a single unconstrained peak
+  dominate the distance.
+- Preserves multi-neuron population structure while keeping the first pass
+  simple and interpretable.
+- Separates shape from response strength so amplitude/gain can be evaluated
+  later as a distinct RDM rather than mixed into the first-pass definition.
+- Makes the neural RDM definition explicit before comparing to chemical RDMs.
+- Avoids confusing raw cosine distance with mean-centered Pearson trajectory
+  similarity.
+
+Evidence:
+- user decision on 2026-05-29
+- user clarification on 2026-06-03
+
+### MEM-20260603-001 | Use t05 through t24 as the canonical neural response window
+
+- type: decision
+- source: explicit user clarification on 2026-06-02 and corrected rerun on 2026-06-03
+- created_at: 2026-06-03T00:10:31.0059072+08:00
+- updated_at: 2026-06-03T00:10:31.0059072+08:00
+- confidence: 1.0
+- status: active
+- tags: [86bac, neural-rdm, trajectory, response-window, timepoints]
+- topic: neural-representation
+- last_seen: 2026-06-03
+- aliases: [canonical neural trajectory window, t05 t24 response window, stimulus on through offset plus ten seconds]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+Use the half-open timepoint interval `[5, 25)`, meaning `t05..t24`, as the
+canonical neural response window for trajectory-based analysis. This covers
+stimulus onset through ten seconds after stimulus offset.
+
+Why it matters:
+- The earlier 86bac exploratory shape-RDM script used `[10, 30)`, which omitted
+  the early stimulus-response period and included later post-stimulus frames.
+- The corrected 86bac rerun is stored separately under
+  `results/86bac_shape_pca_rsa_t05_t24/`; preserve the prior
+  `results/86bac_shape_pca_rsa/` outputs as legacy audit artifacts.
+- Future trajectory plots should draw the stimulus-offset boundary between
+  `t15` and `t16`.
+
+Evidence:
+- user clarification on 2026-06-02
+- memory/2026-06-02.md
+- memory/2026-06-03.md
+- results/86bac_shape_pca_rsa_t05_t24/run_summary.json
+
+### MEM-20260603-002 | Leave silent neurons unscaled in active-scaled trajectory RDMs
+
+- type: decision
+- source: explicit user correction and corrected 86bac rerun on 2026-06-03
+- created_at: 2026-06-03T00:40:53.0650783+08:00
+- updated_at: 2026-06-03T00:40:53.0650783+08:00
+- confidence: 1.0
+- status: active
+- tags: [86bac, neural-rdm, active-scaling, silent-neuron, asg]
+- topic: neural-representation
+- last_seen: 2026-06-03
+- aliases: [silent neuron scale one, leave silent neurons unscaled, preserve raw weak responses]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For signed baseline-centered neural trajectories, scale active neurons by
+`mean(abs(active frames))` using frames where `abs(value) >= threshold`. If a
+neuron has no suprathreshold frames, use `scale=1.0` and preserve its raw values.
+
+Why it matters:
+- Dividing a silent neuron by the mean absolute value of its near-zero noise
+  inflates noise into an apparent response pattern.
+- In the 86bac exploratory rerun, the former fallback amplified ASG from about
+  `[-0.112, 0.130]` to `[-5.040, 5.868]`.
+- The corrected outputs are stored separately under
+  `results/86bac_shape_pca_rsa_t05_t24_silent_scale1/`.
+
+Evidence:
+- user correction on 2026-06-03
+- memory/2026-06-03.md
+- results/86bac_shape_pca_rsa_t05_t24_silent_scale1/run_summary.json
+- results/86bac_shape_pca_rsa_t05_t24_silent_scale1/tables/neural_active_scales.csv
+
+### MEM-20260603-003 | Interpret 86bac neural MDS as correlation-RDM input embedded in 3D Euclidean space
+
+- type: decision
+- source: user MDS and Shepard-diagram clarification on 2026-06-03
+- created_at: 2026-06-03T21:27:31.4393487+08:00
+- updated_at: 2026-06-03T21:27:31.4393487+08:00
+- confidence: 1.0
+- status: active
+- tags: [86bac, neural-rdm, neural-mds, mds, shepard-diagram, mds-diagnostics, correlation-distance]
+- topic: neural-representation
+- last_seen: 2026-06-03
+- aliases: [3D neural MDS, MDS uses correlation RDM, Shepard diagram interpretation, embedded Euclidean distance]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+The current 86bac neural MDS uses the precomputed neural Pearson correlation
+distance RDM as input, then embeds samples into 3D Euclidean coordinates with
+classical metric MDS. Shepard diagrams should compare original RDM distances on
+the x-axis against Euclidean distances between the 3D MDS coordinates on the
+y-axis.
+
+Why it matters:
+- The MDS input is not Euclidean distance computed from raw neural traces.
+- The low-dimensional embedding distances are Euclidean because the output
+  space is 3D Euclidean.
+- For Shepard diagrams and stress, do not normalize MDS coordinates after
+  embedding; doing so changes the fitted distance scale. Axis range adjustment
+  for display is acceptable.
+- If the RDM rows are treated as features and Euclidean distance is recomputed
+  between rows, the result becomes a second-order distance profile and will not
+  match the current Shepard diagnostic.
+
+Evidence:
+- memory/2026-06-03.md
+- exploratory/plot_86bac_rdm_mds_3d.py
+- exploratory/plot_86bac_neural_mds_shepard.py
+- results/86bac_shape_pca_rsa_t05_t24_silent_scale1/tables/mds_diagnostics/neural_mds_3d_shepard_summary.json
 
 ### MEM-20260409-004 | Use date + worm_key + segment_index as the canonical trial identifier
 
@@ -659,6 +981,41 @@ Why it matters:
 Evidence:
 - AGENTS.md
 - memory/2026-04-25.md
+
+### MEM-20260525-001 | Do not require rigorous pytest for analysis-only scientific work
+
+- type: preference
+- source: explicit user instruction on 2026-05-25 and AGENTS.md update
+- created_at: 2026-05-25T15:32:17.5775344+08:00
+- updated_at: 2026-05-25T15:32:17.5775344+08:00
+- confidence: 1.0
+- status: active
+- tags: [scientific-analysis, analysis-validation, pytest, exploratory-analysis]
+- topic: user-preferences
+- last_seen: 2026-05-25
+- aliases: [no rigorous pytest for analysis-only work, analysis sanity checks, scientific analysis validation]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+For exploratory scientific analysis in this project, do not require rigorous
+`pytest` coverage by default. Treat the work as scientific analysis rather than
+production workflow construction unless reusable code, pipeline behavior, or
+public APIs are being changed.
+
+Why it matters:
+- Prevents analysis sessions from being slowed down by inappropriate software
+  testing requirements.
+- Keeps verification focused on the scientific artifacts: input/source checks,
+  sample and feature counts, output readability, figure sanity, sensitivity
+  checks when relevant, and explicit caveats.
+- Preserves formal `pytest` for engineering changes or when the user explicitly
+  asks for formal tests.
+
+Evidence:
+- AGENTS.md
+- user instruction on 2026-05-25
 
 ## Lessons
 
@@ -1551,6 +1908,37 @@ Evidence:
 
 <!-- Migrated from legacy Active Threads bullets on 2026-04-09. -->
 
+### MEM-20260519-003 | Continue exploratory chemical survey in the chemical_survey worktree
+
+- type: active-thread
+- source: explicit user instruction on 2026-05-19
+- created_at: 2026-05-19T18:14:05.1118098+08:00
+- updated_at: 2026-05-19T18:14:05.1118098+08:00
+- confidence: 1.0
+- status: active
+- tags: [chemical-survey, worktree, exploratory-analysis, no-commit]
+- topic: chemical-survey
+- last_seen: 2026-05-19
+- aliases: [continue in chemical_survey worktree, no git commit for chemical survey, exploratory chemical worktree]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+Continue the current exploratory chemical/metabolite analysis in
+`.worktrees/chemical_survey` on branch `codex/chemical_survey`. Do not commit the
+memory updates, scripts, or exploratory outputs unless the user explicitly asks.
+
+Why it matters:
+- The chemical survey remains exploratory and should not be folded into the
+  formal framework yet.
+- Future analysis should reuse the existing worktree context, scripts, and
+  outputs rather than restarting in the main checkout.
+
+Evidence:
+- user instruction on 2026-05-19
+- .worktrees/chemical_survey/
+
 ### MEM-20260409-003 | Stage3 prototype supplement worktree was merged and cleaned
 
 - type: active-thread
@@ -1768,16 +2156,16 @@ Evidence:
 - type: active-thread
 - source: user instruction on 2026-04-23 after clarifying robustness and search-corrected significance
 - created_at: 2026-04-23T15:45:04+08:00
-- updated_at: 2026-04-23T21:35:02+08:00
+- updated_at: 2026-05-08T17:52:53+08:00
 - confidence: 1.0
-- status: active
+- status: superseded
 - tags: [rsa, taxonomy-rsa, permutation, validation, interpretation]
 - topic: rsa-workflow
-- last_seen: 2026-04-23
+- last_seen: 2026-05-07
 - aliases: [stable taxonomy classes, taxonomy-first stable classes, class-neural association]
 - ttl_days: null
 - supersedes: []
-- superseded_by: null
+- superseded_by: MEM-20260507-001
 
 Summary:
 The next thread should start from the existing taxonomy results and ask which
@@ -1825,6 +2213,120 @@ Evidence:
 - results/202604_without_20260331/taxonomy_class_stability_review/figures/04_taxonomy_class_stability_summary.png
 - results/202604_without_20260331/taxonomy_class_stability_review/figures/05_class_chemical_rdm_similarity_matrix.png
 - results/202604_without_20260331/date_controlled_rsa_review/figures/neural_chemical_rdm_foundation__response_window_full_vs_top_class_rdms.png
+
+### MEM-20260507-001 | Analysis refactor: IO cleaned, old pipeline archived, preprocessing module-only
+
+- type: active-thread
+- source: user handoff request on 2026-05-07, completed on 2026-05-13
+- created_at: 2026-05-07T17:08:53+08:00
+- updated_at: 2026-05-13T16:20:00+08:00
+- confidence: 1.0
+- status: active
+- tags: [analysis-refactor, function-first, output-policy, io-cli-cleanup, legacy-archive]
+- topic: analysis-refactor
+- last_seen: 2026-05-13
+- aliases: [aggressive analysis refactor, function-first refactor, io cleanup, legacy archive]
+- ttl_days: null
+- supersedes: [MEM-20260423-002]
+- superseded_by: null
+
+Summary:
+The active worktree is `.worktrees/analysis-refactor-spec` on branch `codex/analysis-refactor-spec`. As of 2026-05-13, the following have been completed:
+- `io.py` cleaned: all parquet/npz writer functions removed; only dataset classes and `save_analysis_result` remain.
+- Preprocessing CLI removed: `preprocessing` is module-only, invoked by `features/neural.py`.
+- Old pipeline archived: reliability → geometry → RSA modules, related CLI, tests, and review scripts moved to `_legacy/` (gitignored).
+- `_data_loaders.py` extracted: `read_metabolite_matrix`, `build_stimulus_sample_map` from archived `model_space.py`.
+- `_vector_distance.py` extracted: `compute_vector_distance` from archived `reliability.py`.
+- `pixi.toml` tasks reduced: only `test` remains.
+- RDM method boundary clarified: maintained distance-matrix/RDM/RSA-style code now lives under `analyses/rdm/`.
+- `features/` now owns reusable feature tables and metadata only; `build_*_rdm` functions moved to `analyses.rdm.builders`.
+- 97 tests passing.
+
+Current package layout:
+```
+src/bacteria_analysis/
+  io.py, preprocessing.py
+  features/     anchor.py, chemical.py, neural.py, taxonomy.py
+  analyses/rdm/ core.py, builders.py, stats.py, plots.py,
+                neural_chemical.py, chemical_class.py, anchor_batch.py
+  cli/          empty (explanatory only)
+  _legacy/      archived pipeline (gitignored)
+```
+
+Why it matters:
+- Output policy is now strict: only figures (PNG), summary JSON/MD, tables as CSV. No parquet/npy intermediate files.
+- New analysis layer separates shared features from RDM methods; old pipeline code exists on disk for reference only.
+- Clean separation between active `src/` and archived `_legacy/`.
+
+Resolved known issues from earlier session:
+- ~~`run_rsa.py` still contains CLI logic in `scripts/`~~ → archived to `_legacy/`
+- ~~legacy script dependency~~ → removed
+- ~~flat preprocessing outputs and `resolve_preprocessing_path`~~ → removed with io cleanup
+
+Next step:
+- Review the new package structure and output contract; decide whether to merge `codex/analysis-refactor-spec` into `master`.
+
+Evidence:
+- memory/2026-05-13.md
+- `.worktrees/analysis-refactor-spec/src/bacteria_analysis/io.py`
+- `.worktrees/analysis-refactor-spec/src/bacteria_analysis/_legacy/__init__.py`
+- `.worktrees/analysis-refactor-spec/src/bacteria_analysis/analyses/rdm/builders.py`
+
+### MEM-20260513-001 | Output policy: only figures and summary artifacts, no parquet/npy intermediates
+
+- type: decision
+- source: user requirement on 2026-05-08 during refactor review
+- created_at: 2026-05-13T16:00:00+08:00
+- updated_at: 2026-05-13T16:00:00+08:00
+- confidence: 1.0
+- status: active
+- tags: [output-policy, io, refactor]
+- topic: analysis-refactor
+- last_seen: 2026-05-13
+- aliases: [output contract, no intermediate parquet, only figures and summary]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+Analysis outputs must be only final artifacts: figures (PNG), summary (JSON/MD), and tables (CSV). No parquet, NPZ, or other intermediate binary files should be written as outputs. The new `save_analysis_result` enforces this: only CSV tables, JSON summaries, MD reports, and PNG figures.
+
+Why it matters:
+- Prevents output directories from being treated as inputs to other programs, breaking the hidden dependency chain.
+- Keeps results human-inspectable without special readers.
+- The new analysis layer builds features on-the-fly from raw data, so intermediate caching is unnecessary.
+
+Evidence:
+- memory/2026-05-13.md
+- `src/bacteria_analysis/io.py`
+- `src/bacteria_analysis/_analysis_results_impl.py`
+
+### MEM-20260513-002 | Preprocessing is module-only, no standalone CLI
+
+- type: decision
+- source: user instruction on 2026-05-13
+- created_at: 2026-05-13T16:00:00+08:00
+- updated_at: 2026-05-13T16:00:00+08:00
+- confidence: 1.0
+- status: active
+- tags: [cli, preprocessing, module-only]
+- topic: analysis-refactor
+- last_seen: 2026-05-13
+- aliases: [no preprocess CLI, preprocessing as module]
+- ttl_days: null
+- supersedes: []
+- superseded_by: null
+
+Summary:
+Preprocessing should not have a CLI entry point. It is called internally by `features/neural.py` when building neural feature matrices from raw data; RDM builders then consume those feature matrices through `analyses.rdm.builders`. The `cli/preprocessing.py` and `scripts/run_preprocessing.py` have been archived to `_legacy/`.
+
+Why it matters:
+- Preprocessing is an internal step, not a user-facing analysis. Users interact with `analyses.rdm.build_neural_rdm()` or `run_rdm_alignment()`.
+- Keeps the CLI surface minimal and focused on analysis entry points.
+
+Evidence:
+- memory/2026-05-13.md
+- `src/bacteria_analysis/cli/__init__.py`
 
 ## Key References
 - `docs/neuron_data_format.md`
