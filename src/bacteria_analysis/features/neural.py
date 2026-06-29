@@ -19,7 +19,7 @@ from bacteria_analysis.preprocessing import (
     validate_input_dataframe,
 )
 VIEW_TIMEPOINTS: dict[str, tuple[int, ...]] = {
-    "response_window": tuple(range(6, 21)),
+    "response_window": tuple(range(5, 25)),
     "full_trajectory": tuple(range(45)),
 }
 

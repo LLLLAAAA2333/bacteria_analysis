@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 VIEW_WINDOWS = {
-    "response_window": tuple(range(6, 21)),
+    "response_window": tuple(range(5, 25)),
     "full_trajectory": tuple(range(45)),
 }
 BASELINE_TIMEPOINTS = tuple(range(6))

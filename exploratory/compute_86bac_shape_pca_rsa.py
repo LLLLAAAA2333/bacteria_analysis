@@ -20,7 +20,7 @@ if str(PROJECT_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from bacteria_analysis.features.neural import build_trial_feature_matrix, neural_feature_columns  # noqa: E402
-from bacteria_analysis.io import read_metabolite_matrix  # noqa: E402
+from bacteria_analysis._data_loaders import read_metabolite_matrix  # noqa: E402
 from bacteria_analysis._data_loaders import _canonicalize_metabolite_name  # noqa: E402
 
 

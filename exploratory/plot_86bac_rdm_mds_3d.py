@@ -12,12 +12,15 @@ from scipy.linalg import orthogonal_procrustes
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import pearsonr, spearmanr
 
+import compare_86bac_chord_hmds as base
+
 
 DEFAULT_ROOT = Path("results") / "86bac_shape_pca_rsa_t05_t24_silent_scale1"
 DEFAULT_TABLES_DIR = DEFAULT_ROOT / "tables"
 DEFAULT_FIGURES_DIR = DEFAULT_ROOT / "figures"
-NEURAL_RDM = "neural_shape_rdm__active_scaled_flattened_correlation.csv"
+NEURAL_RDM = "neural_correlation_distance_matrix.csv"
 CHEMICAL_RDM = "chemical_rdm__qc20_missing50_log2_zscore_pca10_euclidean.csv"
+TAXONOMY = "taxonomy_from_GM300/86bac_sample_species_mapping.csv"
 
 
 def read_rdm(path: Path) -> pd.DataFrame:
@@ -127,15 +130,19 @@ def plot_static(
     *,
     output_path: Path,
     summary: dict[str, object],
+    color_table: pd.DataFrame,
 ) -> None:
     samples = coordinates["sample_id"].astype(str).to_numpy()
-    numbers = coordinates["sample_number"].to_numpy(float)
+    species_indices = coordinates["species_index"].to_numpy(float)
     neural = coordinates[["neural_mds1", "neural_mds2", "neural_mds3"]].to_numpy(float)
     chemical = coordinates[["chemical_mds1", "chemical_mds2", "chemical_mds3"]].to_numpy(float)
     neural_unit = coordinates[["neural_unit1", "neural_unit2", "neural_unit3"]].to_numpy(float)
     chemical_aligned = coordinates[
         ["chemical_aligned_to_neural1", "chemical_aligned_to_neural2", "chemical_aligned_to_neural3"]
     ].to_numpy(float)
+
+    n_species = len(color_table)
+    norm = plt.Normalize(vmin=-0.5, vmax=n_species - 0.5)
 
     figure = plt.figure(figsize=(15, 5.2), constrained_layout=True)
     axes = [
@@ -144,7 +151,10 @@ def plot_static(
         figure.add_subplot(1, 3, 3, projection="3d"),
     ]
 
-    scatter = axes[0].scatter(neural[:, 0], neural[:, 1], neural[:, 2], c=numbers, cmap="viridis", s=30)
+    scatter = axes[0].scatter(
+        neural[:, 0], neural[:, 1], neural[:, 2],
+        c=species_indices, cmap=plt.cm.turbo, norm=norm, s=30,
+    )
     axes[0].set_title(
         "Neural RDM MDS\n"
         f"stress={summary['neural']['normalized_raw_stress']:.3f}; "
@@ -153,7 +163,10 @@ def plot_static(
     )
     set_equal_axes(axes[0], neural)
 
-    axes[1].scatter(chemical[:, 0], chemical[:, 1], chemical[:, 2], c=numbers, cmap="viridis", s=30)
+    axes[1].scatter(
+        chemical[:, 0], chemical[:, 1], chemical[:, 2],
+        c=species_indices, cmap=plt.cm.turbo, norm=norm, s=30,
+    )
     axes[1].set_title(
         "Chemical RDM MDS\n"
         f"stress={summary['chemical']['normalized_raw_stress']:.3f}; "
@@ -196,21 +209,35 @@ def plot_static(
         axis.tick_params(labelsize=7)
 
     colorbar = figure.colorbar(scatter, ax=axes[:2], fraction=0.03, pad=0.02)
-    colorbar.set_label("sample number", fontsize=9)
-    colorbar.ax.tick_params(labelsize=8)
-    figure.suptitle("86bac neural and chemical RDMs projected with 3D classical MDS", fontsize=12)
+    base.set_species_colorbar(colorbar, color_table, label_size=7)
+    figure.suptitle("86bac neural and chemical RDMs projected with 3D classical MDS, colored by species", fontsize=12)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=220)
     plt.close(figure)
 
 
-def plot_interactive(coordinates: pd.DataFrame, *, output_path: Path, summary: dict[str, object]) -> None:
+def plot_interactive(
+    coordinates: pd.DataFrame,
+    *,
+    output_path: Path,
+    summary: dict[str, object],
+    color_table: pd.DataFrame,
+) -> None:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
     samples = coordinates["sample_id"].astype(str)
-    numbers = coordinates["sample_number"]
+    species_indices = coordinates["species_index"].astype(int)
+    n_species = len(color_table)
+    species_colorscale = base.plotly_species_colorscale(color_table)
+    customdata_species = np.column_stack(
+        [
+            coordinates["genus"].astype(str),
+            coordinates["species"].astype(str),
+            (species_indices + 1).astype(str),
+        ]
+    )
     figure = make_subplots(
         rows=1,
         cols=3,
@@ -224,9 +251,24 @@ def plot_interactive(coordinates: pd.DataFrame, *, output_path: Path, summary: d
             y=coordinates["neural_mds2"],
             z=coordinates["neural_mds3"],
             mode="markers",
-            marker={"size": 4, "color": numbers, "colorscale": "Viridis", "colorbar": {"title": "sample"}},
+            marker={
+                "size": 4,
+                "color": species_indices,
+                "colorscale": species_colorscale,
+                "cmin": -0.5,
+                "cmax": n_species - 0.5,
+                "line": {"width": 0.3, "color": "white"},
+                "colorbar": {"title": "Species"},
+            },
             text=samples,
-            hovertemplate="%{text}<br>MDS1=%{x:.3f}<br>MDS2=%{y:.3f}<br>MDS3=%{z:.3f}<extra>neural</extra>",
+            customdata=customdata_species,
+            hovertemplate=(
+                "%{text}<br>"
+                "genus=%{customdata[0]}<br>"
+                "species=%{customdata[1]}<br>"
+                "species color code=S%{customdata[2]}<br>"
+                "MDS1=%{x:.3f}<br>MDS2=%{y:.3f}<br>MDS3=%{z:.3f}<extra>neural</extra>"
+            ),
         ),
         row=1,
         col=1,
@@ -237,9 +279,24 @@ def plot_interactive(coordinates: pd.DataFrame, *, output_path: Path, summary: d
             y=coordinates["chemical_mds2"],
             z=coordinates["chemical_mds3"],
             mode="markers",
-            marker={"size": 4, "color": numbers, "colorscale": "Viridis", "showscale": False},
+            marker={
+                "size": 4,
+                "color": species_indices,
+                "colorscale": species_colorscale,
+                "cmin": -0.5,
+                "cmax": n_species - 0.5,
+                "line": {"width": 0.3, "color": "white"},
+                "showscale": False,
+            },
             text=samples,
-            hovertemplate="%{text}<br>MDS1=%{x:.3f}<br>MDS2=%{y:.3f}<br>MDS3=%{z:.3f}<extra>chemical</extra>",
+            customdata=customdata_species,
+            hovertemplate=(
+                "%{text}<br>"
+                "genus=%{customdata[0]}<br>"
+                "species=%{customdata[1]}<br>"
+                "species color code=S%{customdata[2]}<br>"
+                "MDS1=%{x:.3f}<br>MDS2=%{y:.3f}<br>MDS3=%{z:.3f}<extra>chemical</extra>"
+            ),
         ),
         row=1,
         col=2,
@@ -296,7 +353,7 @@ def plot_interactive(coordinates: pd.DataFrame, *, output_path: Path, summary: d
 
     figure.update_layout(
         title=(
-            "86bac RDM 3D classical MDS | "
+            "86bac RDM 3D classical MDS colored by species | "
             f"neural stress={summary['neural']['normalized_raw_stress']:.3f}, "
             f"chemical stress={summary['chemical']['normalized_raw_stress']:.3f}"
         ),
@@ -308,10 +365,28 @@ def plot_interactive(coordinates: pd.DataFrame, *, output_path: Path, summary: d
     figure.write_html(output_path, include_plotlyjs="cdn")
 
 
-def build_outputs(tables_dir: Path, figures_dir: Path) -> tuple[pd.DataFrame, dict[str, object]]:
+def build_outputs(
+    tables_dir: Path, figures_dir: Path
+) -> tuple[pd.DataFrame, dict[str, object], pd.DataFrame]:
     neural_path = tables_dir / NEURAL_RDM
     chemical_path = tables_dir / CHEMICAL_RDM
     neural_rdm, chemical_rdm = align_rdms(read_rdm(neural_path), read_rdm(chemical_path))
+
+    taxonomy = pd.read_csv(tables_dir / TAXONOMY)
+    taxonomy["AID"] = taxonomy["AID"].astype(str)
+    taxonomy = taxonomy.set_index("AID", drop=False)
+    shared = [s for s in neural_rdm.index.astype(str) if s in taxonomy.index]
+    if len(shared) < 4:
+        raise ValueError(f"need at least 4 shared samples with taxonomy; found {len(shared)}")
+    neural_rdm = neural_rdm.loc[shared, shared]
+    chemical_rdm = chemical_rdm.loc[shared, shared]
+    taxonomy_aligned = taxonomy.loc[shared].copy()
+    sample_table = base.build_sample_table(shared, taxonomy_aligned)
+    color_table = base.species_color_table(taxonomy_aligned)
+    merged = sample_table.merge(
+        color_table[["species", "species_index"]], on="species", how="left"
+    )
+
     neural_distance = clean_distance_matrix(neural_rdm)
     chemical_distance = clean_distance_matrix(chemical_rdm)
 
@@ -324,6 +399,9 @@ def build_outputs(tables_dir: Path, figures_dir: Path) -> tuple[pd.DataFrame, di
         {
             "sample_id": samples,
             "sample_number": [sample_number(sample) for sample in samples],
+            "genus": merged["genus"].astype(str).to_numpy(),
+            "species": merged["species"].astype(str).to_numpy(),
+            "species_index": merged["species_index"].astype(int).to_numpy(),
             "neural_mds1": neural_coordinates[:, 0],
             "neural_mds2": neural_coordinates[:, 1],
             "neural_mds3": neural_coordinates[:, 2],
@@ -343,8 +421,11 @@ def build_outputs(tables_dir: Path, figures_dir: Path) -> tuple[pd.DataFrame, di
             "tables_dir": str(tables_dir),
             "neural_rdm": str(neural_path),
             "chemical_rdm": str(chemical_path),
+            "taxonomy": str(tables_dir / TAXONOMY),
         },
         "n_samples": len(samples),
+        "n_species": int(taxonomy_aligned["species"].nunique()),
+        "coloring": "Points colored by species (evenly-spaced turbo colors)",
         "method": "classical metric MDS from precomputed RDM distances",
         "neural": preservation_summary(neural_distance, neural_coordinates, neural_eigenvalues),
         "chemical": preservation_summary(chemical_distance, chemical_coordinates, chemical_eigenvalues),
@@ -354,9 +435,10 @@ def build_outputs(tables_dir: Path, figures_dir: Path) -> tuple[pd.DataFrame, di
             "summary_json": str(figures_dir / "rdm_mds_3d_summary.json"),
             "static_png": str(figures_dir / "rdm_mds_3d_neural_chemical.png"),
             "interactive_html": str(figures_dir / "rdm_mds_3d_neural_chemical.html"),
+            "species_color_map": str(figures_dir / "species_color_map__rdm_mds.csv"),
         },
     }
-    return coordinates, summary
+    return coordinates, summary, color_table
 
 
 def main() -> None:
@@ -366,19 +448,26 @@ def main() -> None:
     parser.add_argument("--skip-html", action="store_true")
     args = parser.parse_args()
 
-    coordinates, summary = build_outputs(args.tables_dir, args.figures_dir)
+    coordinates, summary, color_table = build_outputs(args.tables_dir, args.figures_dir)
     args.figures_dir.mkdir(parents=True, exist_ok=True)
     coordinates.to_csv(args.figures_dir / "rdm_mds_3d_coordinates.csv", index=False)
+    color_table.to_csv(args.figures_dir / "species_color_map__rdm_mds.csv", index=False)
     (args.figures_dir / "rdm_mds_3d_summary.json").write_text(
         json.dumps(summary, indent=2),
         encoding="utf-8",
     )
-    plot_static(coordinates, output_path=args.figures_dir / "rdm_mds_3d_neural_chemical.png", summary=summary)
+    plot_static(
+        coordinates,
+        output_path=args.figures_dir / "rdm_mds_3d_neural_chemical.png",
+        summary=summary,
+        color_table=color_table,
+    )
     if not args.skip_html:
         plot_interactive(
             coordinates,
             output_path=args.figures_dir / "rdm_mds_3d_neural_chemical.html",
             summary=summary,
+            color_table=color_table,
         )
 
 

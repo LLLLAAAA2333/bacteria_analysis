@@ -5,9 +5,6 @@ name = "bacteria_analysis"
 platforms = ["win-64"]
 version = "0.1.0"
 
-[tasks]
-test = "pytest -q"
-
 [activation.env]
 PYTHONPATH = "src"
 
@@ -16,7 +13,11 @@ python = "3.11.*"
 pandas = ">=2.2,<3"
 pyarrow = ">=15,<22"
 numpy = ">=1.26,<3"
-pytest = ">=8.0,<9"
 matplotlib = ">=3.8,<4"
 seaborn = ">=0.13,<0.14"
 openpyxl = ">=3.1,<4"
+ipykernel = ">=7.2.0,<8"
+scikit-learn = ">=1.8.0,<2"
+plotly = ">=6.6.0,<7"
+nbformat = ">=5.10.4,<6"
+scipy = ">=1.17.1,<2"

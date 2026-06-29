@@ -8,8 +8,15 @@ data/*
 __pycache__/
 *.py[cod]
 
+#local config
+.vscode/
+
 # generated figures and run artifacts
 docs/figures/*
+
+# local exploratory notebooks
+notebook/
+.ipynb_checkpoints/
 
 # local agent metadata
 .agent/*
