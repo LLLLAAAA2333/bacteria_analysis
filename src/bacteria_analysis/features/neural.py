@@ -11,12 +11,9 @@ import pandas as pd
 from bacteria_analysis.constants import NEURON_ORDER
 from bacteria_analysis.preprocessing import (
     add_trial_id,
-    annotate_trace_quality,
     build_trial_metadata,
     build_trial_tensor,
     center_by_baseline,
-    filter_traces,
-    validate_input_dataframe,
 )
 VIEW_TIMEPOINTS: dict[str, tuple[int, ...]] = {
     "response_window": tuple(range(5, 25)),
@@ -64,10 +61,7 @@ def build_trial_feature_matrix(dataset_or_frame, *, view: str, merge_lr: bool = 
         raise ValueError(f"unknown neural feature view {view!r}")
 
     validated = add_trial_id(raw)
-    validate_input_dataframe(validated)
-    annotated = annotate_trace_quality(validated)
-    filtered = filter_traces(annotated)
-    centered = center_by_baseline(filtered)
+    centered = center_by_baseline(validated)
     metadata = build_trial_metadata(centered)
     tensor = build_trial_tensor(centered, metadata)
 

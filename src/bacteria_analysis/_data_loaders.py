@@ -157,6 +157,33 @@ def _canonicalize_metabolite_name(value: object) -> str:
     return METABOLITE_NAME_CANONICAL_OVERRIDES.get(normalized, normalized)
 
 
+def enrich_neural_dataframe(
+    df: pd.DataFrame | str | Path,
+    species_path: str | Path = "data/GM300_bacteria_species_summary.xlsx",
+) -> pd.DataFrame:
+    """Add species and genus columns by joining stim_name → AID → GM300 metadata.
+
+    Parses ``stim_name`` (e.g. "A001 stationary") to extract the AID,
+    then looks up ``species_clean`` and ``genus_clean`` from the GM300
+    species summary spreadsheet.
+
+    Returns a copy of the DataFrame with additional columns:
+    ``species``, ``genus``, and ``aid`` (the parsed AID).
+    """
+
+    if isinstance(df, (str, Path)):
+        df = pd.read_parquet(df)
+
+    species = pd.read_excel(Path(species_path), engine="openpyxl")
+
+    out = df.copy()
+    out["aid"] = out["stim_name"].fillna("").astype(str).str.strip().str.split().str[0]
+    aid_map = species.set_index("AID")[["species_clean", "genus_clean"]]
+    aid_map.columns = ["species", "genus"]
+
+    return out.join(aid_map, on="aid")
+
+
 def _require_columns(frame: pd.DataFrame, required: Iterable[str], label: str) -> pd.DataFrame:
     missing = [c for c in required if c not in frame.columns]
     if missing:
