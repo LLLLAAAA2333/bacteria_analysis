@@ -3,6 +3,7 @@
 !.pixi/config.toml
 
 data/*
+docs/
 
 # python cache
 __pycache__/
@@ -40,3 +41,6 @@ src/bacteria_analysis/_legacy/
 
 # results
 results
+
+# archived local results and pre-change snapshots
+backup/
