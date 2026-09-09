@@ -2,7 +2,7 @@
 authors = ["JH Wang <1125623896@qq.com>"]
 channels = ["conda-forge"]
 name = "bacteria_analysis"
-platforms = ["win-64"]
+platforms = ["win-64", 'osx-arm64']
 version = "0.1.0"
 
 [tasks]
