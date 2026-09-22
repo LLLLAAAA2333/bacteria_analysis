@@ -5,6 +5,8 @@
 data/*
 docs/
 
+output/
+tmp/
 # python cache
 __pycache__/
 *.py[cod]
@@ -16,7 +18,6 @@ __pycache__/
 docs/figures/*
 
 # local exploratory notebooks
-notebook/
 .ipynb_checkpoints/
 
 # local agent metadata
