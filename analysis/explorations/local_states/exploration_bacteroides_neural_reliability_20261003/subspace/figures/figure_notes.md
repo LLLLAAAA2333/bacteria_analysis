@@ -1,0 +1,11 @@
+# Figure captions
+
+## 01 — Two-dimensional neural structure within Bacteroides
+
+Both panels show all 29 strains at identical PC1/PC2 coordinates from centered PCA of the full29 gated 13-coordinate unit profiles; no neuron SD scaling or re-normalization is applied. The two axes have the same geometric scale. Panel A uses recorded species, abbreviated B. for Bacteroides; panel B uses complete recorded date-sets and never assigns multi-date strains to one date. All strain IDs are shown. Asterisks indicate source taxonomy-note flags, not statistical significance. Species/date fields are annotation, not PCA predictors or filters; dates are not assumed chemical/experimental batches. PC coordinates are projections in unit-profile space, not SD or neural response amplitude. PC1 and PC2 explain 33.60% and 31.24% of within-cohort variance, together 64.84%; this is not model explanatory power.
+
+## 02 — Deletion sensitivity of the top-two plane and PC1
+
+Panel A shows every one of 29 leave-one-strain and 16 leave-one-recorded-species maximum principal angles, comparing each training subset's re-centered PCA's top-two span to the full29 top-two span. Jitter affects vertical display only; dark horizontal segments show the middle 50% and vertical ticks the median, not confidence intervals. Labels identify the maximum-angle omission in each scheme: A015 and recorded B. fluxus. Panel B shows the same 45 fits, comparing the acute single-PC1 angle with maximum top-two principal angle; open triangles allow coincident species/strain fits to remain distinguishable. The dashed line marks equal angles. Labels identify the largest PC1-angle cases in each scheme: A048 and recorded B. salyersiae. Some points coincide because omitting a singleton species equals omitting its only strain.
+
+All comparisons use an overlapping full29 reference that contains each training subset. They measure sensitivity to these prescribed deletions, not independent experimental repeatability. Rotations or swaps inside the two-dimensional span can move PC1 substantially without comparably changing that span. No stable/unstable threshold is drawn and K=2 was fixed before this analysis. The separate all29 pre-gate comparison is in the tables/README; it does not select the displayed dimensionality.

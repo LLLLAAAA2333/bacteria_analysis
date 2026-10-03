@@ -7,6 +7,8 @@ version = "0.1.0"
 
 [tasks]
 lab = "jupyter lab"
+clean-notebooks = "python scripts/clean_notebooks.py"
+test = "python -m unittest discover -s tests -t . -v"
 
 [activation.env]
 PYTHONPATH = "src"

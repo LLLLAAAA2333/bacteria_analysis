@@ -1,2 +1,8 @@
 # SCM syntax highlighting & preventing 3-way merges
 pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+
+# Preserve original bytes in the historical exploration source archive.
+analysis/explorations/** -text
+
+# csv.DictWriter emits CRLF; a record terminator is not trailing whitespace.
+*.csv whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

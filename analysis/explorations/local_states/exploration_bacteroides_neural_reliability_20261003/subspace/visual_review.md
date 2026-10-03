@@ -1,0 +1,3 @@
+# Visual review
+
+Both PNG figures were inspected with view_image. Figure 01 initially had overlapping labels near A041/A049 and A011/A038. Only A041 and A038 text offsets were changed; point coordinates, styles and PCA data were unchanged. The final PNG was viewed again and labels are distinct. Full species/date legends remain visible without truncation; all 29 IDs and all six taxonomy asterisks remain. Both panels share coordinates and equal geometric aspect. Figure 02 shows all45 comparisons; extrema, median/IQR markers and the single-PC1/plane comparison are legible. SVG versions were saved from the same figures.

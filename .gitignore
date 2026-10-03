@@ -1,47 +1,65 @@
-# pixi environments
-.pixi/*
-!.pixi/config.toml
+# Local environment; keep a shared Pixi config if one is added.
+/.pixi/*
+!/.pixi/config.toml
+/.venv/
 
-data/*
-docs/
+# Raw data, generated results and historical notebook snapshots stay local.
+/data/
+/output/
+/tmp/
+/results/
+/backup/
+/archive/
+/reports/*
+!/reports/README.md
+/poster/data/
+/poster/tables/
+/poster/figures/
+/docs/figures/
+/src/bacteria_analysis/_legacy/
 
-output/
-tmp/
-# python cache
+# Handoffs belong under docs/handoffs, without root compatibility links.
+/HANDOFF*.md
+
+# Scientific figure exports and binary caches are not source code.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.pdf
+*.npz
+*.npy
+*.parquet
+*.pkl
+
+# Python and Jupyter caches.
 __pycache__/
 *.py[cod]
-
-#local config
-.vscode/
-
-# generated figures and run artifacts
-docs/figures/*
-
-# local exploratory notebooks
 .ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# local agent metadata
-.agent/*
-.agents/*
-.claude/*
+# macOS and editor files.
+.DS_Store
+._*
+*.swp
+*.swo
+/.vscode/
+/.idea/
 
-# project memory synced across workstations
-state/
-!MEMORY.md
-!memory/
-!memory/**
-!state/
-!state/project-status.json
-state/heartbeat-state.json
+# Machine-local settings and credentials.
+.env
+.env.*
+!.env.example
+!.env.template
+/.agent/
+/.agents/
+/.claude/
+/.worktrees/
 
-# local git worktrees
-.worktrees/
-
-# archived legacy pipeline
-src/bacteria_analysis/_legacy/
-
-# results
-results
-
-# archived local results and pre-change snapshots
-backup/
+# Sync only the shared project state; Markdown memory remains versioned.
+/state/*
+!/state/project-status.json
